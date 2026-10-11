@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { PageSurface } from '@/components/page-surface';
+import { AppraisalEmployeeCombo } from '@/components/appraisal/AppraisalEmployeeCombo';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,7 +36,7 @@ import MonthPickerSelect from '@/components/MonthPickerSelect';
 import { evalTranslations, getFormName, getInitialScoresForForm, getStructureForForm, getOperationalLabels } from './evaluation-config';
 import { format } from 'date-fns';
 
-export default function PromotionEvaluationCreate({ employees = [], templates = [] }: any) {
+export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promotion-evaluations/employees/lookup', templates = [] }: any) {
     const { auth } = usePage<SharedData>().props;
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -83,11 +83,7 @@ export default function PromotionEvaluationCreate({ employees = [], templates = 
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
-
-    const selectedEmployee = useMemo(() => 
-        employees.find((e: any) => e.id.toString() === data.employee_id),
-        [data.employee_id, employees]
-    );
+    const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
     // Auto-populate employee profile fields when an employee is selected
     useEffect(() => {
@@ -468,10 +464,15 @@ export default function PromotionEvaluationCreate({ employees = [], templates = 
                                     <Label htmlFor="employee-select" className="text-slate-700 font-medium">
                                         {t.selectEmployeeLabel} <span className="text-red-500">*</span>
                                     </Label>
-                                    <Select 
-                                        value={data.employee_id} 
-                                        onValueChange={(v) => {
-                                            setData('employee_id', v);
+                                    <AppraisalEmployeeCombo
+                                        lookupUrl={employeeLookupUrl}
+                                        value={data.employee_id ? Number(data.employee_id) : null}
+                                        lang={lang}
+                                        invalid={Boolean(mergedErrors.employee_id)}
+                                        placeholder={t.selectEmployeePlaceholder}
+                                        onSelect={(emp) => {
+                                            setSelectedEmployee(emp);
+                                            setData('employee_id', emp ? String(emp.id) : '');
                                             if (clientErrors.employee_id) {
                                                 setClientErrors(ce => {
                                                     const copy = { ...ce };
@@ -480,29 +481,7 @@ export default function PromotionEvaluationCreate({ employees = [], templates = 
                                                 });
                                             }
                                         }}
-                                    >
-                                        <SelectTrigger id="employee-select" className={`h-11 bg-white ${mergedErrors.employee_id ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300'}`}>
-                                            <SelectValue placeholder={t.selectEmployeePlaceholder} />
-                                        </SelectTrigger>
-                                        <SelectContent className="max-h-80">
-                                            {employees.length === 0 ? (
-                                                <div className="p-4 text-center text-sm text-slate-500">
-                                                    {t.noEmployeesFound}
-                                                </div>
-                                            ) : (
-                                                employees.map((emp: any) => {
-                                                    const empName = lang === 'bn' ? (emp.name_bn || emp.name_en) : emp.name_en;
-                                                    const desig = emp.designation?.name || emp.designation?.title || 'No Designation';
-                                                    const brName = emp.branch?.name || (lang === 'bn' ? 'প্রধান কার্যালয়' : 'Head Office');
-                                                    return (
-                                                        <SelectItem key={emp.id} value={emp.id.toString()}>
-                                                            [{emp.pin}] {empName} — {desig} ({brName})
-                                                        </SelectItem>
-                                                    );
-                                                })
-                                            )}
-                                        </SelectContent>
-                                    </Select>
+                                    />
                                     {mergedErrors.employee_id && (
                                         <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
                                             <AlertCircle className="h-3.5 w-3.5" />

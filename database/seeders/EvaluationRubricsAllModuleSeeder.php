@@ -19,10 +19,10 @@ class EvaluationRubricsAllModuleSeeder extends Seeder
             [
                 'code' => 'prob_officer_abm',
                 'appraisal_type' => 'probation_increment',
-                'category_name_bn' => 'শিক্ষানবিস ইনক্রিমেন্ট',
+                'category_name_bn' => 'শিক্ষানবিশ ইনক্রিমেন্ট',
                 'category_name_en' => 'Probation Increment',
                 'title_en' => 'Form A: Field Officer, Program Officer & ABM Probation Increment Evaluation',
-                'title_bn' => 'ফরম ক: মাঠ কর্মকর্তা, কর্মসূচি কর্মকর্তা ও সহকারী শাখা ব্যবস্থাপক (শিক্ষানবিস বেতন বৃদ্ধি)',
+                'title_bn' => 'ফরম ক: মাঠ কর্মকর্তা, কর্মসূচি কর্মকর্তা ও সহকারী শাখা ব্যবস্থাপক (শিক্ষানবিশ বেতন বৃদ্ধি)',
                 'description' => 'শিক্ষানবিশকালে কর্মরত মাঠ কর্মকর্তা, কর্মসূচি কর্মকর্তা ও সহকারী শাখা ব্যবস্থাপকদের ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম।',
                 'total_marks' => 100,
                 'sections' => [
@@ -86,10 +86,10 @@ class EvaluationRubricsAllModuleSeeder extends Seeder
             [
                 'code' => 'prob_accountant',
                 'appraisal_type' => 'probation_increment',
-                'category_name_bn' => 'শিক্ষানবিস ইনক্রিমেন্ট',
+                'category_name_bn' => 'শিক্ষানবিশ ইনক্রিমেন্ট',
                 'category_name_en' => 'Probation Increment',
                 'title_en' => 'Form B: Branch Accountant & Junior Accountant Probation Increment Evaluation',
-                'title_bn' => 'ফরম খ: শাখা হিসাবরক্ষক ও জুনিয়র হিসাবরক্ষক (শিক্ষানবিস বেতন বৃদ্ধি)',
+                'title_bn' => 'ফরম খ: শাখা হিসাবরক্ষক ও জুনিয়র হিসাবরক্ষক (শিক্ষানবিশ বেতন বৃদ্ধি)',
                 'description' => 'শিক্ষানবিশকালে কর্মরত শাখা হিসাবরক্ষক ও জুনিয়র হিসাবরক্ষকদের ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম।',
                 'total_marks' => 100,
                 'sections' => [
@@ -212,10 +212,10 @@ class EvaluationRubricsAllModuleSeeder extends Seeder
             [
                 'code' => 'prob_bm_and_above',
                 'appraisal_type' => 'probation_increment',
-                'category_name_bn' => 'শিক্ষানবিস ইনক্রিমেন্ট',
+                'category_name_bn' => 'শিক্ষানবিশ ইনক্রিমেন্ট',
                 'category_name_en' => 'Probation Increment',
                 'title_en' => 'Form C: Branch Manager to Above Probation Increment Evaluation',
-                'title_bn' => 'ফরম গ: শাখা ব্যবস্থাপক থেকে তদূর্ধ্ব কর্মীদের শিক্ষানবিস বেতন বৃদ্ধি মূল্যায়ন',
+                'title_bn' => 'ফরম গ: শাখা ব্যবস্থাপক থেকে তদূর্ধ্ব কর্মীদের শিক্ষানবিশ বেতন বৃদ্ধি মূল্যায়ন',
                 'description' => 'শিক্ষানবিশকালে কর্মরত শাখা ব্যবস্থাপক থেকে তদূর্ধ্ব কর্মীদের ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম।',
                 'total_marks' => 100,
                 'sections' => [

@@ -18,7 +18,8 @@ import {
     Eye, 
     Edit3, 
     Save, 
-    AlertTriangle 
+    AlertTriangle,
+    Printer
 } from 'lucide-react';
 import FormAIncrement from './components/FormAIncrement';
 import FormBIncrement from './components/FormBIncrement';
@@ -112,7 +113,11 @@ export default function ProbationIncrementEvaluationEdit({
 
         // Recommendation
         supervisor_recommendation: evaluation.supervisor_recommendation || 'recommend_increment',
-        initiator_remarks: evaluation.initiator_remarks || evaluation.remarks || '',
+        strengths: evaluation.strengths || '',
+        weaknesses: evaluation.weaknesses || '',
+        training_need: evaluation.training_need || '',
+        other_remarks: evaluation.other_remarks || evaluation.initiator_remarks || '',
+        initiator_remarks: evaluation.other_remarks || evaluation.initiator_remarks || '',
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
@@ -259,7 +264,11 @@ export default function ProbationIncrementEvaluationEdit({
             total_score: data.total_score,
             calculated_grade: data.calculated_grade,
             supervisor_recommendation: data.supervisor_recommendation,
-            initiator_remarks: data.initiator_remarks,
+            strengths: data.strengths,
+            weaknesses: data.weaknesses,
+            training_need: data.training_need,
+            other_remarks: data.other_remarks,
+            initiator_remarks: data.other_remarks,
             scores: data.scores,
         };
     }, [evaluation, data, formType]);
@@ -274,7 +283,7 @@ export default function ProbationIncrementEvaluationEdit({
             
             <PageSurface className="space-y-6">
                 {/* Header Banner */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs print:hidden">
                     <div className="flex items-center gap-3">
                         <Link 
                             href={`/probation-increment-evaluations/${evaluation.id}`}
@@ -286,7 +295,7 @@ export default function ProbationIncrementEvaluationEdit({
                             <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <Award className="h-3.5 w-3.5" />
-                                    {lang === 'bn' ? 'শিক্ষানবিসকাল ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}
+                                    {lang === 'bn' ? 'শিক্ষানবিশকাল ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}
                                 </span>
                                 <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300">
                                     {lang === 'bn' ? 'সম্পাদনা মোড' : 'Edit Mode'}
@@ -356,7 +365,7 @@ export default function ProbationIncrementEvaluationEdit({
 
                 {/* Return reason banner if available */}
                 {returnComment && (
-                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5 text-amber-900">
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5 text-amber-900 print:hidden">
                         <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                         <div>
                             <h4 className="text-xs font-bold">{lang === 'bn' ? 'সংশোধনের জন্য ফেরত পাঠানোর কারণ:' : 'Reason for Revision:'}</h4>
@@ -368,7 +377,18 @@ export default function ProbationIncrementEvaluationEdit({
                 {/* VIEW MODE: LIVE PREVIEW */}
                 {viewMode === 'preview' ? (
                     <div className="space-y-4">
-                        <div className="bg-slate-100/70 p-2 sm:p-6 rounded-2xl border border-slate-200">
+                        <div className="flex justify-end print:hidden">
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => window.print()}
+                                className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                                <Printer className="h-3.5 w-3.5 mr-1" />
+                                {lang === 'bn' ? 'ফরম প্রিন্ট করুন' : 'Print form'}
+                            </Button>
+                        </div>
+                        <div className="bg-slate-100/70 p-2 sm:p-6 rounded-2xl border border-slate-200 print:bg-white print:p-0 print:border-0 print:rounded-none">
                             <ProbationIncrementOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
                         </div>
                     </div>
@@ -903,16 +923,43 @@ export default function ProbationIncrementEvaluationEdit({
                                     </label>
                                 </div>
 
-                                <div className="space-y-1.5 pt-2">
-                                    <Label className="text-xs font-semibold text-slate-700">
-                                        সুপারভাইজার / শাখা ব্যবস্থাপকের সার্বিক মন্তব্য ও পর্যবেক্ষণ:
-                                    </Label>
-                                    <Textarea 
-                                        rows={3}
-                                        value={data.initiator_remarks}
-                                        onChange={e => setData('initiator_remarks', e.target.value)}
-                                        className="bg-white border-slate-300 text-xs"
-                                    />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">উক্ত কর্মচারীর প্রধান শক্তি/দক্ষতা (Strength)</Label>
+                                        <Textarea
+                                            rows={2}
+                                            value={data.strengths}
+                                            onChange={e => setData('strengths', e.target.value)}
+                                            className="bg-white border-slate-300 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">দুর্বলতা/উন্নয়নের ক্ষেত্রসমূহ (Weakness/Area to Develop)</Label>
+                                        <Textarea
+                                            rows={2}
+                                            value={data.weaknesses}
+                                            onChange={e => setData('weaknesses', e.target.value)}
+                                            className="bg-white border-slate-300 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">প্রশিক্ষণের প্রয়োজন কি না</Label>
+                                        <Textarea
+                                            rows={2}
+                                            value={data.training_need}
+                                            onChange={e => setData('training_need', e.target.value)}
+                                            className="bg-white border-slate-300 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">অন্যান্য মন্তব্য (যদি থাকে)</Label>
+                                        <Textarea
+                                            rows={2}
+                                            value={data.other_remarks}
+                                            onChange={e => setData('other_remarks', e.target.value)}
+                                            className="bg-white border-slate-300 text-xs"
+                                        />
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

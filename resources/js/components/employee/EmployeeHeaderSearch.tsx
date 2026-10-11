@@ -263,7 +263,7 @@ export function EmployeeHeaderSearch({
 
             {/* Results Popover Dropdown */}
             {isOpen && query.trim() !== '' && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-[420px] overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95">
+                <div className="fixed inset-x-2 top-14 sm:absolute sm:inset-x-0 sm:top-full z-50 sm:mt-1.5 max-h-[75vh] sm:max-h-[420px] overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95">
                     <div className="border-b border-zinc-100 bg-zinc-50/80 px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
                         <span>Employee Match Results</span>
                         <span className="font-normal lowercase text-zinc-400">

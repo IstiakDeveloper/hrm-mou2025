@@ -495,7 +495,7 @@ class ProbationIncrementWorkflowService
 
             if ($action === 'submitted' || $action === 'forwarded') {
                 $stageLabel = $this->getStageLabel($evaluation->status, 'bn');
-                $title = "শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন: {$stageLabel}";
+                $title = "শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন: {$stageLabel}";
                 $message = "কর্মী {$empName} {$pin}-এর ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন আপনার পর্যালোচনার জন্য অপেক্ষমাণ।";
                 
                 $targets = $this->getTargetReviewerUsers($evaluation, $evaluation->status);
@@ -505,13 +505,13 @@ class ProbationIncrementWorkflowService
             } elseif ($action === 'sent_back') {
                 $initiator = User::find($evaluation->initiator_id);
                 if ($initiator) {
-                    $title = 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন ফেরত পাঠানো হয়েছে ⚠️';
+                    $title = 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন ফেরত পাঠানো হয়েছে ⚠️';
                     $reason = $comments ? "কারণ: {$comments}" : 'সংশোধনের জন্য ফেরত পাঠানো হয়েছে।';
                     $message = "কর্মী {$empName} {$pin}-এর ইনক্রিমেন্ট মূল্যায়ন সংশোধনের জন্য ফেরত পাঠানো হয়েছে। {$reason}";
                     $initiator->notify(new ProbationIncrementEvaluationNotification($title, $message, 'warning', $link, $evaluation->id));
                 }
             } elseif ($action === 'approved') {
-                $title = 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন চূড়ান্তভাবে অনুমোদিত 🎉';
+                $title = 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন চূড়ান্তভাবে অনুমোদিত 🎉';
                 $message = "কর্মী {$empName} {$pin}-এর ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন নির্বাহী পরিচালক কর্তৃক চূড়ান্ত অনুমোদন পেয়েছে।";
                 
                 $recipients = collect();
@@ -530,7 +530,7 @@ class ProbationIncrementWorkflowService
             } elseif ($action === 'rejected') {
                 $initiator = User::find($evaluation->initiator_id);
                 if ($initiator) {
-                    $title = 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন নামঞ্জুর করা হয়েছে';
+                    $title = 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন নামঞ্জুর করা হয়েছে';
                     $message = "কর্মী {$empName} {$pin}-এর ইনক্রিমেন্ট মূল্যায়নটি নামঞ্জুর করা হয়েছে।";
                     $initiator->notify(new ProbationIncrementEvaluationNotification($title, $message, 'error', $link, $evaluation->id));
                 }

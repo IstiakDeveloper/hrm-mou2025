@@ -54,16 +54,16 @@ export default function ResponsiveScoreSection({
     const pct = sectionMax > 0 ? Math.round((sectionTotal / sectionMax) * 100) : 0;
 
     return (
-        <div className="border border-slate-200/90 rounded-2xl p-4 sm:p-5 bg-white shadow-xs dark:bg-slate-900 dark:border-slate-800 transition-all">
+        <div className="border border-slate-200/90 rounded-xl p-3 sm:p-4 bg-white shadow-2xs dark:bg-slate-900 dark:border-slate-800 transition-all">
             {/* Section Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 className="font-bold text-sm sm:text-base text-emerald-900 dark:text-emerald-300">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 mb-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-xs sm:text-sm text-emerald-950 dark:text-emerald-300">
                     {secName}
                 </h3>
                 <div className="flex items-center gap-2 self-start sm:self-auto">
                     <Badge 
                         variant="outline" 
-                        className={`text-xs font-semibold px-2.5 py-1 ${
+                        className={`text-[11px] font-semibold px-2 py-0.5 ${
                             pct >= 80 
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200' 
                                 : pct >= 60 
@@ -75,13 +75,13 @@ export default function ResponsiveScoreSection({
                             {lang === 'bn' ? 'অর্জিত নম্বর: ' : 'Obtained: '}
                             <span className="font-bold text-emerald-700 dark:text-emerald-400">{sectionTotal}</span> / {sectionMax}
                         </span>
-                        <span className="ml-1 text-[11px] opacity-80">({pct}%)</span>
+                        <span className="ml-1 text-[10px] opacity-80">({pct}%)</span>
                     </Badge>
                 </div>
             </div>
 
             {/* Criteria Items */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                 {section.items.map((item) => {
                     const currentEntry = scoreMap[item.key];
                     const itemName = lang === 'bn' ? item.name_bn : item.name_en;
@@ -105,27 +105,23 @@ export default function ResponsiveScoreSection({
                     return (
                         <div 
                             key={item.key} 
-                            className={`p-3 rounded-xl border transition-all ${
+                            className={`p-2.5 sm:p-3 rounded-xl border transition-all ${
                                 isExceeding
                                     ? 'border-rose-400 bg-rose-50/40 dark:border-rose-800 dark:bg-rose-950/20'
                                     : numScore > 0
-                                    ? 'border-emerald-200/80 bg-emerald-50/20 dark:border-emerald-900/50 dark:bg-emerald-950/10'
-                                    : 'border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 dark:border-slate-800/80 dark:bg-slate-900/40'
+                                    ? 'border-emerald-300 bg-emerald-50/25 dark:border-emerald-900/50 dark:bg-emerald-950/10'
+                                    : 'border-slate-200/70 bg-slate-50/40 hover:bg-white hover:border-slate-300 dark:border-slate-800/80 dark:bg-slate-900/40'
                             }`}
                         >
                             {/* Desktop & Mobile Adaptive Layout */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                                <Label className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 leading-snug flex-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <Label className="text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-200 leading-snug flex-1">
                                     {itemName}
                                 </Label>
 
                                 {/* Input Controls */}
-                                <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                                    <span className="text-[11px] font-semibold text-slate-500 sm:hidden">
-                                        {lang === 'bn' ? 'নম্বর লিখুন:' : 'Score:'}
-                                    </span>
-
-                                    <div className="flex items-center gap-1.5">
+                                <div className="flex items-center justify-between sm:justify-end gap-1.5 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-1">
                                         {/* Stepper Minus Button */}
                                         <Button
                                             type="button"
@@ -133,9 +129,9 @@ export default function ResponsiveScoreSection({
                                             size="icon"
                                             onClick={() => handleStep(-0.5)}
                                             disabled={numScore <= 0}
-                                            className="h-8 w-8 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shrink-0 shadow-2xs"
+                                            className="h-7 w-7 rounded-md border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shrink-0 shadow-2xs"
                                         >
-                                            <Minus className="h-3.5 w-3.5" />
+                                            <Minus className="h-3 w-3" />
                                         </Button>
 
                                         {/* Number Input */}
@@ -157,12 +153,12 @@ export default function ResponsiveScoreSection({
                                                         e.target.value
                                                     );
                                                 }}
-                                                className={`w-20 sm:w-22 h-8 text-center text-xs sm:text-sm font-bold rounded-lg shadow-2xs transition-all ${
+                                                className={`w-18 sm:w-20 h-7 text-center text-xs font-bold rounded-md shadow-2xs transition-all ${
                                                     isExceeding
                                                         ? 'border-rose-500 text-rose-700 bg-rose-50 focus:ring-rose-500'
                                                         : numScore > 0
-                                                        ? 'border-emerald-500 text-emerald-900 bg-white font-black dark:bg-slate-900 dark:text-emerald-300'
-                                                        : 'border-slate-300 bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:border-slate-700'
+                                                        ? 'border-emerald-600 text-emerald-900 bg-white font-extrabold'
+                                                        : 'border-slate-300 bg-white text-slate-800'
                                                 }`}
                                             />
                                         </div>
@@ -174,13 +170,13 @@ export default function ResponsiveScoreSection({
                                             size="icon"
                                             onClick={() => handleStep(0.5)}
                                             disabled={numScore >= maxScore}
-                                            className="h-8 w-8 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shrink-0 shadow-2xs"
+                                            className="h-7 w-7 rounded-md border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shrink-0 shadow-2xs"
                                         >
-                                            <Plus className="h-3.5 w-3.5" />
+                                            <Plus className="h-3 w-3" />
                                         </Button>
 
                                         {/* Maximum Score Label */}
-                                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 min-w-[36px] text-left">
+                                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 min-w-[32px] text-left">
                                             / {maxScore}
                                         </span>
                                     </div>

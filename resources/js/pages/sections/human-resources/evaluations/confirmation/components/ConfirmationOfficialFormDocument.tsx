@@ -248,7 +248,7 @@ export default function ConfirmationOfficialFormDocument({
                             <b>সংস্থায় যোগদানের তারিখ:</b> {formatDateVal(evaluation.joining_date)}
                         </td>
                         <td className="p-1.5" colSpan={2}>
-                            <b>শিক্ষানবিসকাল সমাপ্তির তারিখ:</b> {formatDateVal(evaluation.probation_end_date)}
+                            <b>শিক্ষানবিশকাল সমাপ্তির তারিখ:</b> {formatDateVal(evaluation.probation_end_date)}
                         </td>
                     </tr>
                     <tr>
@@ -583,7 +583,7 @@ export default function ConfirmationOfficialFormDocument({
                         </div>
                         <div className="flex items-center gap-2">
                             <span>[{evaluation.recommendation_status === 'extend_probation' ? ' ✓ ' : '   '}]</span>
-                            <span>শিক্ষানবিসকাল <u>&nbsp;{evaluation.extend_months ? formatNum(evaluation.extend_months) : '......'}&nbsp;</u> মাস বৃদ্ধি করা যেতে পারে।</span>
+                            <span>শিক্ষানবিশকাল <u>&nbsp;{evaluation.extend_months ? formatNum(evaluation.extend_months) : '......'}&nbsp;</u> মাস বৃদ্ধি করা যেতে পারে।</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <span>[{evaluation.recommendation_status === 'not_suitable' ? ' ✓ ' : '   '}]</span>

@@ -236,6 +236,7 @@ use Inertia\Inertia;
         Route::get('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'index'])->name('index');
 
         Route::middleware(['permission:promotion-evaluations.create'])->group(function () {
+            Route::get('/employees/lookup', [\App\Http\Controllers\PromotionEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
             Route::get('/create', [\App\Http\Controllers\PromotionEvaluationController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'store'])->name('store');
         });
@@ -276,6 +277,7 @@ use Inertia\Inertia;
         Route::get('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'index'])->name('index');
 
         Route::middleware(['permission:confirmation-evaluations.create'])->group(function () {
+            Route::get('/employees/lookup', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
             Route::get('/create', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'store'])->name('store');
         });
@@ -304,6 +306,7 @@ use Inertia\Inertia;
         Route::get('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'index'])->name('index');
 
         Route::middleware(['permission:probation-increment-evaluations.create'])->group(function () {
+            Route::get('/employees/lookup', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
             Route::get('/create', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'store'])->name('store');
         });
@@ -333,6 +336,7 @@ use Inertia\Inertia;
         Route::get('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'index'])->name('index');
 
         Route::middleware(['permission:trainee-evaluations.create'])->group(function () {
+            Route::get('/employees/lookup', [\App\Http\Controllers\TraineeEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
             Route::get('/create', [\App\Http\Controllers\TraineeEvaluationController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'store'])->name('store');
         });

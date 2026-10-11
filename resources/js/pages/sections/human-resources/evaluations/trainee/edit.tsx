@@ -61,15 +61,20 @@ export default function TraineeEvaluationEdit({
             const allCriteria = template.sections.flatMap((s: any) => s.criteria || []);
             if (allCriteria.length > 0) {
                 return allCriteria.map((c: any, idx: number) => ({
-                    sl_no: c.order || idx + 1,
-                    key: c.key || `crit_${c.id}`,
-                    nameBn: c.title_bn,
-                    maxScore: Number(c.max_marks),
+                    sl_no: c.order ?? (idx + 1),
+                    key: c.criteria_key || c.key || `crit_${c.id}`,
+                    nameBn: c.name_bn || c.title_bn || c.name_en || '',
+                    maxScore: Number(c.max_score ?? c.max_marks ?? 0),
                 }));
             }
         }
         const conf = TRAINEE_FORM_CONFIGS[type] || TRAINEE_FORM_CONFIGS.officer_abm;
-        return conf.rubrics;
+        return conf.rubrics.map((r: any, idx: number) => ({
+            sl_no: r.sl_no ?? (idx + 1),
+            key: r.key,
+            nameBn: r.nameBn,
+            maxScore: Number(r.maxScore ?? 0),
+        }));
     };
 
     const currentRubrics = useMemo(() => {
@@ -145,22 +150,29 @@ export default function TraineeEvaluationEdit({
     // Auto-recalculate total score
     useEffect(() => {
         const total = data.scores.reduce((sum, item) => {
-            const val = parseFloat(String(item.score)) || 0;
-            return sum + val;
+            const val = parseFloat(String(item.score));
+            return sum + (isNaN(val) ? 0 : val);
         }, 0);
 
-        const gradeConfig = calculateTraineeGrade(total);
+        const safeTotal = isNaN(total) ? 0 : Math.min(100, Math.max(0, parseFloat(total.toFixed(2))));
+        const gradeConfig = calculateTraineeGrade(safeTotal);
         setData((prev) => ({
             ...prev,
-            total_score: Math.min(100, Math.max(0, parseFloat(total.toFixed(2)))),
+            total_score: safeTotal,
             calculated_grade: gradeConfig.grade,
         }));
     }, [data.scores]);
 
     const handleScoreChange = (criteriaKey: string, val: string) => {
         const foundRubric = currentRubrics.find((r: any) => r.key === criteriaKey);
-        const maxScore = foundRubric?.maxScore || 100;
-        let numVal = val === '' ? '' : Math.max(0, Math.min(maxScore, parseFloat(val) || 0));
+        const maxScore = Number(foundRubric?.maxScore) || 100;
+        let numVal: number | string = '';
+        if (val !== '') {
+            const parsed = parseFloat(val);
+            if (!isNaN(parsed)) {
+                numVal = Math.max(0, Math.min(maxScore, parsed));
+            }
+        }
 
         setData('scores', data.scores.map((s) => {
             if (s.criteria_key === criteriaKey) {

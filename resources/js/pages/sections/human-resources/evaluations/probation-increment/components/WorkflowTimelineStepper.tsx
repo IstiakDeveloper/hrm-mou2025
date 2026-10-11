@@ -237,7 +237,7 @@ export default function WorkflowTimelineStepper({
                         </h4>
                         <p className="text-xs text-slate-500 mt-0.5">
                             {lang === 'bn' 
-                                ? 'শিক্ষানবিস বেতন বৃদ্ধির মূল্যায়নের প্রতিটি স্তরের অনুমোদন বিবরণ' 
+                                ? 'শিক্ষানবিশ বেতন বৃদ্ধির মূল্যায়নের প্রতিটি স্তরের অনুমোদন বিবরণ' 
                                 : 'Multi-tier approval verification trail'}
                         </p>
                     </div>

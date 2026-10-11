@@ -105,6 +105,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
 import ActiveMovementBanner from '@/components/active-movement-banner';
+import { EmployeeHeaderSearch } from '@/components/employee/EmployeeHeaderSearch';
 import NotificationDropdown from '@/components/notification-dropdown';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -337,6 +338,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const canSeeHrOnlyMenu = isHRUser || isAccountsDeskUser;
 
+    const isOrdinaryEmployee =
+        auth?.user?.role?.name?.toLowerCase() === 'employee' ||
+        (!isSuperAdmin(auth) && !isHRUser && !hasPermission('employees.view'));
+
+    const canSearchEmployees = !isOrdinaryEmployee && (isSuperAdmin(auth) || isHRUser || hasPermission('employees.view'));
+
     const hasOwnActiveMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
 
     const canCloseOwnMovement = Boolean(hasOwnActiveMovement && hasPermission('movements.complete'));
@@ -549,7 +556,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 submenu: [
                     { title: 'Promotion Evaluation', path: '/promotion-evaluations', permission: 'promotion-evaluations.view' },
                     { title: 'Confirmation Evaluation', path: '/confirmation-evaluations', permission: 'confirmation-evaluations.view' },
-                    { title: 'Probation Increment Evaluation', path: '/probation-increment-evaluations', permission: 'probation-increment-evaluations.view' },
+                    { title: 'Probationary Salary Increase', path: '/probation-increment-evaluations', permission: 'probation-increment-evaluations.view' },
                     { title: 'Trainee Evaluation', path: '/trainee-evaluations', permission: 'trainee-evaluations.view' },
                     { title: 'Evaluation Rubrics', path: '/promotion-evaluations/templates', superAdminOnly: true },
                 ],
@@ -1796,13 +1803,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                                 <Link
                                     href="/office-map"
-                                    className="inline-flex h-9 items-center gap-1.5 rounded-xl px-2 text-slate-600 transition-colors hover:bg-emerald-50/80 hover:text-emerald-800 sm:px-2.5"
+                                    className="hidden sm:inline-flex h-9 items-center gap-1.5 rounded-xl px-2 text-slate-600 transition-colors hover:bg-emerald-50/80 hover:text-emerald-800 sm:px-2.5"
                                     title="Office Map — find branches"
                                 >
                                     <MapPin className="h-5 w-5 shrink-0" />
                                     <span className="hidden text-xs font-semibold sm:inline">Office Map</span>
                                 </Link>
                             </div>
+
+                            {/* Center: Global Employee Live Search */}
+                            {canSearchEmployees && (
+                                <div className="flex-1 min-w-0 max-w-[190px] xs:max-w-[240px] sm:max-w-xs md:max-w-sm lg:max-w-md xl:max-w-lg mx-1 sm:mx-2">
+                                    <EmployeeHeaderSearch />
+                                </div>
+                            )}
 
                             {/* Right: User Menu, Navigation Switcher & Notifications */}
                             <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">

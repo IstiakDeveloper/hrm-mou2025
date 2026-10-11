@@ -346,9 +346,9 @@ export const formCStructure = formCIncrementStructure;
 
 export const probationIncrementTranslations = {
     bn: {
-        pageTitle: 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন',
-        pageSubtitle: 'শিক্ষানবিস কর্মীদের ২য় ধাপে বেতন বৃদ্ধি (Increment) অনুমোদন পরিক্রমা',
-        newEvaluation: 'নতুন ইনক্রিমেন্ট মূল্যায়ন',
+        pageTitle: 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন',
+        pageSubtitle: 'শিক্ষানবিশ কর্মীদের ২য় ধাপে বেতন বৃদ্ধি (Increment) অনুমোদন পরিক্রমা',
+        newEvaluation: 'নতুন বেতন বৃদ্ধি',
         searchPlaceholder: 'পিন বা কর্মীর নাম দিয়ে খুঁজুন...',
         allStatuses: 'সকল স্ট্যাটাস',
         allForms: 'সকল ফরম',
@@ -382,7 +382,7 @@ export const probationIncrementTranslations = {
     en: {
         pageTitle: 'Probation Increment Evaluations',
         pageSubtitle: 'Probation employee 2nd step salary increment performance evaluation and workflow',
-        newEvaluation: 'New Increment Evaluation',
+        newEvaluation: 'New Probationary Salary Increase',
         searchPlaceholder: 'Search by PIN or employee name...',
         allStatuses: 'All Statuses',
         allForms: 'All Forms',

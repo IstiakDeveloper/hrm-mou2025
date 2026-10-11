@@ -89,7 +89,7 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                 };
             case 'probation_increment':
                 return {
-                    labelBn: 'শিক্ষানবিস বেতন বৃদ্ধি',
+                    labelBn: 'শিক্ষানবিশ বেতন বৃদ্ধি',
                     badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
                     activeText: 'text-amber-700',
                     activeBg: 'bg-amber-50',
@@ -405,7 +405,7 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                             }`}
                         >
                             <Award className="h-4 w-4" />
-                            <span>শিক্ষানবিস বেতন বৃদ্ধি (Probation Increment)</span>
+                            <span>শিক্ষানবিশ বেতন বৃদ্ধি (Probation Increment)</span>
                             <span className="text-[11px] opacity-80 font-normal">
                                 ({templates.filter(t => t.appraisal_type === 'probation_increment').length})
                             </span>
@@ -694,7 +694,7 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
 
                         <div className="py-3 text-xs sm:text-sm text-slate-600 space-y-2.5">
                             <p>
-                                ভবিষ্যতে যখন অন্যান্য মূল্যায়ন মডিউল (যেমন: <strong>বার্ষিক কর্মমূল্যায়ন / ACR</strong>, <strong>শিক্ষানবিস ও স্থায়ীকরণ মূল্যায়ন</strong> ইত্যাদি) বাস্তবায়িত হবে, তখন এখান থেকে নতুন ক্যাটাগরি তৈরি করে সম্পূর্ণ স্বাধীন ফরম ও রুব্রিক্স সংজ্ঞায়িত করা যাবে।
+                                ভবিষ্যতে যখন অন্যান্য মূল্যায়ন মডিউল (যেমন: <strong>বার্ষিক কর্মমূল্যায়ন / ACR</strong>, <strong>শিক্ষানবিশ ও স্থায়ীকরণ মূল্যায়ন</strong> ইত্যাদি) বাস্তবায়িত হবে, তখন এখান থেকে নতুন ক্যাটাগরি তৈরি করে সম্পূর্ণ স্বাধীন ফরম ও রুব্রিক্স সংজ্ঞায়িত করা যাবে।
                             </p>
                             <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900">
                                 বর্তমানে আপনার পদোন্নতি মূল্যায়নের ৩টি ফরম (ক, খ, গ) সম্পূর্ণ চালু ও কার্যকর রয়েছে।

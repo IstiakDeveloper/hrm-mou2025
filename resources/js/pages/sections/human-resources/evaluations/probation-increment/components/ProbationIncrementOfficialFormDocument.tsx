@@ -1,18 +1,70 @@
-import React, { useMemo } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
-import { 
-    formAStructure, 
-    formBStructure, 
-    formCStructure, 
-    getFormStructure, 
-    calculateGrade 
-} from '../probation-increment-config';
+import { getFormStructure } from '../probation-increment-config';
 
 interface ProbationIncrementOfficialFormDocumentProps {
     evaluation: any;
     lang?: 'bn' | 'en';
+}
+
+const BN_SECTION_LETTERS = ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ', 'ছ', 'জ', 'ঝ'];
+
+function FitPage({ children, breakAfter = true }: { children: React.ReactNode; breakAfter?: boolean }) {
+    const frameRef = useRef<HTMLDivElement>(null);
+    const innerRef = useRef<HTMLDivElement>(null);
+
+    useLayoutEffect(() => {
+        const fit = () => {
+            const frame = frameRef.current;
+            const inner = innerRef.current;
+            if (!frame || !inner) return;
+
+            inner.style.setProperty('zoom', '1');
+            inner.style.width = '100%';
+
+            const available = frame.clientHeight;
+            const needed = inner.scrollHeight;
+            if (available <= 0 || needed <= 0) return;
+
+            const scale = Math.min(1, (available * 0.985) / needed);
+            inner.style.setProperty('zoom', String(scale));
+            inner.style.width = scale < 0.995 ? `${100 / scale}%` : '100%';
+        };
+
+        fit();
+        const onPrint = () => {
+            fit();
+            requestAnimationFrame(fit);
+        };
+        window.addEventListener('beforeprint', onPrint);
+        window.addEventListener('resize', fit);
+        return () => {
+            window.removeEventListener('beforeprint', onPrint);
+            window.removeEventListener('resize', fit);
+        };
+    });
+
+    return (
+        <div
+            ref={frameRef}
+            className="probation-fit-page mx-auto w-full max-w-[200mm] bg-white mb-6 print:mb-0"
+            style={{
+                height: '270mm',
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                breakInside: 'avoid',
+                pageBreakInside: 'avoid',
+                breakAfter: breakAfter ? 'page' : 'auto',
+                pageBreakAfter: breakAfter ? 'always' : 'auto',
+            }}
+        >
+            <div ref={innerRef} className="text-[10px] leading-tight [&_td]:py-[2px] [&_th]:py-[2px]">
+                {children}
+            </div>
+        </div>
+    );
 }
 
 const toBn = (num: number | string | null | undefined) => {
@@ -22,15 +74,15 @@ const toBn = (num: number | string | null | undefined) => {
 };
 
 const formatDate = (dateStr?: string | null, targetLang: 'bn' | 'en' = 'bn') => {
-    if (!dateStr) return '-';
+    if (!dateStr) return '';
     const str = String(dateStr).trim();
-    if (!str || str === '-') return '-';
+    if (!str || str === '-') return '';
 
     let formatted = str;
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
         formatted = str;
-    } else if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-        const [year, month, day] = str.split('-');
+    } else if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const [year, month, day] = str.slice(0, 10).split('-');
         formatted = `${day}/${month}/${year}`;
     } else {
         try {
@@ -43,36 +95,82 @@ const formatDate = (dateStr?: string | null, targetLang: 'bn' | 'en' = 'bn') => 
         }
     }
 
-    if (targetLang === 'bn') {
-        return toBn(formatted);
-    }
-    return formatted;
+    return targetLang === 'bn' ? toBn(formatted) : formatted;
 };
 
 const formatClosingMonth = (val?: string | null, targetLang: 'bn' | 'en' = 'bn') => {
-    if (!val) return '__________________';
+    if (!val) return '________________';
     const str = String(val).trim();
     if (/^\d{4}-\d{2}$/.test(str)) {
         const [year, monthStr] = str.split('-');
         const monthNum = parseInt(monthStr, 10);
         const bnMonths = [
             'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
-            'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'
+            'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
         ];
         const enMonths = [
             'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
+            'July', 'August', 'September', 'October', 'November', 'December',
         ];
         if (monthNum >= 1 && monthNum <= 12) {
-            if (targetLang === 'bn') {
-                return `${bnMonths[monthNum - 1]} ${toBn(year)}`;
-            } else {
-                return `${enMonths[monthNum - 1]} ${year}`;
-            }
+            return targetLang === 'bn'
+                ? `${bnMonths[monthNum - 1]} ${toBn(year)}`
+                : `${enMonths[monthNum - 1]} ${year}`;
         }
     }
     return targetLang === 'bn' ? toBn(str) : str;
 };
+
+const shortSectionName = (nameBn: string) => {
+    return nameBn
+        .replace(/^[ক-হ]\.\s*/, '')
+        .replace(/\s*\([^)]*\)\s*-\s*[০-৯\d]+\s*নম্বর\s*$/, '')
+        .replace(/\s*-\s*[০-৯\d]+\s*নম্বর\s*$/, '')
+        .replace(/\s*\([০-৯\d]+\s*নম্বর\)\s*$/, '')
+        .trim();
+};
+
+const stripItemNumber = (name: string) => name.replace(/^([০-৯]+|\d+)\.\s*/, '');
+
+const FORM_COPY = {
+    officer_abm: {
+        titleBn: 'শিক্ষানবিশকালীন ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম',
+        subtitleBn: '(অফিসার ও সহকারী শাখা ব্যবস্থাপক পদবীর জন্য প্রযোজ্য)',
+        titleEn: 'Probation 2nd Step Salary Increment Evaluation Form',
+        subtitleEn: '(Applicable for Officer & Assistant Branch Manager)',
+        deptBn: 'মাইক্রোফাইন্যান্স বিভাগের মন্তব্য ও সুপারিশ:',
+        deptEn: 'Microfinance Department remarks & recommendation:',
+        pages: 2,
+        firstPageSections: 4,
+    },
+    accountant: {
+        titleBn: 'শিক্ষানবিশকালীন ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম',
+        subtitleBn: '(হিসাবরক্ষক পদবীর জন্য প্রযোজ্য)',
+        titleEn: 'Probation 2nd Step Salary Increment Evaluation Form',
+        subtitleEn: '(Applicable for Accountant)',
+        deptBn: 'অর্থ ও হিসাব বিভাগের মন্তব্য ও সুপারিশ:',
+        deptEn: 'Finance & Accounts Department remarks & recommendation:',
+        pages: 3,
+        firstPageSections: 3,
+    },
+    bm_and_above: {
+        titleBn: 'শিক্ষানবিশকালীন ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম',
+        subtitleBn: '(শাখা ব্যবস্থাপক থেকে তদূর্ধ্ব পদবীর জন্য প্রযোজ্য)',
+        titleEn: 'Probation 2nd Step Salary Increment Evaluation Form',
+        subtitleEn: '(Applicable for Branch Manager and above)',
+        deptBn: 'মাইক্রোফাইন্যান্স বিভাগের মন্তব্য ও সুপারিশ:',
+        deptEn: 'Microfinance Department remarks & recommendation:',
+        pages: 3,
+        firstPageSections: 4,
+    },
+} as const;
+
+const HR_ITEMS = [
+    { key: 'hr_financial_irregularity', labelBn: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', labelEn: 'Proven financial irregularity / embezzlement' },
+    { key: 'hr_disciplinary_action', labelBn: 'যেকোনো শাস্তিমূলক ব্যবস্থার আওতায় দেওয়া কোনো চিঠিপত্র', labelEn: 'Any letter issued under disciplinary action' },
+    { key: 'hr_audit_objection', labelBn: 'সর্বশেষ অডিটে গুরুতর আপত্তি', labelEn: 'Serious objection in the latest audit' },
+    { key: 'hr_leave_without_pay', labelBn: 'বিনা বেতনে ছুটি ভোগ', labelEn: 'Leave without pay' },
+] as const;
 
 export default function ProbationIncrementOfficialFormDocument({
     evaluation,
@@ -81,7 +179,8 @@ export default function ProbationIncrementOfficialFormDocument({
     const { auth } = usePage<SharedData>().props;
     const { employee = {}, scores = [], signatures = [] } = evaluation;
 
-    const formType = evaluation.form_type || 'officer_abm';
+    const formType = (evaluation.form_type || 'officer_abm') as keyof typeof FORM_COPY;
+    const copy = FORM_COPY[formType] || FORM_COPY.officer_abm;
     const activeStructure = useMemo(() => getFormStructure(formType), [formType]);
 
     const scoreMap = useMemo(() => {
@@ -92,59 +191,71 @@ export default function ProbationIncrementOfficialFormDocument({
         return map;
     }, [scores]);
 
-    const formatNum = (val: any) => {
-        if (val === null || val === undefined || val === '') return '-';
-        return lang === 'bn' ? toBn(val) : String(val);
+    const sectionTotals = useMemo(() => {
+        return activeStructure.map((sec) => {
+            let maxTotal = 0;
+            let obtainedTotal = 0;
+            let anyScored = false;
+            sec.items.forEach((it) => {
+                maxTotal += Number(it.max || 0);
+                const scored = scoreMap[it.key]?.obtained_score;
+                if (scored !== undefined && scored !== null && String(scored) !== '' && !isNaN(Number(scored))) {
+                    obtainedTotal += Number(scored);
+                    anyScored = true;
+                }
+            });
+            return { ...sec, maxTotal, obtainedTotal, anyScored };
+        });
+    }, [activeStructure, scoreMap]);
+
+    const formatMark = (val: any) => {
+        if (val === null || val === undefined || val === '') return '';
+        const num = Number(val);
+        if (isNaN(num)) return String(val);
+        const str = Number(num.toFixed(2)).toString();
+        return lang === 'bn' ? toBn(str) : str;
     };
 
-    const formatDateVal = (dateStr?: string | null) => formatDate(dateStr, lang);
+    const formatStat = (val: any, suffix = '') => {
+        if (val === null || val === undefined || val === '') return '';
+        const text = `${val}${suffix}`;
+        return lang === 'bn' ? toBn(text) : text;
+    };
 
-    const getDiffDisplay = (
-        joiningVal: any, 
-        closingVal: any, 
-        explicitDiff?: any,
-        isPercentage: boolean = false
-    ) => {
+    const getDiffDisplay = (joiningVal: any, closingVal: any, explicitDiff?: any, isPercentage = false) => {
+        const suffix = isPercentage ? '%' : '';
         if (explicitDiff !== undefined && explicitDiff !== null && String(explicitDiff).trim() !== '') {
             const num = parseFloat(String(explicitDiff));
             if (!isNaN(num)) {
                 const formatted = Number.isInteger(num) ? String(num) : num.toFixed(2);
                 const prefix = num > 0 ? '+' : '';
-                const localized = formatNum(formatted);
-                return `${prefix}${localized}${isPercentage ? '%' : ''}`;
+                return formatStat(`${prefix}${formatted}`, suffix);
             }
-            return `${formatNum(explicitDiff)}${isPercentage ? '%' : ''}`;
+            return formatStat(explicitDiff, suffix);
         }
-
         const hasJ = joiningVal !== undefined && joiningVal !== null && String(joiningVal).trim() !== '';
         const hasC = closingVal !== undefined && closingVal !== null && String(closingVal).trim() !== '';
-
-        if (!hasJ && !hasC) return '-';
-
-        const j = hasJ ? parseFloat(String(joiningVal)) : 0;
-        const c = hasC ? parseFloat(String(closingVal)) : 0;
-
-        if (isNaN(j) || isNaN(c)) return '-';
-
-        const diff = c - j;
+        if (!hasJ && !hasC) return '';
+        const diff = (hasC ? parseFloat(String(closingVal)) : 0) - (hasJ ? parseFloat(String(joiningVal)) : 0);
+        if (isNaN(diff)) return '';
         const formatted = Number.isInteger(diff) ? String(diff) : diff.toFixed(2);
         const prefix = diff > 0 ? '+' : '';
-        const localized = formatNum(formatted);
-        return `${prefix}${localized}${isPercentage ? '%' : ''}`;
+        return formatStat(`${prefix}${formatted}`, suffix);
     };
 
-    const getSignature = (stage: string) => {
-        return signatures.find((s: any) => s.stage === stage);
-    };
+    const getSignature = (stage: string) => signatures.find((s: any) => s.stage === stage);
 
-    const initiatorSig = getSignature('initiator') || {
-        stage: 'initiator',
-        user: evaluation.initiator || auth?.user,
-        signed_at: evaluation.created_at || new Date().toISOString(),
-    };
+    const initiatorSig = getSignature('initiator') || (evaluation.initiator || evaluation.created_at
+        ? {
+            stage: 'initiator',
+            user: evaluation.initiator || auth?.user,
+            signed_at: evaluation.created_at,
+            comments: evaluation.other_remarks || evaluation.initiator_remarks || '',
+        }
+        : null);
     const rmSig = getSignature('rm');
     const zmSig = getSignature('zm');
-    const directorSig = getSignature('director_mf') || getSignature('director_fa') || signatures.find((s: any) => s.stage?.includes('director'));
+    const directorSig = getSignature('director_mf') || getSignature('director_fa') || signatures.find((s: any) => String(s.stage || '').includes('director'));
     const hrSig = getSignature('hr');
     const edSig = getSignature('ed') || signatures.find((s: any) => s.stage === 'approved');
 
@@ -152,484 +263,479 @@ export default function ProbationIncrementOfficialFormDocument({
         const sigPath = sig?.user?.signature || sig?.user?.employee?.signature || fallbackUser?.signature || fallbackUser?.employee?.signature;
         if (!sigPath) return null;
         return (
-            <div className="flex justify-center mb-0.5">
+            <div className="flex justify-end mb-0.5">
                 <img src={`/storage/${sigPath}`} alt="Signature" className="h-7 max-h-7 max-w-[120px] object-contain" />
             </div>
         );
     };
 
-    const formTitleBn = formType === 'accountant'
-        ? 'শিক্ষানবিসকালীন ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম (হিসাবরক্ষক পদবীর জন্য প্রযোজ্য)'
-        : formType === 'bm_and_above'
-        ? 'শিক্ষানবিসকালীন ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম (শাখা ব্যবস্থাপক থেকে জোনাল ম্যানেজার পদবীর জন্য প্রযোজ্য)'
-        : 'শিক্ষানবিসকালীন ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম (অফিসার ও সহকারী শাখা ব্যবস্থাপক পদবীর জন্য প্রযোজ্য)';
-
-    const formTitleEn = formType === 'accountant'
-        ? 'Probation Increment Evaluation Form (Accountant)'
-        : formType === 'bm_and_above'
-        ? 'Probation Increment Evaluation Form (Branch Manager to Zonal Manager)'
-        : 'Probation Increment Evaluation Form (Officer & Assistant Branch Manager)';
-
     const employeeName = lang === 'bn'
-        ? (employee.name_bn || employee.name_en || 'কর্মীর নাম')
-        : (employee.name_en || employee.name_bn || 'Employee Name');
+        ? (employee.name_bn || employee.name_en || '')
+        : (employee.name_en || employee.name_bn || '');
 
     const designationName = lang === 'bn'
-        ? (employee.designation?.name_bn || employee.designation?.name || employee.designation?.title || '-')
-        : (employee.designation?.name_en || employee.designation?.name || employee.designation?.title || '-');
+        ? (employee.designation?.name_bn || employee.designation?.name || employee.designation?.title || '')
+        : (employee.designation?.name_en || employee.designation?.name || employee.designation?.title || '');
 
-    const branchName = employee.branch?.name || evaluation.branch?.name || '-';
+    const branchName = employee.branch?.name || evaluation.branch?.name || '';
 
     const resolveRegionName = () => {
         const br = employee.branch || evaluation.branch;
-        if (br?.regionalOffice?.name) return br.regionalOffice.name;
-        if (br?.regional_office?.name) return br.regional_office.name;
-        if (typeof br?.regional_office === 'string' && br.regional_office) return br.regional_office;
-        if (br?.regional_office_name) return br.regional_office_name;
-        if (evaluation.regionalOffice?.name) return evaluation.regionalOffice.name;
-        if (evaluation.regional_office?.name) return evaluation.regional_office.name;
-        if (employee.regionalOffice?.name) return employee.regionalOffice.name;
-        if (employee.regional_office?.name) return employee.regional_office.name;
-        if (br?.is_head_office) return lang === 'bn' ? 'প্রধান কার্যালয়' : 'Head Office';
-        return '-';
+        return br?.regionalOffice?.name
+            || br?.regional_office?.name
+            || (typeof br?.regional_office === 'string' ? br.regional_office : '')
+            || br?.regional_office_name
+            || evaluation.regionalOffice?.name
+            || evaluation.regional_office?.name
+            || employee.regionalOffice?.name
+            || employee.regional_office?.name
+            || (br?.is_head_office ? (lang === 'bn' ? 'প্রধান কার্যালয়' : 'Head Office') : '');
     };
 
     const resolveZoneName = () => {
         const br = employee.branch || evaluation.branch;
-        if (br?.regionalOffice?.zone?.name) return br.regionalOffice.zone.name;
-        if (br?.regional_office?.zone?.name) return br.regional_office.zone.name;
-        if (typeof br?.zone === 'string' && br.zone) return br.zone;
-        if (br?.zone_name) return br.zone_name;
-        if (evaluation.zone?.name) return evaluation.zone.name;
-        if (evaluation.regionalOffice?.zone?.name) return evaluation.regionalOffice.zone.name;
-        if (employee.zone?.name) return employee.zone.name;
-        if (br?.is_head_office) return lang === 'bn' ? 'প্রধান কার্যালয়' : 'Head Office';
-        return '-';
+        return br?.regionalOffice?.zone?.name
+            || br?.regional_office?.zone?.name
+            || (typeof br?.zone === 'string' ? br.zone : '')
+            || br?.zone_name
+            || evaluation.zone?.name
+            || evaluation.regionalOffice?.zone?.name
+            || employee.zone?.name
+            || (br?.is_head_office ? (lang === 'bn' ? 'প্রধান কার্যালয়' : 'Head Office') : '');
     };
 
-    const regionName = resolveRegionName();
-    const zoneName = resolveZoneName();
+    const recommendation = evaluation.supervisor_recommendation || evaluation.recommendation_status;
+    const totalLetters = sectionTotals.map((_, i) => BN_SECTION_LETTERS[i]).filter(Boolean).join('+');
+    const anyScore = sectionTotals.some((sec) => sec.anyScored);
+    const grade = evaluation.calculated_grade;
 
-    const totalScore = Number(evaluation.total_score || 0);
+    const firstPageSections = sectionTotals.slice(0, copy.firstPageSections);
+    const restSections = sectionTotals.slice(copy.firstPageSections);
 
-    return (
-        <div className="bg-white text-black text-[12px] leading-tight font-serif p-6 max-w-[210mm] mx-auto shadow-none print:p-0 print:max-w-none print:m-0">
-            {/* Header with Logo */}
-            <div className="text-center mb-3">
-                <div className="flex justify-center mb-1">
-                    <img src="/logo.png" alt="Organization Logo" className="h-14 w-auto object-contain" onError={(e) => { (e.target as any).style.display = 'none'; }} />
-                </div>
-                <h1 className="text-xl font-bold tracking-wide">মৌসুমী</h1>
-                <p className="text-xs">উকিলপাড়া, নওগাঁ।</p>
-                <div className="mt-1 inline-block border-b-2 border-black pb-0.5">
-                    <h2 className="text-sm font-bold">
-                        {lang === 'bn' ? formTitleBn : formTitleEn}
-                    </h2>
-                </div>
+    let itemNo = 0;
+
+    const renderScoreBody = (sections: typeof sectionTotals, showGrandTotal: boolean) => (
+        <>
+            {sections.map((sec) => (
+                <React.Fragment key={sec.section_key}>
+                    <tr className="bg-gray-100 font-bold">
+                        <td className="border border-black px-1.5 py-0.5" colSpan={4}>
+                            {lang === 'bn' ? sec.section_name_bn : sec.section_name_en}
+                        </td>
+                    </tr>
+                    {sec.items.map((it) => {
+                        itemNo += 1;
+                        const current = itemNo;
+                        const entry = scoreMap[it.key];
+                        const obtained = entry?.obtained_score;
+                        const hasScore = obtained !== undefined && obtained !== null && String(obtained) !== '';
+                        return (
+                            <tr key={it.key}>
+                                <td className="border border-black px-1 py-0.5 text-center font-mono w-8">
+                                    {lang === 'bn' ? toBn(current) : current}
+                                </td>
+                                <td className="border border-black px-1.5 py-0.5">
+                                    {stripItemNumber(lang === 'bn' ? it.name_bn : it.name_en)}
+                                </td>
+                                <td className="border border-black px-1 py-0.5 text-center font-mono w-16">
+                                    {formatMark(it.max)}
+                                </td>
+                                <td className="border border-black px-1 py-0.5 text-center font-mono font-bold w-16">
+                                    {hasScore ? formatMark(obtained) : ''}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                    <tr className="font-semibold bg-gray-50">
+                        <td className="border border-black px-1 py-0.5 text-right font-bold" colSpan={2}>
+                            {lang === 'bn' ? 'উপ-মোট' : 'Sub-total'}
+                        </td>
+                        <td className="border border-black px-1 py-0.5 text-center font-mono font-bold">
+                            {formatMark(sec.maxTotal)}
+                        </td>
+                        <td className="border border-black px-1 py-0.5 text-center font-mono font-bold">
+                            {sec.anyScored ? formatMark(sec.obtainedTotal) : ''}
+                        </td>
+                    </tr>
+                </React.Fragment>
+            ))}
+            {showGrandTotal && (
+                <tr className="bg-gray-100 font-bold">
+                    <td className="border border-black px-1.5 py-1 text-right" colSpan={2}>
+                        {lang === 'bn' ? `সর্বমোট (${totalLetters})` : 'Grand total'}
+                    </td>
+                    <td className="border border-black px-1 py-1 text-center font-mono">{lang === 'bn' ? '১০০' : '100'}</td>
+                    <td className="border border-black px-1 py-1 text-center font-mono">
+                        {anyScore ? formatMark(evaluation.total_score || 0) : ''}
+                    </td>
+                </tr>
+            )}
+        </>
+    );
+
+    const scoreHead = (
+        <thead>
+            <tr className="bg-gray-100 font-bold">
+                <th className="border border-black p-1 text-center w-8">{lang === 'bn' ? 'ক্র.' : 'SL'}</th>
+                <th className="border border-black p-1 text-left">{lang === 'bn' ? 'মূল্যায়ন সূচক' : 'Criteria'}</th>
+                <th className="border border-black p-1 text-center w-16">{lang === 'bn' ? 'সর্বোচ্চ নম্বর' : 'Max'}</th>
+                <th className="border border-black p-1 text-center w-16">{lang === 'bn' ? 'প্রাপ্ত নম্বর' : 'Obtained'}</th>
+            </tr>
+        </thead>
+    );
+
+    const pageHeader = (
+        <div className="flex justify-between items-start mb-1 border-b border-black pb-1">
+            <img
+                src="/logo.png"
+                alt="মৌসুমী"
+                className="h-9 w-auto object-contain shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div className="text-center flex-1 px-2">
+                <h1 className="text-lg font-black leading-none">{lang === 'bn' ? 'মৌসুমী' : 'MOUSUMI'}</h1>
+                <p className="text-[10px] mt-0.5">{lang === 'bn' ? 'উকিলপাড়া, নওগাঁ।' : 'Ukilpara, Naogaon.'}</p>
+                <h2 className="text-[12px] font-bold mt-0.5">{lang === 'bn' ? copy.titleBn : copy.titleEn}</h2>
+                <h3 className="text-[10px] font-bold">{lang === 'bn' ? copy.subtitleBn : copy.subtitleEn}</h3>
             </div>
+            <div className="w-9 shrink-0" />
+        </div>
+    );
 
-            {/* Basic Info Table */}
-            <table className="w-full border-collapse border border-black mb-3 text-[11px]">
+    const pageNumber = (page: number) => (
+        <div className="text-right text-[9px] font-mono text-gray-600 mt-2">
+            Page {page} of {copy.pages}
+        </div>
+    );
+
+    const tick = (on: boolean) => (on ? '✓' : '');
+
+    const ynCell = (value: any, expect: boolean) => {
+        if (value === null || value === undefined || value === '') return '';
+        const yes = value === true || value === 1 || value === '1';
+        return tick(expect ? yes : !yes);
+    };
+
+    const summaryTable = (
+        <div className="grid grid-cols-2 gap-2 mb-2">
+            <table className="w-full border-collapse border border-black text-[10px] h-fit">
+                <thead>
+                    <tr className="bg-gray-100 font-bold">
+                        <th className="border border-black p-1 text-center" colSpan={3}>
+                            {lang === 'bn' ? 'মোট নম্বর' : 'Total marks'}
+                        </th>
+                    </tr>
+                    <tr className="bg-gray-50 font-semibold">
+                        <th className="border border-black p-1 text-left">{lang === 'bn' ? 'মূল্যায়ন সূচক' : 'Section'}</th>
+                        <th className="border border-black p-1 text-center w-10">{lang === 'bn' ? 'নম্বর' : 'Max'}</th>
+                        <th className="border border-black p-1 text-center w-12">{lang === 'bn' ? 'প্রাপ্ত নম্বর' : 'Got'}</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    <tr className="border-b border-black">
-                        <td className="border-r border-black p-1.5 w-1/4"><b>নাম:</b> {employeeName}</td>
-                        <td className="border-r border-black p-1.5 w-1/4"><b>পদবী:</b> {designationName}</td>
-                        <td className="p-1.5 w-1/2" colSpan={2}><b>পিন নং:</b> {formatNum(employee.pin)}</td>
-                    </tr>
-                    <tr className="border-b border-black">
-                        <td className="border-r border-black p-1.5"><b>শাখার নাম:</b> {branchName}</td>
-                        <td className="border-r border-black p-1.5"><b>অঞ্চলের নাম:</b> {regionName}</td>
-                        <td className="p-1.5" colSpan={2}><b>জোন:</b> {zoneName}</td>
-                    </tr>
-                    <tr className="border-b border-black">
-                        <td className="border-r border-black p-1.5" colSpan={2}>
-                            <b>সংস্থায় যোগদানের তারিখ:</b> {formatDateVal(evaluation.joining_date)}
-                        </td>
-                        <td className="p-1.5" colSpan={2}>
-                            <b>শিক্ষানবিসকাল ০৩ মাস পূর্তির তারিখ:</b> {formatDateVal(evaluation.probation_3m_completion_date)}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td className="border-r border-black p-1.5" colSpan={2}>
-                            <b>শিক্ষাগত যোগ্যতা (যোগদানের সময়):</b> {evaluation.education_at_joining || employee.educational_qualification || '-'}
-                        </td>
-                        <td className="p-1.5" colSpan={2}>
-                            <b>শিক্ষাগত যোগ্যতা (বর্তমান):</b> {evaluation.education_current || employee.educational_qualification || '-'}
+                    {sectionTotals.map((sec) => (
+                        <tr key={sec.section_key}>
+                            <td className="border border-black px-1 py-0.5">{lang === 'bn' ? shortSectionName(sec.section_name_bn) : sec.section_name_en}</td>
+                            <td className="border border-black px-1 py-0.5 text-center font-mono">{formatMark(sec.maxTotal)}</td>
+                            <td className="border border-black px-1 py-0.5 text-center font-mono font-bold">
+                                {sec.anyScored ? formatMark(sec.obtainedTotal) : ''}
+                            </td>
+                        </tr>
+                    ))}
+                    <tr className="font-bold bg-gray-100">
+                        <td className="border border-black px-1 py-0.5 text-right">{lang === 'bn' ? 'সর্বমোট' : 'Total'}</td>
+                        <td className="border border-black px-1 py-0.5 text-center font-mono">{lang === 'bn' ? '১০০' : '100'}</td>
+                        <td className="border border-black px-1 py-0.5 text-center font-mono">
+                            {anyScore ? formatMark(evaluation.total_score || 0) : ''}
                         </td>
                     </tr>
                 </tbody>
             </table>
 
-            {/* Achievement Statistics Table */}
-            <div className="mb-3">
-                <div className="flex items-center justify-between mb-1 text-[11px] font-bold">
-                    <span>
-                        {lang === 'bn'
-                            ? (formType === 'accountant' ? 'মূল্যায়ণকালীন অর্জন (সর্বশেষ মাস ক্লোজিং অনুযায়ী):' : 'মূল্যায়ণকালীন অর্জন (যোগদান এবং সর্বশেষ মাস ক্লোজিং অনুযায়ী):')
-                            : 'Performance Statistics (At Joining and Latest Closing):'
-                        }
-                    </span>
-                    <span>
-                        {lang === 'bn' ? 'ক্লোজিং মাসের নাম:' : 'Closing Month:'}{' '}
-                        <u>{formatClosingMonth(evaluation.closing_month, lang)}</u>
+            <table className="w-full border-collapse border border-black text-[10px] h-fit">
+                <thead>
+                    <tr className="bg-gray-100 font-bold">
+                        <th className="border border-black p-1 text-center" colSpan={2}>
+                            {lang === 'bn' ? 'প্রাপ্ত নম্বর অনুযায়ী অবস্থান' : 'Position by obtained marks'}
+                        </th>
+                    </tr>
+                    <tr className="bg-gray-50 font-semibold">
+                        <th className="border border-black p-1 text-center w-16">{lang === 'bn' ? 'স্কোর' : 'Score'}</th>
+                        <th className="border border-black p-1 text-left">{lang === 'bn' ? 'ফলাফল' : 'Result'}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {[
+                        { id: 'excellent', score: '৮৫-১০০', en: '85-100', resultBn: 'Excellent (বেতন বৃদ্ধির জন্য অত্যন্ত উপযুক্ত)', resultEn: 'Excellent (highly suitable for increment)' },
+                        { id: 'very_good', score: '৬৫-৮৪', en: '65-84', resultBn: 'Very Good (বেতন বৃদ্ধির জন্য উপযুক্ত)', resultEn: 'Very Good (suitable for increment)' },
+                        { id: 'good', score: '৫০-৬৪', en: '50-64', resultBn: 'Good (বেতন বৃদ্ধির জন্য বিবেচনাযোগ্য)', resultEn: 'Good (may be considered for increment)' },
+                        { id: 'not_satisfactory', score: '৫০-এর নিচে', en: 'Below 50', resultBn: 'Not Satisfactory (বেতন বৃদ্ধির জন্য অনুপযুক্ত)', resultEn: 'Not Satisfactory (not suitable for increment)' },
+                    ].map((row) => (
+                        <tr key={row.id} className={grade === row.id ? 'bg-emerald-50 font-bold' : ''}>
+                            <td className="border border-black px-1 py-1 text-center align-top">{lang === 'bn' ? row.score : row.en}</td>
+                            <td className="border border-black px-1 py-1 align-top">{lang === 'bn' ? row.resultBn : row.resultEn}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+
+    const personalFile = (
+        <div className="mb-2">
+            <p className="font-bold text-[11px] mb-1">
+                {lang === 'bn'
+                    ? 'ব্যক্তিগত ফাইল পর্যবেক্ষণ (মানবসম্পদ বিভাগ কর্তৃক পূরণ করা হবে): নিচের যেকোনো একটি গত ০৩ মাসের মধ্যে হয়েছে কি না?'
+                    : 'Personal file review (to be filled by HR): has any of the following occurred in the last 03 months?'}
+            </p>
+            <table className="w-full border-collapse border border-black text-[10.5px]">
+                <thead>
+                    <tr className="bg-gray-100 font-bold">
+                        <th className="border border-black p-1 text-left">{lang === 'bn' ? 'বিষয়' : 'Item'}</th>
+                        <th className="border border-black p-1 text-center w-12">{lang === 'bn' ? 'হ্যাঁ' : 'Yes'}</th>
+                        <th className="border border-black p-1 text-center w-12">{lang === 'bn' ? 'না' : 'No'}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {HR_ITEMS.map((item) => (
+                        <tr key={item.key}>
+                            <td className="border border-black px-1.5 py-0.5">{lang === 'bn' ? item.labelBn : item.labelEn}</td>
+                            <td className="border border-black text-center font-bold">{ynCell(evaluation[item.key], true)}</td>
+                            <td className="border border-black text-center font-bold">{ynCell(evaluation[item.key], false)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+
+    const signLine = (sig: any, fallbackUser?: any) => (
+        <div className="flex justify-end items-end mt-1">
+            <div className="text-right text-[10px]">
+                {renderSignatureImage(sig, fallbackUser)}
+                {(sig?.user?.name || fallbackUser?.name) && (
+                    <div className="font-semibold">{sig?.user?.name || fallbackUser?.name}</div>
+                )}
+                <div className="font-mono">{formatDate(sig?.signed_at, lang)}</div>
+                <div className="border-t border-black w-36 mt-0.5 pt-0.5 text-center font-bold">
+                    {lang === 'bn' ? 'স্বাক্ষর, তারিখ ও সিল' : 'Signature, date & seal'}
+                </div>
+            </div>
+        </div>
+    );
+
+    const commentBox = (title: string, body?: string | null, sig?: any, fallbackUser?: any) => (
+        <div className="border border-black p-1.5 mb-1.5 break-inside-avoid">
+            <div className="font-bold text-[11px]">{title}</div>
+            {body ? <p className="mt-0.5 whitespace-pre-wrap">{body}</p> : <div className="min-h-[16px]" />}
+            {signLine(sig, fallbackUser)}
+        </div>
+    );
+
+    const supervisorBlock = (
+        <div className="border border-black p-1.5 mb-1.5 break-inside-avoid">
+            <div className="font-bold text-[11px] mb-1">
+                {lang === 'bn' ? '১ম তত্ত্বাবধায়কের মন্তব্য ও সুপারিশ:' : '1st supervisor remarks & recommendation:'}
+            </div>
+            <div className="space-y-0.5 text-[10.5px]">
+                <div><span className="font-semibold">➢ {lang === 'bn' ? 'উক্ত কর্মচারীর প্রধান শক্তি/দক্ষতা (Strength):' : 'Strength:'}</span> {evaluation.strengths || ''}</div>
+                <div><span className="font-semibold">➢ {lang === 'bn' ? 'উক্ত কর্মচারীর দুর্বলতা/উন্নয়নের ক্ষেত্রসমূহ (Weakness/Area to Develop):' : 'Weakness / area to develop:'}</span> {evaluation.weaknesses || ''}</div>
+                <div><span className="font-semibold">➢ {lang === 'bn' ? 'উক্ত কর্মচারীর প্রশিক্ষণের প্রয়োজন কি না:' : 'Training needed:'}</span> {evaluation.training_need || ''}</div>
+                <div><span className="font-semibold">➢ {lang === 'bn' ? 'অন্যান্য মন্তব্য (যদি থাকে):' : 'Other remarks:'}</span> {evaluation.other_remarks || evaluation.initiator_remarks || ''}</div>
+            </div>
+            <div className="mt-1 text-[10.5px]">
+                <div className="font-semibold mb-0.5">{lang === 'bn' ? 'সুপারিশ (টিক চিহ্ন দিতে হবে):' : 'Recommendation (tick one):'}</div>
+                <div className="flex items-start gap-1.5">
+                    <span className="font-mono">{recommendation === 'recommend_increment' ? '☑' : '☐'}</span>
+                    <span>{lang === 'bn' ? 'বেতন বৃদ্ধির জন্য সুপারিশ করা হলো।' : 'Recommended for salary increment.'}</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                    <span className="font-mono">{recommendation === 'defer_increment' ? '☑' : '☐'}</span>
+                    <span>{lang === 'bn' ? 'বেতন বৃদ্ধি স্থগিত রেখে পুনমূল্যায়ন করা হোক।' : 'Defer increment and re-evaluate.'}</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                    <span className="font-mono">{recommendation === 'not_suitable' ? '☑' : '☐'}</span>
+                    <span>{lang === 'bn' ? 'বেতন বৃদ্ধির উপযুক্ত নয়, অব্যাহতি প্রদান করা যেতে পারে।' : 'Not suitable; discharge may be considered.'}</span>
+                </div>
+            </div>
+            {signLine(initiatorSig, evaluation.initiator || auth?.user)}
+        </div>
+    );
+
+    const closingBlocks = (
+        <>
+            {personalFile}
+            {supervisorBlock}
+            {commentBox(
+                lang === 'bn' ? 'আঞ্চলিক ব্যবস্থাপকের মন্তব্য ও সুপারিশ:' : 'Regional Manager remarks & recommendation:',
+                rmSig?.comments,
+                rmSig,
+            )}
+            {commentBox(
+                lang === 'bn' ? 'জোনাল ম্যানেজারের মন্তব্য ও সুপারিশ:' : 'Zonal Manager remarks & recommendation:',
+                zmSig?.comments,
+                zmSig,
+            )}
+            {commentBox(lang === 'bn' ? copy.deptBn : copy.deptEn, directorSig?.comments, directorSig)}
+            {commentBox(
+                lang === 'bn' ? 'মানবসম্পদ বিভাগের মন্তব্য ও সুপারিশ:' : 'Human Resources remarks & recommendation:',
+                hrSig?.comments,
+                hrSig,
+            )}
+            {commentBox(
+                lang === 'bn' ? 'নির্বাহী পরিচালক কর্তৃক মন্তব্য ও অনুমোদন:' : 'Executive Director remarks & approval:',
+                edSig?.comments,
+                edSig,
+            )}
+        </>
+    );
+
+    const achievementTitle = lang === 'bn'
+        ? (formType === 'accountant'
+            ? 'মূল্যায়নকালীন অর্জন (সর্বশেষ মাস ক্লোজিং অনুযায়ী):'
+            : 'মূল্যায়নকালীন অর্জন (যোগদান এবং সর্বশেষ মাস ক্লোজিং অনুযায়ী):')
+        : (formType === 'accountant'
+            ? 'Achievements during evaluation (latest month closing):'
+            : 'Achievements during evaluation (at joining and latest closing):');
+
+    return (
+        <div className="bg-white text-black font-sans mx-auto print:m-0">
+            <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } .probation-fit-page { height: 270mm !important; max-height: 270mm !important; overflow: hidden !important; } }`}</style>
+            <FitPage>
+                {pageHeader}
+
+                <table className="w-full border-collapse border border-black mb-2 text-[11px]">
+                    <tbody>
+                        <tr>
+                            <td className="border border-black px-1.5 py-1 w-[40%]"><b>{lang === 'bn' ? 'নাম:' : 'Name:'}</b> {employeeName}</td>
+                            <td className="border border-black px-1.5 py-1 w-[40%]"><b>{lang === 'bn' ? 'পদবী:' : 'Designation:'}</b> {designationName}</td>
+                            <td className="border border-black px-1.5 py-1"><b>{lang === 'bn' ? 'পিন নং:' : 'PIN:'}</b> {formatStat(employee.pin)}</td>
+                        </tr>
+                        <tr>
+                            <td className="border border-black px-1.5 py-1"><b>{lang === 'bn' ? 'শাখার নাম:' : 'Branch:'}</b> {branchName}</td>
+                            <td className="border border-black px-1.5 py-1"><b>{lang === 'bn' ? 'অঞ্চলের নাম:' : 'Region:'}</b> {resolveRegionName()}</td>
+                            <td className="border border-black px-1.5 py-1"><b>{lang === 'bn' ? 'জোন:' : 'Zone:'}</b> {resolveZoneName()}</td>
+                        </tr>
+                        <tr>
+                            <td className="border border-black px-1.5 py-1">
+                                <b>{lang === 'bn' ? 'সংস্থায় যোগদানের তারিখ:' : 'Date of joining:'}</b> {formatDate(evaluation.joining_date, lang)}
+                            </td>
+                            <td className="border border-black px-1.5 py-1" colSpan={2}>
+                                <b>{lang === 'bn' ? 'শিক্ষানবিশকাল ০৩ মাস পূর্তির তারিখ:' : 'Probation 03-month completion date:'}</b> {formatDate(evaluation.probation_3m_completion_date, lang)}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td className="border border-black px-1.5 py-1">
+                                <b>{lang === 'bn' ? 'শিক্ষাগত যোগ্যতা (যোগদানের সময়):' : 'Education (at joining):'}</b> {evaluation.education_at_joining || employee.educational_qualification || ''}
+                            </td>
+                            <td className="border border-black px-1.5 py-1" colSpan={2}>
+                                <b>{lang === 'bn' ? 'শিক্ষাগত যোগ্যতা (বর্তমান):' : 'Education (current):'}</b> {evaluation.education_current || ''}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div className="flex items-end justify-between gap-2 mb-1 font-bold text-[11px]">
+                    <span>{achievementTitle}</span>
+                    <span className="shrink-0">
+                        {lang === 'bn' ? 'ক্লোজিং মাসের নাম:' : 'Closing month:'}{' '}
+                        <span className="font-semibold underline">{formatClosingMonth(evaluation.closing_month, lang)}</span>
                     </span>
                 </div>
 
                 {formType === 'accountant' ? (
-                    <table className="w-full border-collapse border border-black text-[11px] text-center">
+                    <table className="w-full border-collapse border border-black mb-2 text-[11px]">
                         <tbody>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left w-1/4 font-semibold">শাখার সদস্য (জন):</td>
-                                <td className="border-r border-black p-1 w-1/4">{formatNum(evaluation.closing_members_count)}</td>
-                                <td className="border-r border-black p-1 text-left w-1/4 font-semibold">শাখার ঋণী (জন):</td>
-                                <td className="p-1 w-1/4">{formatNum(evaluation.closing_borrowers_count)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-semibold">শাখার ঋণ স্থিতি (টাকা):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_loan_balance)}</td>
-                                <td className="border-r border-black p-1 text-left font-semibold">শাখার সঞ্চয় স্থিতি (সকল কম্পোনেন্ট মোট টাকা):</td>
-                                <td className="p-1">{formatNum(evaluation.closing_savings_balance)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-semibold">শাখার বকেয়া (জন):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_overdue_borrowers)}</td>
-                                <td className="border-r border-black p-1 text-left font-semibold">শাখার বকেয়া (টাকা):</td>
-                                <td className="p-1">{formatNum(evaluation.closing_overdue_amount)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-semibold">শাখার OTR (%):</td>
-                                <td className="border-r border-black p-1">
-                                    {evaluation.closing_otr_pct !== null && evaluation.closing_otr_pct !== undefined && evaluation.closing_otr_pct !== ''
-                                        ? `${formatNum(evaluation.closing_otr_pct)}%`
-                                        : '-'}
-                                </td>
-                                <td className="border-r border-black p-1 text-left font-semibold">শাখার PAR (%):</td>
-                                <td className="p-1">
-                                    {evaluation.closing_par_pct !== null && evaluation.closing_par_pct !== undefined && evaluation.closing_par_pct !== ''
-                                        ? `${formatNum(evaluation.closing_par_pct)}%`
-                                        : '-'}
-                                </td>
-                            </tr>
+                            {[
+                                [lang === 'bn' ? 'শাখার সদস্য (জন):' : 'Branch members:', evaluation.closing_members_count, lang === 'bn' ? 'শাখার ঋণী (জন):' : 'Branch borrowers:', evaluation.closing_borrowers_count],
+                                [lang === 'bn' ? 'শাখার ঋণ স্থিতি (টাকা):' : 'Branch loan balance:', evaluation.closing_loan_balance, lang === 'bn' ? 'শাখার সঞ্চয় স্থিতি (সকল কম্পোনেন্ট মোট টাকা):' : 'Branch savings balance:', evaluation.closing_savings_balance],
+                                [lang === 'bn' ? 'শাখার বকেয়া (জন):' : 'Branch overdue (persons):', evaluation.closing_overdue_borrowers, lang === 'bn' ? 'শাখার বকেয়া (টাকা):' : 'Branch overdue (Tk):', evaluation.closing_overdue_amount],
+                                [lang === 'bn' ? 'শাখার OTR (%):' : 'Branch OTR (%):', evaluation.closing_otr_pct, lang === 'bn' ? 'শাখার PAR (%):' : 'Branch PAR (%):', evaluation.closing_par_pct],
+                            ].map((row, idx) => (
+                                <tr key={idx}>
+                                    <td className="border border-black px-1.5 py-0.5 w-[30%]">{row[0]}</td>
+                                    <td className="border border-black px-1.5 py-0.5 text-center font-mono w-[20%]">
+                                        {formatStat(row[1], idx === 3 && row[1] !== '' && row[1] !== null && row[1] !== undefined ? '%' : '')}
+                                    </td>
+                                    <td className="border border-black px-1.5 py-0.5 w-[30%]">{row[2]}</td>
+                                    <td className="border border-black px-1.5 py-0.5 text-center font-mono w-[20%]">
+                                        {formatStat(row[3], idx === 3 && row[3] !== '' && row[3] !== null && row[3] !== undefined ? '%' : '')}
+                                    </td>
+                                </tr>
+                            ))}
                             <tr>
-                                <td className="border-r border-black p-1 text-left font-semibold" colSpan={2}>
-                                    শাখায় ক্যাশিয়ার আছে কি না?
+                                <td className="border border-black px-1.5 py-0.5" colSpan={2}>
+                                    {lang === 'bn' ? 'শাখায় ক্যাশিয়ার আছে কি না?' : 'Does the branch have a cashier?'}
                                 </td>
-                                <td className="p-1 text-center font-bold" colSpan={2}>
-                                    {evaluation.has_cashier ? (lang === 'bn' ? 'হ্যাঁ' : 'Yes') : (lang === 'bn' ? 'না' : 'No')}
+                                <td className="border border-black px-1.5 py-0.5 text-center font-bold" colSpan={2}>
+                                    {evaluation.has_cashier === true || evaluation.has_cashier === 1
+                                        ? (lang === 'bn' ? 'হ্যাঁ' : 'Yes')
+                                        : evaluation.has_cashier === false || evaluation.has_cashier === 0
+                                            ? (lang === 'bn' ? 'না' : 'No')
+                                            : ''}
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 ) : (
-                    <table className="w-full border-collapse border border-black text-[11px] text-center">
+                    <table className="w-full border-collapse border border-black mb-2 text-[11px] text-center">
                         <thead>
-                            <tr className="border-b border-black bg-slate-50 font-bold">
-                                <th className="border-r border-black p-1 text-left w-1/3">সূচক</th>
-                                <th className="border-r border-black p-1 w-1/5">যোগদানের সময়</th>
-                                <th className="border-r border-black p-1 w-1/4">ক্লোজিং মাসে</th>
-                                <th className="p-1 w-1/5">পার্থক্য</th>
+                            <tr className="bg-gray-100 font-bold">
+                                <th className="border border-black p-1 text-left">{lang === 'bn' ? 'সূচক' : 'Indicator'}</th>
+                                <th className="border border-black p-1 w-[18%]">{lang === 'bn' ? 'যোগদানের সময়' : 'At joining'}</th>
+                                <th className="border border-black p-1 w-[18%]">{lang === 'bn' ? 'ক্লোজিং মাসে' : 'Closing month'}</th>
+                                <th className="border border-black p-1 w-[16%]">{lang === 'bn' ? 'পার্থক্য' : 'Difference'}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">সদস্য (জন):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.joining_members_count)}</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_members_count)}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_members_count, evaluation.closing_members_count, evaluation.diff_members_count)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">ঋণী (জন):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.joining_borrowers_count)}</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_borrowers_count)}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_borrowers_count, evaluation.closing_borrowers_count, evaluation.diff_borrowers_count)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">ঋণ স্থিতি (টাকা):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.joining_loan_balance)}</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_loan_balance)}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_loan_balance, evaluation.closing_loan_balance, evaluation.diff_loan_balance)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">সঞ্চয় স্থিতি (সকল কম্পোনেন্ট মোট টাকা):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.joining_savings_balance)}</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_savings_balance)}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_savings_balance, evaluation.closing_savings_balance, evaluation.diff_savings_balance)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">বকেয়া (জন):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.joining_overdue_borrowers)}</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_overdue_borrowers)}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_overdue_borrowers, evaluation.closing_overdue_borrowers, evaluation.diff_overdue_borrowers)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">বকেয়া (টাকা):</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.joining_overdue_amount)}</td>
-                                <td className="border-r border-black p-1">{formatNum(evaluation.closing_overdue_amount)}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_overdue_amount, evaluation.closing_overdue_amount, evaluation.diff_overdue_amount)}</td>
-                            </tr>
-                            <tr className="border-b border-black">
-                                <td className="border-r border-black p-1 text-left font-medium">OTR (%):</td>
-                                <td className="border-r border-black p-1">{evaluation.joining_otr_pct !== null && evaluation.joining_otr_pct !== undefined && evaluation.joining_otr_pct !== '' ? `${formatNum(evaluation.joining_otr_pct)}%` : '-'}</td>
-                                <td className="border-r border-black p-1">{evaluation.closing_otr_pct !== null && evaluation.closing_otr_pct !== undefined && evaluation.closing_otr_pct !== '' ? `${formatNum(evaluation.closing_otr_pct)}%` : '-'}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_otr_pct, evaluation.closing_otr_pct, evaluation.diff_otr_pct, true)}</td>
-                            </tr>
-                            <tr>
-                                <td className="border-r border-black p-1 text-left font-medium">PAR (%):</td>
-                                <td className="border-r border-black p-1">{evaluation.joining_par_pct !== null && evaluation.joining_par_pct !== undefined && evaluation.joining_par_pct !== '' ? `${formatNum(evaluation.joining_par_pct)}%` : '-'}</td>
-                                <td className="border-r border-black p-1">{evaluation.closing_par_pct !== null && evaluation.closing_par_pct !== undefined && evaluation.closing_par_pct !== '' ? `${formatNum(evaluation.closing_par_pct)}%` : '-'}</td>
-                                <td className="p-1">{getDiffDisplay(evaluation.joining_par_pct, evaluation.closing_par_pct, evaluation.diff_par_pct, true)}</td>
-                            </tr>
+                            {[
+                                [lang === 'bn' ? 'সদস্য (জন):' : 'Members:', evaluation.joining_members_count, evaluation.closing_members_count, evaluation.diff_members_count, false],
+                                [lang === 'bn' ? 'ঋণী (জন):' : 'Borrowers:', evaluation.joining_borrowers_count, evaluation.closing_borrowers_count, evaluation.diff_borrowers_count, false],
+                                [lang === 'bn' ? 'ঋণ স্থিতি (টাকা):' : 'Loan balance (Tk):', evaluation.joining_loan_balance, evaluation.closing_loan_balance, evaluation.diff_loan_balance, false],
+                                [lang === 'bn' ? 'সঞ্চয় স্থিতি (সকল কম্পোনেন্ট মোট টাকা):' : 'Savings balance:', evaluation.joining_savings_balance, evaluation.closing_savings_balance, evaluation.diff_savings_balance, false],
+                                [lang === 'bn' ? 'বকেয়া (জন):' : 'Overdue (persons):', evaluation.joining_overdue_borrowers, evaluation.closing_overdue_borrowers, evaluation.diff_overdue_borrowers, false],
+                                [lang === 'bn' ? 'বকেয়া (টাকা):' : 'Overdue (Tk):', evaluation.joining_overdue_amount, evaluation.closing_overdue_amount, evaluation.diff_overdue_amount, false],
+                                [lang === 'bn' ? 'OTR (%):' : 'OTR (%):', evaluation.joining_otr_pct, evaluation.closing_otr_pct, evaluation.diff_otr_pct, true],
+                                [lang === 'bn' ? 'PAR (%):' : 'PAR (%):', evaluation.joining_par_pct, evaluation.closing_par_pct, evaluation.diff_par_pct, true],
+                            ].map((row) => (
+                                <tr key={String(row[0])}>
+                                    <td className="border border-black px-1.5 py-0.5 text-left">{row[0]}</td>
+                                    <td className="border border-black px-1 py-0.5 font-mono">{formatStat(row[1], row[5] && row[1] !== '' && row[1] != null ? '%' : '')}</td>
+                                    <td className="border border-black px-1 py-0.5 font-mono">{formatStat(row[2], row[5] && row[2] !== '' && row[2] != null ? '%' : '')}</td>
+                                    <td className="border border-black px-1 py-0.5 font-mono">{getDiffDisplay(row[1], row[2], row[3], Boolean(row[5]))}</td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 )}
-            </div>
 
-            {/* Evaluation Criteria & Scores */}
-            <div className="mb-3">
-                <div className="text-center font-bold text-xs border border-black bg-slate-100 p-1 mb-1">
-                    {lang === 'bn' ? 'মূল্যায়ন নির্দেশক ও নম্বর বিভাজন' : 'Evaluation Rubrics & Scoring'}
+                <div className="font-bold text-[11px] mb-1">
+                    {lang === 'bn'
+                        ? '১ম তত্ত্বাবধায়ক কর্তৃক বিগত ০৩ মাসের সার্বিক মূল্যায়নের প্রেক্ষিতে রেটিং করতে হবে:'
+                        : 'The 1st supervisor shall rate the last 03 months of overall performance:'}
                 </div>
-
-                <table className="w-full border-collapse border border-black text-[11px]">
-                    <thead>
-                        <tr className="border-b border-black bg-slate-50 font-bold text-center">
-                            <th className="border-r border-black p-1 w-10">ক্র: নং</th>
-                            <th className="border-r border-black p-1 text-left">মূল্যায়নের ক্ষেত্র ও নির্দেশকসমূহ</th>
-                            <th className="border-r border-black p-1 w-16">সর্বোচ্চ নম্বর</th>
-                            <th className="p-1 w-20">প্রাপ্ত নম্বর</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {activeStructure.map((sec: any, sIdx: number) => {
-                            let secTotal = 0;
-                            let secMax = 0;
-                            sec.items.forEach((item: any) => {
-                                secMax += Number(item.max || 0);
-                                const scored = scoreMap[item.key]?.obtained_score;
-                                if (scored !== undefined && scored !== null && !isNaN(Number(scored))) {
-                                    secTotal += Number(scored);
-                                }
-                            });
-
-                            return (
-                                <React.Fragment key={sec.section_key}>
-                                    {/* Section Heading Row */}
-                                    <tr className="border-b border-black bg-slate-50 font-bold">
-                                        <td className="border-r border-black p-1 text-center">{toBn(sIdx + 1)}</td>
-                                        <td className="border-r border-black p-1">{lang === 'bn' ? sec.section_name_bn : sec.section_name_en}</td>
-                                        <td className="border-r border-black p-1 text-center">{toBn(secMax)}</td>
-                                        <td className="p-1 text-center font-bold">{toBn(Number(secTotal.toFixed(2)))}</td>
-                                    </tr>
-                                    {/* Items */}
-                                    {sec.items.map((it: any, iIdx: number) => {
-                                        const curScore = scoreMap[it.key]?.obtained_score;
-                                        return (
-                                            <tr key={it.key} className="border-b border-black">
-                                                <td className="border-r border-black p-1 text-center text-slate-500">
-                                                    {toBn(sIdx + 1)}.{toBn(iIdx + 1)}
-                                                </td>
-                                                <td className="border-r border-black p-1 pl-3">
-                                                    {lang === 'bn' ? it.name_bn : it.name_en}
-                                                </td>
-                                                <td className="border-r border-black p-1 text-center text-slate-600">
-                                                    {toBn(it.max)}
-                                                </td>
-                                                <td className="p-1 text-center font-semibold">
-                                                    {curScore !== undefined && curScore !== null && curScore !== '' ? toBn(curScore) : '-'}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </React.Fragment>
-                            );
-                        })}
-                        {/* Grand Total */}
-                        <tr className="border-t-2 border-black font-bold bg-slate-100 text-center">
-                            <td className="border-r border-black p-1" colSpan={2}>
-                                {lang === 'bn' ? 'সর্বমোট অর্জিত নম্বর' : 'Grand Total Score'}
-                            </td>
-                            <td className="border-r border-black p-1">{toBn(100)}</td>
-                            <td className="p-1 text-sm font-extrabold">{toBn(Number(totalScore.toFixed(2)))}</td>
-                        </tr>
-                    </tbody>
+                <table className="w-full border-collapse border border-black mb-2">
+                    {scoreHead}
+                    <tbody>{renderScoreBody(firstPageSections, restSections.length === 0)}</tbody>
                 </table>
-            </div>
+                {pageNumber(1)}
+            </FitPage>
 
-            {/* Score Interpretation Scale */}
-            <div className="border border-black p-1.5 mb-3 text-[10.5px]">
-                <div className="font-bold mb-0.5">{lang === 'bn' ? 'নম্বর বিভাজন ও গ্রেড মূল্যায়ন:' : 'Grading Scale:'}</div>
-                <div className="grid grid-cols-4 gap-1 text-center">
-                    <div className="border border-slate-300 p-0.5">
-                        <span className="font-bold">৮৫-১০০:</span> {lang === 'bn' ? 'অতি উত্তম (বেতন বৃদ্ধির জন্য অত্যন্ত উপযুক্ত)' : 'Excellent'}
-                    </div>
-                    <div className="border border-slate-300 p-0.5">
-                        <span className="font-bold">৬৫-৮৪:</span> {lang === 'bn' ? 'উত্তম (বেতন বৃদ্ধির জন্য উপযুক্ত)' : 'Very Good'}
-                    </div>
-                    <div className="border border-slate-300 p-0.5">
-                        <span className="font-bold">৫০-৬৪:</span> {lang === 'bn' ? 'সন্তোষজনক (বেতন বৃদ্ধির জন্য বিবেচনাযোগ্য)' : 'Good'}
-                    </div>
-                    <div className="border border-slate-300 p-0.5">
-                        <span className="font-bold">&lt; ৫০:</span> {lang === 'bn' ? 'অসন্তোষজনক (বেতন বৃদ্ধির জন্য অনুপযুক্ত)' : 'Poor'}
-                    </div>
-                </div>
-            </div>
+            {restSections.length > 0 && (
+                <FitPage>
+                    <table className="w-full border-collapse border border-black mb-2">
+                        {scoreHead}
+                        <tbody>{renderScoreBody(restSections, true)}</tbody>
+                    </table>
+                    {summaryTable}
+                    {pageNumber(2)}
+                </FitPage>
+            )}
 
-            {/* Supervisor Recommendation */}
-            <div className="border border-black p-2 mb-3 text-[11px]">
-                <div className="font-bold mb-1">
-                    {lang === 'bn' 
-                        ? 'বিগত ০৩ মাসের সার্বিক মূল্যায়নের প্রেক্ষিতে সুপারভাইজারের সুপারিশ:' 
-                        : "Supervisor's Recommendation (Based on last 03 months):"}
-                </div>
-                <div className="space-y-1 ml-2">
-                    <div className="flex items-center gap-2">
-                        <span className="w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[10px] font-bold">
-                            {evaluation.supervisor_recommendation === 'recommend_increment' ? '✓' : ''}
-                        </span>
-                        <span>বেতন বৃদ্ধির জন্য সুপারিশ করা হলো।</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[10px] font-bold">
-                            {evaluation.supervisor_recommendation === 'defer_increment' ? '✓' : ''}
-                        </span>
-                        <span>বেতন বৃদ্ধি স্থগিত রেখে পুনমূল্যায়ন করা হোক।</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[10px] font-bold">
-                            {evaluation.supervisor_recommendation === 'not_suitable' ? '✓' : ''}
-                        </span>
-                        <span>বেতন বৃদ্ধির উপযুক্ত নয়, অব্যাহতি প্রদান করা যেতে পারে।</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Comments & Signatures Workflow Sections */}
-            <div className="space-y-2 mb-3">
-                {/* Initiator (BM / RM) */}
-                <div className="border border-black p-1.5 text-[11px]">
-                    <div className="font-bold mb-0.5">
-                        {formType === 'bm_and_above' 
-                            ? 'সুপারভাইজার / আঞ্চলিক ব্যবস্থাপকের মন্তব্য ও সুপারিশ:' 
-                            : 'শাখা ব্যবস্থাপকের মন্তব্য ও সুপারিশ:'}
-                    </div>
-                    <div className="min-h-[22px] italic text-slate-800">
-                        {initiatorSig?.comments || evaluation.initiator_remarks || evaluation.remarks || '-'}
-                    </div>
-                    <div className="flex justify-between items-end mt-1 text-[10px] pt-1 border-t border-dotted border-slate-300">
-                        <div>
-                            <b>স্বাক্ষরকারীর নাম:</b> {initiatorSig?.user?.name || evaluation.initiator?.name || '-'}
-                            <span className="ml-3"><b>পদবী:</b> {initiatorSig?.user?.designation?.name || '-'}</span>
-                        </div>
-                        <div className="text-right">
-                            {renderSignatureImage(initiatorSig, evaluation.initiator)}
-                            <div><b>স্বাক্ষর ও তারিখ:</b> {formatDateVal(initiatorSig?.signed_at || evaluation.created_at)}</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* RM Comments (for Form A & Form B) */}
-                {formType !== 'bm_and_above' && (
-                    <div className="border border-black p-1.5 text-[11px]">
-                        <div className="font-bold mb-0.5">আঞ্চলিক ব্যবস্থাপকের মন্তব্য ও সুপারিশ:</div>
-                        <div className="min-h-[22px] italic text-slate-800">
-                            {rmSig?.comments || evaluation.rm_remarks || '-'}
-                        </div>
-                        <div className="flex justify-between items-end mt-1 text-[10px] pt-1 border-t border-dotted border-slate-300">
-                            <div>
-                                <b>স্বাক্ষরকারীর নাম:</b> {rmSig?.user?.name || '-'}
-                                <span className="ml-3"><b>পদবী:</b> {rmSig?.user?.designation?.name || 'আঞ্চলিক ব্যবস্থাপক'}</span>
-                            </div>
-                            <div className="text-right">
-                                {renderSignatureImage(rmSig)}
-                                <div><b>স্বাক্ষর ও তারিখ:</b> {formatDateVal(rmSig?.signed_at)}</div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ZM Comments */}
-                <div className="border border-black p-1.5 text-[11px]">
-                    <div className="font-bold mb-0.5">জোনাল ম্যানেজারের মন্তব্য ও সুপারিশ:</div>
-                    <div className="min-h-[22px] italic text-slate-800">
-                        {zmSig?.comments || evaluation.zm_remarks || '-'}
-                    </div>
-                    <div className="flex justify-between items-end mt-1 text-[10px] pt-1 border-t border-dotted border-slate-300">
-                        <div>
-                            <b>স্বাক্ষরকারীর নাম:</b> {zmSig?.user?.name || '-'}
-                            <span className="ml-3"><b>পদবী:</b> {zmSig?.user?.designation?.name || 'জোনাল ম্যানেজার'}</span>
-                        </div>
-                        <div className="text-right">
-                            {renderSignatureImage(zmSig)}
-                            <div><b>স্বাক্ষর ও তারিখ:</b> {formatDateVal(zmSig?.signed_at)}</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Director Comments (Microfinance or Finance & Accounts) */}
-                <div className="border border-black p-1.5 text-[11px]">
-                    <div className="font-bold mb-0.5">
-                        {formType === 'accountant' 
-                            ? 'পরিচালক (অর্থ ও হিসাব) এর মন্তব্য ও সুপারিশ:' 
-                            : 'পরিচালক (মাইক্রোফাইন্যান্স) এর মন্তব্য ও সুপারিশ:'}
-                    </div>
-                    <div className="min-h-[22px] italic text-slate-800">
-                        {directorSig?.comments || evaluation.director_remarks || '-'}
-                    </div>
-                    <div className="flex justify-between items-end mt-1 text-[10px] pt-1 border-t border-dotted border-slate-300">
-                        <div>
-                            <b>স্বাক্ষরকারীর নাম:</b> {directorSig?.user?.name || '-'}
-                            <span className="ml-3">
-                                <b>পদবী:</b> {directorSig?.user?.designation?.name || (formType === 'accountant' ? 'পরিচালক (অর্থ ও হিসাব)' : 'পরিচালক (মাইক্রোফাইন্যান্স)')}
-                            </span>
-                        </div>
-                        <div className="text-right">
-                            {renderSignatureImage(directorSig)}
-                            <div><b>স্বাক্ষর ও তারিখ:</b> {formatDateVal(directorSig?.signed_at)}</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* HR Comments */}
-                <div className="border border-black p-1.5 text-[11px]">
-                    <div className="font-bold mb-0.5">মানবসম্পদ বিভাগের সুপারিশ / সিদ্ধান্ত:</div>
-                    <div className="min-h-[22px] italic text-slate-800">
-                        {hrSig?.comments || evaluation.hr_remarks || '-'}
-                    </div>
-                    <div className="flex justify-between items-end mt-1 text-[10px] pt-1 border-t border-dotted border-slate-300">
-                        <div>
-                            <b>স্বাক্ষরকারীর নাম:</b> {hrSig?.user?.name || '-'}
-                            <span className="ml-3"><b>পদবী:</b> {hrSig?.user?.designation?.name || 'মানবসম্পদ বিভাগ'}</span>
-                        </div>
-                        <div className="text-right">
-                            {renderSignatureImage(hrSig)}
-                            <div><b>স্বাক্ষর ও তারিখ:</b> {formatDateVal(hrSig?.signed_at)}</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ED Approval */}
-                <div className="border border-black p-1.5 text-[11px]">
-                    <div className="font-bold mb-0.5">নির্বাহী পরিচালকের চূড়ান্ত অনুমোদন / সিদ্ধান্ত:</div>
-                    <div className="min-h-[22px] italic text-slate-800">
-                        {edSig?.comments || evaluation.ed_remarks || '-'}
-                    </div>
-                    <div className="flex justify-between items-end mt-1 text-[10px] pt-1 border-t border-dotted border-slate-300">
-                        <div>
-                            <b>স্বাক্ষরকারীর নাম:</b> {edSig?.user?.name || '-'}
-                            <span className="ml-3"><b>পদবী:</b> {edSig?.user?.designation?.name || 'নির্বাহী পরিচালক'}</span>
-                        </div>
-                        <div className="text-right">
-                            {renderSignatureImage(edSig)}
-                            <div><b>স্বাক্ষর ও তারিখ:</b> {formatDateVal(edSig?.signed_at)}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Print Footer */}
-            <div className="text-center text-[9px] text-slate-500 pt-2 border-t border-slate-200">
-                মুদ্রণ তারিখ ও সময়: {formatDate(new Date().toISOString(), 'bn')} | সিস্টেম জেনারেটেড মূল্যায়ন ফরম
-            </div>
+            <FitPage breakAfter={false}>
+                {restSections.length === 0 && summaryTable}
+                {closingBlocks}
+                {pageNumber(restSections.length === 0 ? 2 : 3)}
+            </FitPage>
         </div>
     );
 }

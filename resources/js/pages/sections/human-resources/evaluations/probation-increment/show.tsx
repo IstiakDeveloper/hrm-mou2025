@@ -144,7 +144,7 @@ export default function ProbationIncrementEvaluationShow({
 
     return (
         <Layout>
-            <Head title={`${employeeName} - ${lang === 'bn' ? 'শিক্ষানবিস ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}`} />
+            <Head title={`${employeeName} - ${lang === 'bn' ? 'শিক্ষানবিশ ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}`} />
             
             <PageSurface className="space-y-6">
                 {/* Header Banner */}
@@ -160,7 +160,7 @@ export default function ProbationIncrementEvaluationShow({
                             <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <Award className="h-3.5 w-3.5" />
-                                    {lang === 'bn' ? 'শিক্ষানবিসকালীন ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}
+                                    {lang === 'bn' ? 'শিক্ষানবিশকালীন ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}
                                 </span>
                                 {getStatusBadge(evaluation.status)}
                             </div>

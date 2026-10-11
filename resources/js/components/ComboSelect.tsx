@@ -27,6 +27,10 @@ type Props<TValue extends string | number = string> = {
     createLabel?: (query: string) => string;
     /** Fired when the user types in the search box (e.g. server-side employee lookup). */
     onQueryChange?: (query: string) => void;
+    /** Replaces the default empty-state message. */
+    emptyText?: string;
+    /** Extra classes for the input trigger (height, border). */
+    triggerClassName?: string;
 };
 
 export function ComboSelect<TValue extends string | number = string>({
@@ -42,6 +46,8 @@ export function ComboSelect<TValue extends string | number = string>({
     onCreate,
     createLabel = (q) => `Add "${q}"`,
     onQueryChange,
+    emptyText = 'No results found.',
+    triggerClassName,
 }: Props<TValue>) {
     const [query, setQuery] = useState('');
 
@@ -78,13 +84,17 @@ export function ComboSelect<TValue extends string | number = string>({
             value={selectedItem}
             onChange={(item: ComboSelectItem<TValue> | null) => onChange(item ? item.value : null)}
             disabled={disabled}
-            onClose={() => setQuery('')}
+            onClose={() => {
+                setQuery('');
+                onQueryChange?.('');
+            }}
         >
             {({ open }) => (
                 <div className={cn('relative w-full min-w-[9.5rem]', className)}>
                     <div
                         className={cn(
                             'bg-card border-input flex h-9 w-full min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+                            triggerClassName,
                             open
                                 ? 'border-emerald-600 ring-[3px] ring-emerald-600/15 dark:border-emerald-500 dark:ring-emerald-500/20'
                                 : 'focus-within:border-emerald-600 focus-within:ring-[3px] focus-within:ring-emerald-600/15 dark:focus-within:border-emerald-500 dark:focus-within:ring-emerald-500/20',
@@ -143,7 +153,7 @@ export function ComboSelect<TValue extends string | number = string>({
                         )}
                     >
                         {filtered.length === 0 && !canCreate ? (
-                            <div className="text-muted-foreground px-2 py-3 text-center text-xs italic">No results found.</div>
+                            <div className="text-muted-foreground px-2 py-3 text-center text-xs italic">{emptyText}</div>
                         ) : (
                             <>
                                 {canCreate && onCreate && (

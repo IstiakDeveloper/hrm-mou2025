@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
-use App\Models\EvaluationTemplate;
 use App\Models\PromotionEvaluation;
 use App\Models\User;
+use App\Services\Appraisal\AppraisalEmployeeLookup;
+use App\Services\Appraisal\AppraisalListQuery;
+use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\PromotionEvaluationWorkflowService;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
@@ -20,13 +22,11 @@ class PromotionEvaluationController extends Controller
     {
         $user = $request->user();
         
-        $query = PromotionEvaluation::with([
+        $query = PromotionEvaluation::with(array_merge([
             'employee:id,pin,name_en,name_bn,designation_id,current_branch_id',
             'employee.designation:id,name',
             'employee.branch:id,name',
-            'initiator:id,name',
-            'signatures.user.employee.designation',
-        ]);
+        ], AppraisalListQuery::listSignatures($user, 'promotion_evaluation_id')));
 
         $roleNames = OrganogramAccessService::mergedRoleNames($user);
         $branchId = $user->employee?->current_branch_id ?? $user->branch_id;
@@ -55,13 +55,11 @@ class PromotionEvaluationController extends Controller
         
         // HR & ED can see all
         
-        $baseQuery = clone $query;
-        $metrics = [
-            'total' => (clone $baseQuery)->count(),
-            'pending' => (clone $baseQuery)->whereNotIn('status', ['approved', 'rejected'])->count(),
-            'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
-            'high_performers' => (clone $baseQuery)->whereIn('calculated_grade', ['excellent', 'very_good'])->count(),
-        ];
+        $metrics = AppraisalListQuery::summarize(clone $query, [
+            'pending' => "status NOT IN ('approved', 'rejected')",
+            'approved' => "status = 'approved'",
+            'high_performers' => "calculated_grade IN ('excellent', 'very_good')",
+        ]);
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -100,6 +98,8 @@ class PromotionEvaluationController extends Controller
             $ev->has_user_signed = $hasSigned;
             $ev->sent_back_reason = $sentBackSig?->comments;
             $ev->current_stage_label = $this->workflowService->getStageLabel($ev->status);
+            $ev->unsetRelation('signatures');
+            AppraisalListQuery::hideNarratives($ev);
             
             return $ev;
         });
@@ -139,109 +139,22 @@ class PromotionEvaluationController extends Controller
             return redirect()->route('promotions.evaluations.index')->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
         }
 
-        $userLevel = $this->workflowService->getUserHierarchyLevel($user);
-        $branchId = $user->employee?->current_branch_id ?? $user->branch_id;
-        $employeesQuery = Employee::query()->where('status', 'active')->with(['designation', 'branch.regionalOffice.zone', 'salaryGrade', 'transfers']);
-        
-        // 1. Exclude the creator themselves
-        if ($user->employee_id) {
-            $employeesQuery->where('id', '!=', $user->employee_id);
-        }
-
-        // 2. Geographic scoping
-        if ($userLevel === 3) { // Branch Manager
-            $employeesQuery->where('current_branch_id', $branchId);
-        } elseif ($userLevel === 2) { // Regional Manager
-            $rmRoId = $user->employee?->branch?->regional_office_id;
-            $employeesQuery->whereHas('branch', function($q) use ($rmRoId) {
-                $q->where('regional_office_id', $rmRoId);
-            });
-        } elseif ($userLevel === 1) { // Zonal Manager
-            $zmZoneId = $user->employee?->branch?->regionalOffice?->zone_id;
-            $employeesQuery->whereHas('branch.regionalOffice', function($q) use ($zmZoneId) {
-                $q->where('zone_id', $zmZoneId);
-            });
-        }
-
-        $employees = $employeesQuery->get(['id', 'pin', 'name_en', 'name_bn', 'designation_id', 'current_branch_id', 'salary_grade_id', 'joining_date', 'last_promotion_date', 'educational_qualification'])
-            ->filter(function ($emp) use ($userLevel, $user) {
-                // Cannot evaluate oneself
-                if ($user->employee_id && (int) $emp->id === (int) $user->employee_id) {
-                    return false;
-                }
-                // Cannot evaluate superior or peer (candidate tier must be strictly subordinate)
-                if ($userLevel > 0) {
-                    $candTier = \App\Support\BranchOrganogram::resolveTier($emp->designation?->name);
-                    $candLevel = (int) ($candTier['level'] ?? 999);
-                    if ($candLevel <= $userLevel) {
-                        return false;
-                    }
-                }
-                return true;
-            })
-            ->values()
-            ->map(function ($emp) {
-                $latestTransfer = $emp->transfers->sortByDesc('effective_date')->first();
-                $stationDate = $latestTransfer?->effective_date ?? $emp->joining_date;
-                $currentStationDate = $stationDate ? $stationDate->format('d/m/Y') : null;
-
-                $baseDate = $stationDate;
-                $serviceLength = null;
-                if ($baseDate) {
-                    $diff = $baseDate->diff(now());
-                    $diffYears = (int) $diff->y;
-                    $diffMonths = (int) $diff->m;
-
-                    $toBn = function ($num) {
-                        $en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-                        $bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-                        return str_replace($en, $bn, (string) $num);
-                    };
-
-                    if ($diffYears > 0 && $diffMonths > 0) {
-                        $serviceLength = "{$toBn($diffYears)} বছর {$toBn($diffMonths)} মাস";
-                    } elseif ($diffYears > 0) {
-                        $serviceLength = "{$toBn($diffYears)} বছর";
-                    } elseif ($diffMonths > 0) {
-                        $serviceLength = "{$toBn($diffMonths)} মাস";
-                    } else {
-                        $serviceLength = "১ মাস";
-                    }
-                }
-
-                return [
-                    'id' => $emp->id,
-                    'pin' => $emp->pin,
-                    'name_en' => $emp->name_en,
-                    'name_bn' => $emp->name_bn,
-                    'designation_id' => $emp->designation_id,
-                    'designation' => $emp->designation ? [
-                        'id' => $emp->designation->id,
-                        'name' => $emp->designation->name,
-                        'title' => $emp->designation->name,
-                    ] : null,
-                    'branch' => $emp->branch ? [
-                        'id' => $emp->branch->id,
-                        'name' => $emp->branch->name,
-                        'regional_office' => $emp->branch->regionalOffice?->name,
-                        'zone' => $emp->branch->regionalOffice?->zone?->name,
-                    ] : null,
-                    'joining_date' => $emp->joining_date ? $emp->joining_date->format('d/m/Y') : null,
-                    'last_promotion_date' => $emp->last_promotion_date ? $emp->last_promotion_date->format('d/m/Y') : null,
-                    'current_station_joining_date' => $currentStationDate,
-                    'service_length_current_post' => $serviceLength,
-                    'educational_qualification' => $emp->educational_qualification,
-                ];
-            });
-
-        $templates = EvaluationTemplate::with(['sections.criteria' => function ($q) {
-            $q->where('is_active', true)->orderBy('order');
-        }])->where('is_active', true)->get();
-
         return Inertia::render('sections/human-resources/evaluations/promotion/create', [
-            'employees' => $employees,
-            'templates' => $templates,
+            'employeeLookupUrl' => route('promotions.evaluations.employees.lookup'),
+            'templates' => AppraisalTemplateCache::load('promotion', activeOnly: true, activeCriteriaOnly: true),
         ]);
+    }
+
+    public function lookupEmployees(Request $request)
+    {
+        $rows = app(AppraisalEmployeeLookup::class)->search(
+            $request->user(),
+            'promotion',
+            (string) $request->query('q', ''),
+            (int) $request->query('limit', 20),
+        );
+
+        return response()->json($rows);
     }
 
     public function store(Request $request)
@@ -383,7 +296,7 @@ class PromotionEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
@@ -438,14 +351,12 @@ class PromotionEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
-        $templates = EvaluationTemplate::with(['sections.criteria' => function ($q) {
-            $q->where('is_active', true)->orderBy('order');
-        }])->where('is_active', true)->get();
+        $templates = AppraisalTemplateCache::load('promotion', activeOnly: true, activeCriteriaOnly: true);
 
         return Inertia::render('sections/human-resources/evaluations/promotion/edit', [
             'evaluation' => $evaluation,
@@ -653,7 +564,7 @@ class PromotionEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         return Inertia::render('sections/human-resources/evaluations/promotion/print', [

@@ -351,7 +351,7 @@ export const confirmationTranslations = {
         designation: 'পদবী',
         branch: 'শাখা ও অঞ্চল',
         joiningDate: 'যোগদানের তারিখ',
-        probationEndDate: 'শিক্ষানবিসকাল সমাপ্তির তারিখ',
+        probationEndDate: 'শিক্ষানবিশকাল সমাপ্তির তারিখ',
         scoreAndGrade: 'প্রাপ্ত নম্বর ও ফলাফল',
         recommendation: 'সুপারিশ',
         status: 'বর্তমান স্তর',
@@ -368,7 +368,7 @@ export const confirmationTranslations = {
         recommendedCandidates: 'স্থায়ীকরণের সুপারিশকৃত',
         draft: 'খসড়া (Draft)',
         recommended: 'স্থায়ীকরণের জন্য সুপারিশকৃত',
-        extendProbation: 'শিক্ষানবিসকাল বর্ধিতকরণ',
+        extendProbation: 'শিক্ষানবিশকাল বর্ধিতকরণ',
         notSuitable: 'স্থায়ীকরণের অনুপযুক্ত (অব্যাহতি)',
     },
     en: {

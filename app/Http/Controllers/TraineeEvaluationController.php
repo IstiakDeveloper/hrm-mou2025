@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Employee;
-use App\Models\RegionalOffice;
 use App\Models\TraineeEvaluation;
 use App\Models\User;
 use App\Models\Zone;
+use App\Services\Appraisal\AppraisalEmployeeLookup;
+use App\Services\Appraisal\AppraisalListQuery;
+use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\OrganogramAccessService;
 use App\Services\TraineeWorkflowService;
 use Illuminate\Http\Request;
@@ -25,7 +27,12 @@ class TraineeEvaluationController extends Controller
     {
         $user = $request->user();
         $query = TraineeEvaluation::query()
-            ->with(['employee.designation', 'employee.branch', 'initiator.employee', 'branch', 'regionalOffice', 'zone', 'signatures.user.employee']);
+            ->with(array_merge([
+                'employee:id,pin,name_en,name_bn,designation_id,current_branch_id',
+                'employee.designation:id,name',
+                'employee.branch:id,name',
+                'branch:id,name',
+            ], AppraisalListQuery::listSignatures($user, 'trainee_evaluation_id')));
 
         // Scope by User Role / Hierarchy
         $branchId = $user->employee?->current_branch_id ?? $user->employee?->branch_id;
@@ -80,16 +87,13 @@ class TraineeEvaluationController extends Controller
             $perPage = 15;
         }
 
-        $evaluations = $query->latest()->paginate($perPage)->withQueryString();
+        $metrics = AppraisalListQuery::summarize(clone $query, [
+            'pending' => "status NOT IN ('draft', 'approved', 'rejected')",
+            'approved' => "status = 'approved'",
+            'recommended' => "recommendation_type = 'recommend_appointment'",
+        ]);
 
-        // Calculate summary counts
-        $baseQuery = clone $query;
-        $metrics = [
-            'total' => (clone $baseQuery)->count(),
-            'pending' => (clone $baseQuery)->whereNotIn('status', ['draft', 'approved', 'rejected'])->count(),
-            'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
-            'recommended' => (clone $baseQuery)->where('recommendation_type', 'recommend_appointment')->count(),
-        ];
+        $evaluations = $query->latest()->paginate($perPage)->withQueryString();
 
         // Attach reviewer eligibility
         $evaluations->getCollection()->transform(function ($ev) use ($user) {
@@ -104,6 +108,8 @@ class TraineeEvaluationController extends Controller
             $ev->can_submit = $ev->status === 'draft' && ((int) $ev->initiator_id === (int) $user->id);
             $ev->has_user_signed = $hasSigned;
             $ev->sent_back_reason = ($ev->status === 'draft' && $sentBackSig) ? $sentBackSig->comments : null;
+            $ev->unsetRelation('signatures');
+            AppraisalListQuery::hideNarratives($ev);
 
             return $ev;
         });
@@ -137,59 +143,53 @@ class TraineeEvaluationController extends Controller
         $user = $request->user();
         $userSignature = $user->signature ?? $user->employee?->signature;
 
-        // Fetch optional employees for search/selection helper
-        $employees = Employee::query()
-            ->where('status', 'active')
-            ->with(['designation', 'branch.regionalOffice.zone'])
-            ->select('id', 'name_en', 'name_bn', 'pin', 'designation_id', 'current_branch_id', 'joining_date')
-            ->orderBy('name_en')
-            ->limit(100)
-            ->get()
-            ->map(function ($emp) {
-                return [
-                    'id' => $emp->id,
-                    'name_en' => $emp->name_en,
-                    'name_bn' => $emp->name_bn,
-                    'pin' => $emp->pin,
-                    'designation' => $emp->designation ? [
-                        'id' => $emp->designation->id,
-                        'name' => $emp->designation->name,
-                        'title' => $emp->designation->title,
-                    ] : null,
-                    'branch' => $emp->branch ? [
-                        'id' => $emp->branch->id,
-                        'name' => $emp->branch->name,
-                        'regional_office_id' => $emp->branch->regional_office_id,
-                        'regional_office' => $emp->branch->regionalOffice ? [
-                            'id' => $emp->branch->regionalOffice->id,
-                            'name' => $emp->branch->regionalOffice->name,
-                            'zone_id' => $emp->branch->regionalOffice->zone_id,
-                            'zone' => $emp->branch->regionalOffice->zone ? [
-                                'id' => $emp->branch->regionalOffice->zone->id,
-                                'name' => $emp->branch->regionalOffice->zone->name,
-                            ] : null,
-                        ] : null,
-                    ] : null,
-                    'joining_date' => $emp->joining_date?->format('Y-m-d'),
-                ];
-            });
-
-        $currentUserBranch = $user->employee?->branch;
-
-        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'trainee')
-            ->with(['sections.criteria' => function ($q) {
-                $q->orderBy('order');
-            }])->get();
+        $user->loadMissing('employee.branch.regionalOffice.zone');
+        $branch = $user->employee?->branch;
+        $currentUserBranch = $branch ? [
+            'id' => $branch->id,
+            'name' => $branch->name,
+            'regional_office_id' => $branch->regional_office_id,
+            'regional_office' => $branch->regionalOffice ? [
+                'id' => $branch->regionalOffice->id,
+                'name' => $branch->regionalOffice->name,
+                'zone_id' => $branch->regionalOffice->zone_id,
+                'zone' => $branch->regionalOffice->zone ? [
+                    'id' => $branch->regionalOffice->zone->id,
+                    'name' => $branch->regionalOffice->zone->name,
+                ] : null,
+            ] : null,
+        ] : null;
 
         return Inertia::render('sections/human-resources/evaluations/trainee/create', [
-            'employees' => $employees,
-            'templates' => $templates,
-            'branches' => Branch::with('regionalOffice.zone')->select('id', 'name', 'regional_office_id')->orderBy('name')->get(),
-            'regionalOffices' => RegionalOffice::select('id', 'name', 'zone_id')->orderBy('name')->get(),
-            'zones' => Zone::select('id', 'name')->orderBy('name')->get(),
+            'employeeLookupUrl' => route('trainee-evaluations.employees.lookup'),
+            'templates' => AppraisalTemplateCache::load('trainee'),
+            'branches' => $this->branchOptions(),
             'currentUserBranch' => $currentUserBranch,
             'userHasSignature' => !empty($userSignature),
         ]);
+    }
+
+    public function lookupEmployees(Request $request)
+    {
+        $rows = app(AppraisalEmployeeLookup::class)->search(
+            $request->user(),
+            'trainee',
+            (string) $request->query('q', ''),
+            (int) $request->query('limit', 20),
+        );
+
+        return response()->json($rows);
+    }
+
+    private function branchOptions()
+    {
+        return Branch::query()
+            ->with([
+                'regionalOffice:id,name,zone_id',
+                'regionalOffice.zone:id,name',
+            ])
+            ->orderBy('name')
+            ->get(['id', 'name', 'regional_office_id']);
     }
 
     public function store(Request $request)
@@ -314,7 +314,7 @@ class TraineeEvaluationController extends Controller
             'zone',
             'scores',
             'ratings',
-            'signatures.user.employee.designation',
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         $user = $request->user();
@@ -347,19 +347,17 @@ class TraineeEvaluationController extends Controller
 
     public function edit(TraineeEvaluation $evaluation, Request $request): Response
     {
-        $evaluation->load(['scores', 'ratings', 'signatures.user', 'employee.designation', 'employee.branch']);
+        $evaluation->load(array_merge(
+            ['scores', 'ratings', 'employee.designation', 'employee.branch'],
+            AppraisalListQuery::signerWith(),
+        ));
 
-        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'trainee')
-            ->with(['sections.criteria' => function ($q) {
-                $q->orderBy('order');
-            }])->get();
+        $templates = AppraisalTemplateCache::load('trainee');
 
         return Inertia::render('sections/human-resources/evaluations/trainee/edit', [
             'evaluation' => $evaluation,
             'templates' => $templates,
-            'branches' => Branch::with('regionalOffice.zone')->select('id', 'name', 'regional_office_id')->orderBy('name')->get(),
-            'regionalOffices' => RegionalOffice::select('id', 'name', 'zone_id')->orderBy('name')->get(),
-            'zones' => Zone::select('id', 'name')->orderBy('name')->get(),
+            'branches' => $this->branchOptions(),
         ]);
     }
 
@@ -550,7 +548,7 @@ class TraineeEvaluationController extends Controller
             'zone',
             'scores',
             'ratings',
-            'signatures.user.employee.designation',
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         return Inertia::render('sections/human-resources/evaluations/trainee/print', [

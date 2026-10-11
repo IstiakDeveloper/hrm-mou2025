@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\ConfirmationEvaluation;
-use App\Models\EvaluationTemplate;
 use App\Models\User;
+use App\Services\Appraisal\AppraisalEmployeeLookup;
+use App\Services\Appraisal\AppraisalListQuery;
+use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\ConfirmationEvaluationWorkflowService;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
@@ -22,13 +24,11 @@ class ConfirmationEvaluationController extends Controller
     {
         $user = $request->user();
         
-        $query = ConfirmationEvaluation::with([
+        $query = ConfirmationEvaluation::with(array_merge([
             'employee:id,pin,name_en,name_bn,designation_id,current_branch_id',
             'employee.designation:id,name',
             'employee.branch:id,name',
-            'initiator:id,name',
-            'signatures.user.employee.designation',
-        ]);
+        ], AppraisalListQuery::listSignatures($user, 'confirmation_evaluation_id')));
 
         $roleNames = OrganogramAccessService::mergedRoleNames($user);
         $branchId = $user->employee?->current_branch_id ?? $user->branch_id;
@@ -54,13 +54,11 @@ class ConfirmationEvaluationController extends Controller
             $query->where('zone_id', $zoneId);
         }
         
-        $baseQuery = clone $query;
-        $metrics = [
-            'total' => (clone $baseQuery)->count(),
-            'pending' => (clone $baseQuery)->whereNotIn('status', ['approved', 'rejected'])->count(),
-            'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
-            'recommended' => (clone $baseQuery)->where('recommendation_status', 'recommended')->count(),
-        ];
+        $metrics = AppraisalListQuery::summarize(clone $query, [
+            'pending' => "status NOT IN ('approved', 'rejected')",
+            'approved' => "status = 'approved'",
+            'recommended' => "recommendation_status = 'recommended'",
+        ]);
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -99,6 +97,8 @@ class ConfirmationEvaluationController extends Controller
             $ev->has_user_signed = $hasSigned;
             $ev->sent_back_reason = $sentBackSig?->comments;
             $ev->current_stage_label = $this->workflowService->getStageLabel($ev->status);
+            $ev->unsetRelation('signatures');
+            AppraisalListQuery::hideNarratives($ev);
             
             return $ev;
         });
@@ -138,126 +138,24 @@ class ConfirmationEvaluationController extends Controller
             return redirect()->route('confirmation.evaluations.index')->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
         }
 
-        $userLevel = $this->workflowService->getUserHierarchyLevel($user);
-        $branchId = $user->employee?->current_branch_id ?? $user->branch_id;
-        
-        // Employees whose Employee Type is PROBATION (or unconfirmed non-permanent)
-        $employeesQuery = Employee::query()
-            ->where('status', 'active')
-            ->where(function ($q) {
-                $q->whereHas('employeeType', function ($t) {
-                    $t->where('name', 'like', '%PROBATION%');
-                })->orWhere(function ($sub) {
-                    $sub->whereNull('confirmation_date')
-                        ->where(function ($fallback) {
-                            $fallback->whereNull('employee_type_id')
-                                ->orWhereHas('employeeType', function ($t2) {
-                                    $t2->where('name', '!=', 'PERMANENT');
-                                });
-                        });
-                });
-            })
-            ->with(['designation', 'branch.regionalOffice.zone', 'employeeType', 'salaryGrade', 'educations']);
-        
-        // 1. Exclude the creator themselves
-        if ($user->employee_id) {
-            $employeesQuery->where('id', '!=', $user->employee_id);
-        }
-
-        // 2. Geographic scoping
-        if ($userLevel === 3) { // Branch Manager
-            $employeesQuery->where('current_branch_id', $branchId);
-        } elseif ($userLevel === 2) { // Regional Manager
-            $rmRoId = $user->employee?->branch?->regional_office_id;
-            $employeesQuery->whereHas('branch', function($q) use ($rmRoId) {
-                $q->where('regional_office_id', $rmRoId);
-            });
-        } elseif ($userLevel === 1) { // Zonal Manager
-            $zmZoneId = $user->employee?->branch?->regionalOffice?->zone_id;
-            $employeesQuery->whereHas('branch.regionalOffice', function($q) use ($zmZoneId) {
-                $q->where('zone_id', $zmZoneId);
-            });
-        }
-
-        $employees = $employeesQuery->get(['id', 'pin', 'name_en', 'name_bn', 'designation_id', 'current_branch_id', 'employee_type_id', 'salary_grade_id', 'joining_date', 'probation_period_days', 'educational_qualification'])
-            ->filter(function ($emp) use ($userLevel, $user) {
-                // Cannot evaluate oneself
-                if ($user->employee_id && (int) $emp->id === (int) $user->employee_id) {
-                    return false;
-                }
-                // Cannot evaluate superior or peer
-                if ($userLevel > 0) {
-                    $candTier = \App\Support\BranchOrganogram::resolveTier($emp->designation?->name);
-                    $candLevel = (int) ($candTier['level'] ?? 999);
-                    if ($candLevel <= $userLevel) {
-                        return false;
-                    }
-                }
-                return true;
-            })
-            ->values()
-            ->map(function ($emp) {
-                $joiningDate = $emp->joining_date;
-                $probationEndDate = null;
-                if ($joiningDate) {
-                    if ($emp->probation_period_days && $emp->probation_period_days > 0) {
-                        $probationEndDate = $joiningDate->copy()->addDays($emp->probation_period_days);
-                    } elseif ($emp->employeeType?->probation_months && $emp->employeeType->probation_months > 0) {
-                        $probationEndDate = $joiningDate->copy()->addMonths($emp->employeeType->probation_months);
-                    } else {
-                        $probationEndDate = $joiningDate->copy()->addMonths(6);
-                    }
-                }
-
-                $regOfficeName = $emp->branch?->regionalOffice?->name ?? ($emp->branch?->is_head_office ? 'প্রধান কার্যালয়' : null);
-                $zoneName = $emp->branch?->regionalOffice?->zone?->name ?? ($emp->branch?->is_head_office ? 'প্রধান কার্যালয়' : null);
-
-                return [
-                    'id' => $emp->id,
-                    'pin' => $emp->pin,
-                    'name_en' => $emp->name_en,
-                    'name_bn' => $emp->name_bn,
-                    'employee_type' => $emp->employeeType ? [
-                        'id' => $emp->employeeType->id,
-                        'name' => $emp->employeeType->name,
-                    ] : null,
-                    'designation_id' => $emp->designation_id,
-                    'designation' => $emp->designation ? [
-                        'id' => $emp->designation->id,
-                        'name' => $emp->designation->name,
-                        'title' => $emp->designation->name,
-                    ] : null,
-                    'branch' => $emp->branch ? [
-                        'id' => $emp->branch->id,
-                        'name' => $emp->branch->name,
-                        'is_head_office' => (bool) $emp->branch->is_head_office,
-                        'regional_office' => [
-                            'id' => $emp->branch->regionalOffice?->id,
-                            'name' => $regOfficeName,
-                            'zone' => [
-                                'id' => $emp->branch->regionalOffice?->zone?->id,
-                                'name' => $zoneName,
-                            ],
-                        ],
-                        'regional_office_name' => $regOfficeName,
-                        'zone_name' => $zoneName,
-                    ] : null,
-                    'joining_date' => $emp->joining_date ? $emp->joining_date->format('d/m/Y') : null,
-                    'probation_end_date' => $probationEndDate ? $probationEndDate->format('d/m/Y') : null,
-                    'educational_qualification' => $emp->resolveEducationalQualification(),
-                ];
-            });
-
-        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'confirmation')
-            ->with(['sections.criteria' => function ($q) {
-                $q->orderBy('order');
-            }])->get();
-
         return Inertia::render('sections/human-resources/evaluations/confirmation/create', [
-            'employees' => $employees,
-            'templates' => $templates,
+            'employeeLookupUrl' => route('confirmation.evaluations.employees.lookup'),
+            'templates' => AppraisalTemplateCache::load('confirmation'),
         ]);
     }
+
+    public function lookupEmployees(Request $request)
+    {
+        $rows = app(AppraisalEmployeeLookup::class)->search(
+            $request->user(),
+            'confirmation',
+            (string) $request->query('q', ''),
+            (int) $request->query('limit', 20),
+        );
+
+        return response()->json($rows);
+    }
+
 
     public function store(Request $request)
     {
@@ -440,7 +338,7 @@ class ConfirmationEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {
@@ -500,7 +398,7 @@ class ConfirmationEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {
@@ -509,10 +407,7 @@ class ConfirmationEvaluationController extends Controller
 
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
-        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'confirmation')
-            ->with(['sections.criteria' => function ($q) {
-                $q->orderBy('order');
-            }])->get();
+        $templates = AppraisalTemplateCache::load('confirmation');
 
         return Inertia::render('sections/human-resources/evaluations/confirmation/edit', [
             'evaluation' => $evaluation,
@@ -756,7 +651,7 @@ class ConfirmationEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {

@@ -484,7 +484,7 @@ class ConfirmationEvaluationWorkflowService
             if ($action === 'submitted' || $action === 'forwarded') {
                 $stageLabel = $this->getStageLabel($evaluation->status, 'bn');
                 $title = "স্থায়ীকরণ মূল্যায়ন: {$stageLabel}";
-                $message = "কর্মী {$empName} {$pin}-এর শিক্ষানবিসকাল স্থায়ীকরণ মূল্যায়ন আপনার পর্যালোচনার জন্য অপেক্ষমাণ।";
+                $message = "কর্মী {$empName} {$pin}-এর শিক্ষানবিশকাল স্থায়ীকরণ মূল্যায়ন আপনার পর্যালোচনার জন্য অপেক্ষমাণ।";
                 
                 $targets = $this->getTargetReviewerUsers($evaluation, $evaluation->status);
                 if (!empty($targets)) {

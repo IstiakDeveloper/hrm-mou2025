@@ -29,7 +29,7 @@ export default function ConfirmationEvaluationPrint({ evaluation }: any) {
                             {lang === 'bn' ? 'ফিরে যান' : 'Back'}
                         </Button>
                         <span className="text-xs font-semibold text-slate-700">
-                            {lang === 'bn' ? 'অফিসিয়াল শিক্ষানবিসকাল স্থায়ীকরণ মূল্যায়ন ফরম' : 'Official Confirmation Evaluation Form'}
+                            {lang === 'bn' ? 'অফিসিয়াল শিক্ষানবিশকাল স্থায়ীকরণ মূল্যায়ন ফরম' : 'Official Confirmation Evaluation Form'}
                         </span>
                     </div>
 

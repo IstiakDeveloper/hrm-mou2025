@@ -13,7 +13,7 @@ export default function ProbationIncrementPrint({ evaluation }: any) {
 
     return (
         <div className="bg-slate-100/50 print:bg-white min-h-screen py-4 print:py-0">
-            <Head title={`${lang === 'bn' ? 'শিক্ষানবিস বেতন বৃদ্ধি মূল্যায়ন ফরম প্রিন্ট' : 'Print Probation Increment Evaluation'} - ${employee?.name_en || ''}`} />
+            <Head title={`${lang === 'bn' ? 'শিক্ষানবিশ বেতন বৃদ্ধি মূল্যায়ন ফরম প্রিন্ট' : 'Print Probation Increment Evaluation'} - ${employee?.name_en || ''}`} />
             
             {/* Top Toolbar (Hidden when printing) */}
             <div className="print:hidden max-w-4xl mx-auto mb-6 px-4">
@@ -29,7 +29,7 @@ export default function ProbationIncrementPrint({ evaluation }: any) {
                             {lang === 'bn' ? 'ফিরে যান' : 'Back'}
                         </Button>
                         <span className="text-xs font-semibold text-slate-700">
-                            {lang === 'bn' ? 'অফিসিয়াল শিক্ষানবিসকাল ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম' : 'Official Probation Increment Evaluation Form'}
+                            {lang === 'bn' ? 'অফিসিয়াল শিক্ষানবিশকাল ২য় ধাপে বেতন বৃদ্ধির মূল্যায়ন ফরম' : 'Official Probation Increment Evaluation Form'}
                         </span>
                     </div>
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     TRAINEE_FORM_CONFIGS,
     QUALITATIVE_RATING_OPTIONS,

@@ -1,4 +1,3 @@
-import { EmployeeHeaderSearch } from '@/components/employee/EmployeeHeaderSearch';
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -681,9 +680,9 @@ export default function HumanResourcesDashboard(props: Props) {
             <Head title="Human Resources" />
 
             <PageSurface className="max-w-7xl space-y-3 px-3 py-3 sm:px-4">
-                {/* Compact Header with Global Employee Live Search */}
-                <div className="flex flex-col gap-3 rounded-xl border border-zinc-200/80 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex items-center gap-3 shrink-0">
+                {/* Compact Header */}
+                <div className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">
                             <Building2 className="h-5 w-5" />
                         </div>
@@ -700,12 +699,7 @@ export default function HumanResourcesDashboard(props: Props) {
                         </div>
                     </div>
 
-                    {/* Global Employee Live Search */}
-                    <div className="w-full lg:max-w-sm xl:max-w-md">
-                        <EmployeeHeaderSearch />
-                    </div>
-
-                    <div className="flex items-center gap-2 self-end lg:self-center shrink-0">
+                    <div className="flex items-center gap-2 self-end sm:self-center">
                         {/* Inline Mode Selector (Saves whole row compared to separate Tabs bar!) */}
                         {showEmployeeTab && (
                             <div className="flex rounded-lg bg-zinc-100 p-0.5 ring-1 ring-zinc-200/50">

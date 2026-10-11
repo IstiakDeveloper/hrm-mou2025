@@ -8,7 +8,9 @@ use App\Models\ProbationIncrementEvaluationScore;
 use App\Models\ProbationIncrementEvaluationSignature;
 use App\Models\Branch;
 use App\Models\Zone;
-use App\Models\RegionalOffice;
+use App\Services\Appraisal\AppraisalEmployeeLookup;
+use App\Services\Appraisal\AppraisalListQuery;
+use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\ProbationIncrementWorkflowService;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
@@ -30,16 +32,12 @@ class ProbationIncrementEvaluationController extends Controller
         $isSuperAdmin = $user->isSuperAdmin();
 
         $query = ProbationIncrementEvaluation::query()
-            ->with([
+            ->with(array_merge([
                 'employee:id,pin,name_en,name_bn,designation_id,current_branch_id',
                 'employee.designation:id,name',
                 'employee.branch:id,name',
-                'initiator:id,name',
                 'branch:id,name',
-                'regionalOffice:id,name',
-                'zone:id,name',
-                'signatures.user.employee.designation'
-            ]);
+            ], AppraisalListQuery::listSignatures($user, 'probation_increment_evaluation_id')));
 
         $roleNames = OrganogramAccessService::mergedRoleNames($user);
         $branchId = $user->employee?->current_branch_id ?? $user->employee?->branch_id ?? $user->branch_id;
@@ -88,16 +86,13 @@ class ProbationIncrementEvaluationController extends Controller
             $perPage = 15;
         }
 
-        $evaluations = $query->latest()->paginate($perPage)->withQueryString();
+        $metrics = AppraisalListQuery::summarize(clone $query, [
+            'pending' => "status NOT IN ('draft', 'approved', 'rejected')",
+            'approved' => "status = 'approved'",
+            'recommended' => "recommendation_status = 'recommend_increment'",
+        ]);
 
-        // Calculate summary counts
-        $baseQuery = clone $query;
-        $metrics = [
-            'total' => (clone $baseQuery)->count(),
-            'pending' => (clone $baseQuery)->whereNotIn('status', ['draft', 'approved', 'rejected'])->count(),
-            'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
-            'recommended' => (clone $baseQuery)->where('recommendation_status', 'recommend_increment')->count(),
-        ];
+        $evaluations = $query->latest()->paginate($perPage)->withQueryString();
 
         // Attach reviewer eligibility
         $evaluations->getCollection()->transform(function ($ev) use ($user) {
@@ -113,6 +108,8 @@ class ProbationIncrementEvaluationController extends Controller
             $ev->has_user_signed = $hasSigned;
             $ev->sent_back_reason = $sentBackSig?->comments;
             $ev->current_stage_label = $this->workflowService->getStageLabel($ev->status);
+            $ev->unsetRelation('signatures');
+            AppraisalListQuery::hideNarratives($ev);
             
             return $ev;
         });
@@ -157,134 +154,44 @@ class ProbationIncrementEvaluationController extends Controller
         }
 
         if (!$user->hasSignature()) {
-            return redirect()->route('settings.profile.edit')->with('error', 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন শুরু করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
+            return redirect()->route('settings.profile.edit')->with('error', 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন শুরু করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
         }
 
         if (!$isSuperAdmin && $isLineManager && !$user->employee) {
             return redirect()->route('probation-increment-evaluations.index')->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
         }
 
-        $userLevel = $this->workflowService->getUserHierarchyLevel($user);
-        $branchId = $user->employee?->current_branch_id ?? $user->employee?->branch_id ?? $user->branch_id;
-
-        $employeeQuery = Employee::query()
-            ->where('status', 'active')
-            ->where(function ($q) {
-                $q->where('employee_type_id', 2)
-                  ->orWhereHas('employeeType', function ($t) {
-                      $t->where('name', 'like', '%probation%');
-                  })
-                  ->orWhere(function ($sub) {
-                      $sub->whereNull('confirmation_date')
-                          ->where(function ($fallback) {
-                              $fallback->whereNull('employee_type_id')
-                                  ->orWhereHas('employeeType', function ($t2) {
-                                      $t2->where('name', '!=', 'PERMANENT');
-                                  });
-                          });
-                  });
-            })
-            ->with(['designation', 'branch.regionalOffice.zone', 'employeeType', 'salaryGrade', 'educations']);
-
-        // Exclude the creator themselves
-        if ($user->employee_id) {
-            $employeeQuery->where('id', '!=', $user->employee_id);
-        }
-
-        // Geographic scoping matching Confirmation and Promotion
-        if ($userLevel === 3 && $branchId) { // Branch Manager
-            $employeeQuery->where('current_branch_id', $branchId);
-        } elseif ($userLevel === 2) { // Regional Manager
-            $rmRoId = $user->employee?->branch?->regional_office_id;
-            if ($rmRoId) {
-                $employeeQuery->whereHas('branch', function($q) use ($rmRoId) {
-                    $q->where('regional_office_id', $rmRoId);
-                });
-            }
-        } elseif ($userLevel === 1) { // Zonal Manager
-            $zmZoneId = $user->employee?->branch?->regionalOffice?->zone_id;
-            if ($zmZoneId) {
-                $employeeQuery->whereHas('branch.regionalOffice', function($q) use ($zmZoneId) {
-                    $q->where('zone_id', $zmZoneId);
-                });
-            }
-        }
-
-        $employees = $employeeQuery->get()
-            ->filter(function ($emp) use ($userLevel, $user) {
-                // Cannot evaluate oneself
-                if ($user->employee_id && (int) $emp->id === (int) $user->employee_id) {
-                    return false;
-                }
-                // Cannot evaluate superior or peer
-                if ($userLevel > 0) {
-                    $candTier = \App\Support\BranchOrganogram::resolveTier($emp->designation?->name);
-                    $candLevel = (int) ($candTier['level'] ?? 999);
-                    if ($candLevel <= $userLevel) {
-                        return false;
-                    }
-                }
-                return true;
-            })
-            ->values()
-            ->map(function ($emp) {
-                $qual = method_exists($emp, 'resolveEducationalQualification')
-                    ? $emp->resolveEducationalQualification()
-                    : ($emp->educational_qualification ?? null);
-
-                return [
-                    'id' => $emp->id,
-                    'pin' => $emp->pin,
-                    'name_en' => $emp->name_en,
-                    'name_bn' => $emp->name_bn,
-                    'designation_id' => $emp->designation_id,
-                    'designation' => $emp->designation ? [
-                        'id' => $emp->designation->id,
-                        'name' => $emp->designation->name,
-                        'title' => $emp->designation->title ?? $emp->designation->name,
-                    ] : null,
-                    'branch' => $emp->branch ? [
-                        'id' => $emp->branch->id,
-                        'name' => $emp->branch->name,
-                        'is_head_office' => (bool) $emp->branch->is_head_office,
-                        'regional_office' => $emp->branch->regionalOffice,
-                        'regional_office_name' => $emp->branch->regionalOffice?->name,
-                        'zone' => $emp->branch->regionalOffice?->zone,
-                        'zone_name' => $emp->branch->regionalOffice?->zone?->name,
-                    ] : null,
-                    'joining_date' => $emp->joining_date?->format('Y-m-d'),
-                    'probation_3m_completion_date' => $emp->joining_date ? $emp->joining_date->copy()->addMonths(3)->format('Y-m-d') : null,
-                    'educational_qualification' => $qual,
-                    'employee_type' => $emp->employeeType ? [
-                        'id' => $emp->employeeType->id,
-                        'name' => $emp->employeeType->name,
-                    ] : ['id' => 2, 'name' => 'PROBATION'],
-                ];
-            });
-
-        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'probation_increment')
-            ->with(['sections.criteria' => function ($q) {
-                $q->orderBy('order');
-            }])->get();
-
         return Inertia::render('sections/human-resources/evaluations/probation-increment/create', [
-            'employees' => $employees,
-            'templates' => $templates,
+            'employeeLookupUrl' => route('probation-increment-evaluations.employees.lookup'),
+            'templates' => AppraisalTemplateCache::load('probation_increment'),
             'isSuperAdmin' => $isSuperAdmin,
         ]);
     }
+
+    public function lookupEmployees(Request $request)
+    {
+        $rows = app(AppraisalEmployeeLookup::class)->search(
+            $request->user(),
+            'probation_increment',
+            (string) $request->query('q', ''),
+            (int) $request->query('limit', 20),
+        );
+
+        return response()->json($rows);
+    }
+
 
     public function store(Request $request)
     {
         $user = $request->user();
 
         if (!$user->hasSignature()) {
-            return redirect()->route('settings.profile.edit')->with('error', 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন সংরক্ষণ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
+            return redirect()->route('settings.profile.edit')->with('error', 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন সংরক্ষণ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
         }
 
         if ($user->employee_id && (int) $request->input('employee_id') === (int) $user->employee_id) {
             return redirect()->back()->withErrors([
-                'employee_id' => 'আপনি নিজের শিক্ষানবিস মূল্যায়ন করতে পারবেন না।'
+                'employee_id' => 'আপনি নিজের শিক্ষানবিশ মূল্যায়ন করতে পারবেন না।'
             ])->withInput();
         }
 
@@ -355,7 +262,7 @@ class ProbationIncrementEvaluationController extends Controller
             $candLevel = (int) ($candTier['level'] ?? 999);
             if ($candLevel <= $userLevel) {
                 return redirect()->back()->withErrors([
-                    'employee_id' => 'আপনি শুধুমাত্র আপনার অধীনস্থ (নিচের পদবীর) কর্মীদের শিক্ষানবিস মূল্যায়ন তৈরি করতে পারবেন।'
+                    'employee_id' => 'আপনি শুধুমাত্র আপনার অধীনস্থ (নিচের পদবীর) কর্মীদের শিক্ষানবিশ মূল্যায়ন তৈরি করতে পারবেন।'
                 ])->withInput();
             }
         }
@@ -478,8 +385,8 @@ class ProbationIncrementEvaluationController extends Controller
 
         return redirect()->route('probation-increment-evaluations.show', $evaluation->id)
             ->with('success', !empty($validated['submit_now']) 
-                ? 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন সফলভাবে দাখিল করা হয়েছে।' 
-                : 'শিক্ষানবিস ইনক্রিমেন্ট মূল্যায়ন খসড়া সফলভাবে সংরক্ষিত হয়েছে।');
+                ? 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন সফলভাবে দাখিল করা হয়েছে।' 
+                : 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন খসড়া সফলভাবে সংরক্ষিত হয়েছে।');
     }
 
     public function show(Request $request, ProbationIncrementEvaluation $evaluation)
@@ -495,7 +402,7 @@ class ProbationIncrementEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {
@@ -551,7 +458,7 @@ class ProbationIncrementEvaluationController extends Controller
             'employee.branch.regionalOffice.zone',
             'employee.educations',
             'scores',
-            'signatures.user.employee'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {
@@ -562,10 +469,7 @@ class ProbationIncrementEvaluationController extends Controller
 
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
-        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'probation_increment')
-            ->with(['sections.criteria' => function ($q) {
-                $q->orderBy('order');
-            }])->get();
+        $templates = AppraisalTemplateCache::load('probation_increment');
 
         return Inertia::render('sections/human-resources/evaluations/probation-increment/edit', [
             'evaluation' => $evaluation,
@@ -587,7 +491,7 @@ class ProbationIncrementEvaluationController extends Controller
             'zone',
             'initiator.employee.designation',
             'scores',
-            'signatures.user.employee.designation'
+            ...AppraisalListQuery::signerWith(),
         ]);
 
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {

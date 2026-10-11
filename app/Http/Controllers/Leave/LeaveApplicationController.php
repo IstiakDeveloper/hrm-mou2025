@@ -459,7 +459,10 @@ class LeaveApplicationController extends Controller
                 return (int) ($u->employee_id ?? 0) !== (int) $employee->id;
             })->values();
 
-            return ['recipients' => $recipients, 'tier' => null, 'addressee' => $addressee];
+            $result = ['recipients' => $recipients, 'tier' => null, 'addressee' => $addressee];
+            $this->cachedTierApprovers[$cacheKey] = $result;
+
+            return $result;
         }
 
         $approverType = (string) $tier->approver_type;
@@ -759,8 +762,9 @@ class LeaveApplicationController extends Controller
             ->withQueryString();
 
         $applications->getCollection()->transform(function (LeaveApplication $app) use ($user) {
-            $app->setAttribute('can_approve_action', $this->canApproveApplication($user, $app));
-            $app->setAttribute('approver_display', $this->approverDisplayForIndex($app));
+            $resolvedApprovers = $this->resolvedTierApproversForIndex($app);
+            $app->setAttribute('can_approve_action', $this->canApproveApplication($user, $app, $resolvedApprovers));
+            $app->setAttribute('approver_display', $this->approverDisplayForIndex($app, $resolvedApprovers));
 
             return $app;
         });
@@ -865,12 +869,44 @@ class LeaveApplicationController extends Controller
     }
 
     /**
+     * Tier approvers for one pending index row. Resolved once and reused for the approve
+     * button and the Approver column. Null when this row does not need tier resolution.
+     *
+     * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array<string, mixed>}|null
+     */
+    private function resolvedTierApproversForIndex(LeaveApplication $application): ?array
+    {
+        if ((string) $application->status !== 'pending') {
+            return null;
+        }
+
+        if (! $this->getActiveTiers()->isNotEmpty()) {
+            return null;
+        }
+
+        $applicant = ($application->relationLoaded('employee') && $application->employee)
+            ? $application->employee
+            : Employee::query()->with(['currentBranch', 'branch', 'department', 'designation'])->find($application->employee_id);
+
+        if (! $applicant) {
+            return null;
+        }
+
+        if (! $applicant->relationLoaded('currentBranch')) {
+            $applicant->load(['currentBranch.regionalOffice.zone', 'branch', 'department', 'designation', 'project']);
+        }
+
+        return $this->resolveTierApprovers($applicant, (int) $application->days);
+    }
+
+    /**
      * Label for the Approver column on the leave applications index.
      * Pending → current tier addressee / recipients; decided → who actioned it.
      *
+     * @param  array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array<string, mixed>}|null  $resolvedApprovers
      * @return array{label: string, title: ?string, name: ?string, status: string}
      */
-    private function approverDisplayForIndex(LeaveApplication $application): array
+    private function approverDisplayForIndex(LeaveApplication $application, ?array $resolvedApprovers = null): array
     {
         $status = (string) $application->status;
 
@@ -924,7 +960,7 @@ class LeaveApplicationController extends Controller
             ];
         }
 
-        $resolved = $this->resolveTierApprovers($applicant, (int) $application->days);
+        $resolved = $resolvedApprovers ?? $this->resolveTierApprovers($applicant, (int) $application->days);
         $addressee = $resolved['addressee'] ?? [];
         $title = trim((string) ($addressee['title'] ?? ''));
         $name = trim((string) ($addressee['name'] ?? ''));
@@ -988,7 +1024,7 @@ class LeaveApplicationController extends Controller
      * allowed department heads with employee directory access to approve any leave).
      * Legacy role-based rules apply only when no leave approval tiers are configured at all.
      */
-    private function canApproveApplication($user, $application)
+    private function canApproveApplication($user, $application, ?array $resolvedApprovers = null)
     {
         $userEmployeeId = $user->employee_id;
         $employeeId = $application->employee_id;
@@ -1029,7 +1065,7 @@ class LeaveApplicationController extends Controller
                     return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
                 }
 
-                $resolved = $this->resolveTierApprovers($applicant, (int) $application->days);
+                $resolved = $resolvedApprovers ?? $this->resolveTierApprovers($applicant, (int) $application->days);
                 $recipientIds = $resolved['recipients']->pluck('id')->map(fn ($id) => (int) $id)->all();
                 $isListedApprover = in_array((int) $user->id, $recipientIds, true);
 
@@ -1481,7 +1517,7 @@ class LeaveApplicationController extends Controller
                     }
 
                     // Send email notification
-                    Mail::to($recipient->email)->send(
+                    Mail::to($recipient->email)->queue(
                         new LeaveApplicationNotification($leaveApplication, $employee, $leaveType, $recipient)
                     );
                 } catch (\Exception $e) {
@@ -1714,88 +1750,7 @@ class LeaveApplicationController extends Controller
             // Ensure attendance is marked as leave for the approved date range
             $this->syncAttendanceForApprovedLeave($application);
 
-            // Get employee and leave type for notification - ensure they exist
-            $employee = Employee::find($application->employee_id);
-            $leaveType = LeaveType::find($application->leave_type_id);
-
-            // Find employee's user account - improved retrieval
-            $employeeUser = null;
-            if ($employee) {
-                $employeeUser = User::where('employee_id', $employee->id)->first();
-
-                // Format dates for notification message
-                $startDate = Carbon::parse($application->start_date)->format('M d, Y');
-                $endDate = Carbon::parse($application->end_date)->format('M d, Y');
-
-                // Notification details
-                $title = 'Leave Application Approved';
-                $message = "Your {$application->days} day(s) {$leaveType->name} leave request from {$startDate} to {$endDate} has been approved.";
-                $link = route('leave.applications.show', $application->id);
-
-                if ($employeeUser) {
-                    try {
-                        // Send in-app notification
-                        $employeeUser->notify(new \App\Notifications\HrmNotification(
-                            $title,
-                            $message,
-                            'success',
-                            $link
-                        ));
-
-                        // Log successful in-app notification
-                        \Log::info('In-app notification sent successfully', [
-                            'application_id' => $application->id,
-                            'employee_id' => $employee->id,
-                            'user_id' => $employeeUser->id,
-                        ]);
-
-                        // Only send email if the user has a valid email
-                        if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
-                            Mail::to($employeeUser->email)->send(
-                                new \App\Mail\LeaveApprovedNotification($application, $employee, $leaveType)
-                            );
-
-                            // Log successful email notification
-                            \Log::info('Email notification sent successfully', [
-                                'application_id' => $application->id,
-                                'employee_id' => $employee->id,
-                                'email' => $employeeUser->email,
-                            ]);
-                        } else {
-                            \Log::warning('Email notification not sent - invalid or missing email', [
-                                'application_id' => $application->id,
-                                'employee_id' => $employee->id,
-                                'email' => $employeeUser->email ?? 'null',
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        // Log notification error but continue with the process
-                        \Log::error('Error sending notifications: '.$e->getMessage(), [
-                            'application_id' => $application->id,
-                            'employee_id' => $employee->id,
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
-                        ]);
-                    }
-                } else {
-                    // Log warning if user account not found
-                    \Log::warning('Employee user account not found for notifications', [
-                        'application_id' => $application->id,
-                        'employee_id' => $employee->id,
-                    ]);
-                }
-            } else {
-                // Log warning if employee not found
-                \Log::warning('Employee not found for notifications', [
-                    'application_id' => $application->id,
-                    'employee_id' => $application->employee_id,
-                ]);
-            }
-
             DB::commit();
-
-            return redirect()->route('leave.applications.index')
-                ->with('success', 'Leave application approved successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Error approving leave application: '.$e->getMessage(), [
@@ -1806,6 +1761,86 @@ class LeaveApplicationController extends Controller
 
             return redirect()->route('leave.applications.index')
                 ->with('error', 'An error occurred while approving the leave application.');
+        }
+
+        $this->notifyEmployeeOfApprovedLeave($application);
+
+        return redirect()->route('leave.applications.index')
+            ->with('success', 'Leave application approved successfully.');
+    }
+
+    /**
+     * Queue in-app and email notice after the approval transaction has committed.
+     */
+    private function notifyEmployeeOfApprovedLeave(LeaveApplication $application): void
+    {
+        $employee = Employee::find($application->employee_id);
+        $leaveType = LeaveType::find($application->leave_type_id);
+
+        if (! $employee || ! $leaveType) {
+            \Log::warning('Employee or leave type not found for approval notifications', [
+                'application_id' => $application->id,
+                'employee_id' => $application->employee_id,
+                'leave_type_id' => $application->leave_type_id,
+            ]);
+
+            return;
+        }
+
+        $employeeUser = User::where('employee_id', $employee->id)->first();
+        if (! $employeeUser) {
+            \Log::warning('Employee user account not found for notifications', [
+                'application_id' => $application->id,
+                'employee_id' => $employee->id,
+            ]);
+
+            return;
+        }
+
+        $startDate = Carbon::parse($application->start_date)->format('M d, Y');
+        $endDate = Carbon::parse($application->end_date)->format('M d, Y');
+        $title = 'Leave Application Approved';
+        $message = "Your {$application->days} day(s) {$leaveType->name} leave request from {$startDate} to {$endDate} has been approved.";
+        $link = route('leave.applications.show', $application->id);
+
+        try {
+            $employeeUser->notify(new \App\Notifications\HrmNotification(
+                $title,
+                $message,
+                'success',
+                $link
+            ));
+
+            \Log::info('In-app notification queued', [
+                'application_id' => $application->id,
+                'employee_id' => $employee->id,
+                'user_id' => $employeeUser->id,
+            ]);
+
+            if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
+                Mail::to($employeeUser->email)->queue(
+                    new \App\Mail\LeaveApprovedNotification($application, $employee, $leaveType)
+                );
+
+                \Log::info('Email notification queued', [
+                    'application_id' => $application->id,
+                    'employee_id' => $employee->id,
+                    'email' => $employeeUser->email,
+                ]);
+            } else {
+                \Log::warning('Email notification not queued - invalid or missing email', [
+                    'application_id' => $application->id,
+                    'employee_id' => $employee->id,
+                    'email' => $employeeUser->email ?? 'null',
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error queueing approval notifications: '.$e->getMessage(), [
+                'application_id' => $application->id,
+                'employee_id' => $employee->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
     }
 

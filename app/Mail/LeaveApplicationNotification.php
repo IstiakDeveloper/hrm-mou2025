@@ -7,10 +7,11 @@ use App\Models\Employee;
 use App\Models\LeaveType;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-class LeaveApplicationNotification extends Mailable
+class LeaveApplicationNotification extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -28,6 +29,7 @@ class LeaveApplicationNotification extends Mailable
         $this->employee = $employee;
         $this->leaveType = $leaveType;
         $this->recipient = $recipient;
+        $this->afterCommit();
     }
 
     /**

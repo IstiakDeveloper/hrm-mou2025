@@ -79,6 +79,10 @@ export default function ProbationIncrementEvaluationIndex({
     const [selectedEvaluationForApproval, setSelectedEvaluationForApproval] = useState<any | null>(null);
     const [approvalComments, setApprovalComments] = useState('');
     const [approvalRecommendation, setApprovalRecommendation] = useState('recommend_increment');
+    const [hrFinancialIrregularity, setHrFinancialIrregularity] = useState(false);
+    const [hrDisciplinaryAction, setHrDisciplinaryAction] = useState(false);
+    const [hrAuditObjection, setHrAuditObjection] = useState(false);
+    const [hrLeaveWithoutPay, setHrLeaveWithoutPay] = useState(false);
     const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
     const [approvalMode, setApprovalMode] = useState<'approve' | 'send_back'>('approve');
 
@@ -86,7 +90,7 @@ export default function ProbationIncrementEvaluationIndex({
         if (!userHasSignature) {
             alert(
                 lang === 'bn' 
-                    ? 'শিক্ষানবিস মূল্যায়ন অনুমোদন দেওয়ার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।' 
+                    ? 'শিক্ষানবিশ মূল্যায়ন অনুমোদন দেওয়ার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।' 
                     : 'You must upload a digital signature to your profile before approving an evaluation.'
             );
             window.location.href = '/settings/profile';
@@ -95,6 +99,10 @@ export default function ProbationIncrementEvaluationIndex({
         setSelectedEvaluationForApproval(ev);
         setApprovalMode('approve');
         setApprovalRecommendation(ev.supervisor_recommendation || 'recommend_increment');
+        setHrFinancialIrregularity(Boolean(ev.hr_financial_irregularity));
+        setHrDisciplinaryAction(Boolean(ev.hr_disciplinary_action));
+        setHrAuditObjection(Boolean(ev.hr_audit_objection));
+        setHrLeaveWithoutPay(Boolean(ev.hr_leave_without_pay));
         if (ev.status === 'submitted_to_hr') {
             setApprovalComments('ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।');
         } else {
@@ -110,6 +118,10 @@ export default function ProbationIncrementEvaluationIndex({
         if (ev.status === 'submitted_to_hr') {
             router.post(`/probation-increment-evaluations/${ev.id}/hr-verify`, {
                 comments: approvalComments || 'ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।',
+                hr_financial_irregularity: hrFinancialIrregularity,
+                hr_disciplinary_action: hrDisciplinaryAction,
+                hr_audit_objection: hrAuditObjection,
+                hr_leave_without_pay: hrLeaveWithoutPay,
             }, {
                 preserveScroll: true,
                 onSuccess: () => {
@@ -293,7 +305,7 @@ export default function ProbationIncrementEvaluationIndex({
 
     return (
         <Layout>
-            <Head title={lang === 'bn' ? 'শিক্ষানবিসকাল ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'} />
+            <Head title={lang === 'bn' ? 'শিক্ষানবিশকাল ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'} />
 
             <div className="space-y-6">
                 {/* Header Banner */}
@@ -306,11 +318,11 @@ export default function ProbationIncrementEvaluationIndex({
                             </span>
                         </div>
                         <h1 className="text-2xl font-extrabold text-slate-900 mt-1 tracking-tight">
-                            {lang === 'bn' ? 'শিক্ষানবিসকাল ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}
+                            {lang === 'bn' ? 'শিক্ষানবিশকাল ২য় ধাপে বেতন বৃদ্ধি মূল্যায়ন' : 'Probation Increment Evaluation'}
                         </h1>
                         <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
                             {lang === 'bn' 
-                                ? 'শিক্ষানবিসকাল ০৩ মাস পূর্তির ভিত্তিতে বেতন বৃদ্ধির মূল্যায়ন ও বহুস্তরীয় অনুমোদন প্রক্রিয়া।' 
+                                ? 'শিক্ষানবিশকাল ০৩ মাস পূর্তির ভিত্তিতে বেতন বৃদ্ধির মূল্যায়ন ও বহুস্তরীয় অনুমোদন প্রক্রিয়া।' 
                                 : 'Multi-tier review and approval for 2nd step salary increment upon 03-month probation completion.'}
                         </p>
                     </div>
@@ -365,7 +377,7 @@ export default function ProbationIncrementEvaluationIndex({
                             <Link href="/probation-increment-evaluations/create">
                                 <Button className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-10 px-4 rounded-xl shadow-xs flex items-center gap-2">
                                     <Plus className="h-4 w-4" />
-                                    <span>{lang === 'bn' ? 'নতুন ইনক্রিমেন্ট মূল্যায়ন' : 'New Increment Evaluation'}</span>
+                                    <span>{lang === 'bn' ? 'নতুন বেতন বৃদ্ধি' : 'New Probationary Salary Increase'}</span>
                                 </Button>
                             </Link>
                         )}
@@ -718,7 +730,7 @@ export default function ProbationIncrementEvaluationIndex({
                 open={Boolean(selectedEvaluationForApproval)} 
                 onOpenChange={(open) => !open && setSelectedEvaluationForApproval(null)}
             >
-                <DialogContent className="max-w-md p-6">
+                <DialogContent className="max-w-lg p-6">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                             <Award className="h-5 w-5 text-emerald-600" />
@@ -761,6 +773,35 @@ export default function ProbationIncrementEvaluationIndex({
 
                         {approvalMode === 'approve' ? (
                             <div className="space-y-3">
+                                {selectedEvaluationForApproval?.status === 'submitted_to_hr' && (
+                                    <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+                                        <p className="text-xs font-bold text-slate-800">
+                                            ব্যক্তিগত ফাইল পর্যবেক্ষণ (গত ০৩ মাস)
+                                        </p>
+                                        <p className="text-[11px] text-slate-500">নিচের যেকোনো একটি গত ০৩ মাসের মধ্যে হয়েছে কি না?</p>
+                                        {[
+                                            { label: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', value: hrFinancialIrregularity, set: setHrFinancialIrregularity },
+                                            { label: 'যেকোনো শাস্তিমূলক ব্যবস্থার আওতায় দেওয়া কোনো চিঠিপত্র', value: hrDisciplinaryAction, set: setHrDisciplinaryAction },
+                                            { label: 'সর্বশেষ অডিটে গুরুতর আপত্তি', value: hrAuditObjection, set: setHrAuditObjection },
+                                            { label: 'বিনা বেতনে ছুটি ভোগ', value: hrLeaveWithoutPay, set: setHrLeaveWithoutPay },
+                                        ].map((item) => (
+                                            <div key={item.label} className="flex items-center justify-between gap-3 text-xs">
+                                                <span className="text-slate-700">{item.label}</span>
+                                                <span className="flex shrink-0 gap-3">
+                                                    <label className="flex items-center gap-1">
+                                                        <input type="radio" checked={item.value === true} onChange={() => item.set(true)} />
+                                                        হ্যাঁ
+                                                    </label>
+                                                    <label className="flex items-center gap-1">
+                                                        <input type="radio" checked={item.value === false} onChange={() => item.set(false)} />
+                                                        না
+                                                    </label>
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {selectedEvaluationForApproval?.status !== 'submitted_to_hr' && selectedEvaluationForApproval?.status !== 'submitted_to_ed' && (
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-700">

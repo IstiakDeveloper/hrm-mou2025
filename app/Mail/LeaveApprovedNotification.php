@@ -11,7 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-class LeaveApprovedNotification extends Mailable
+class LeaveApprovedNotification extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -43,6 +43,8 @@ class LeaveApprovedNotification extends Mailable
         if ($application->approved_by) {
             $this->approver = \App\Models\User::find($application->approved_by);
         }
+
+        $this->afterCommit();
     }
 
     /**

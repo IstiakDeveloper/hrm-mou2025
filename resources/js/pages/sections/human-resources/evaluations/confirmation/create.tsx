@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { PageSurface } from '@/components/page-surface';
+import { AppraisalEmployeeCombo } from '@/components/appraisal/AppraisalEmployeeCombo';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,7 +31,7 @@ import FormA from './components/FormA';
 import FormB from './components/FormB';
 import FormC from './components/FormC';
 import MonthPickerSelect from '@/components/MonthPickerSelect';
-import ConfirmationOfficialFormDocument from './components/ConfirmationOfficialFormDocument';
+const ConfirmationOfficialFormDocument = lazy(() => import('./components/ConfirmationOfficialFormDocument'));
 import { 
     calculateGrade,
     getFormStructure,
@@ -65,11 +65,11 @@ interface EmployeeOption {
 }
 
 interface CreateProps {
-    employees: EmployeeOption[];
+    employeeLookupUrl?: string;
     templates?: any[];
 }
 
-export default function ConfirmationEvaluationCreate({ employees = [], templates = [] }: CreateProps) {
+export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/confirmation-evaluations/employees/lookup', templates = [] }: CreateProps) {
     const { auth } = usePage<SharedData>().props;
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -132,11 +132,7 @@ export default function ConfirmationEvaluationCreate({ employees = [], templates
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
-
-    const selectedEmployee = useMemo(() => 
-        employees.find((e: any) => e.id.toString() === data.employee_id),
-        [data.employee_id, employees]
-    );
+    const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
     // Auto-detect form type based on designation
     const formType = useMemo<'officer_abm' | 'accountant' | 'bm_and_above'>(() => {
@@ -545,7 +541,9 @@ export default function ConfirmationEvaluationCreate({ employees = [], templates
                         </div>
 
                         <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">
-                            <ConfirmationOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
+                            <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">{lang === 'bn' ? 'ফরম লোড হচ্ছে…' : 'Loading form…'}</div>}>
+                                <ConfirmationOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
+                            </Suspense>
                         </div>
                     </div>
                 ) : (
@@ -583,10 +581,15 @@ export default function ConfirmationEvaluationCreate({ employees = [], templates
                                     <Label htmlFor="employee-select" className="text-slate-700 font-medium">
                                         {lang === 'bn' ? 'মূল্যায়নযোগ্য কর্মী নির্বাচন করুন' : 'Select Employee for Confirmation'} <span className="text-red-500">*</span>
                                     </Label>
-                                    <Select 
-                                        value={data.employee_id} 
-                                        onValueChange={(v) => {
-                                            setData('employee_id', v);
+                                    <AppraisalEmployeeCombo
+                                        lookupUrl={employeeLookupUrl}
+                                        value={data.employee_id ? Number(data.employee_id) : null}
+                                        lang={lang}
+                                        invalid={Boolean(mergedErrors.employee_id)}
+                                        placeholder={lang === 'bn' ? 'পিন বা নাম লিখে খুঁজুন ও নির্বাচন করুন' : 'Search by PIN or name, then select'}
+                                        onSelect={(emp) => {
+                                            setSelectedEmployee(emp);
+                                            setData('employee_id', emp ? String(emp.id) : '');
                                             if (clientErrors.employee_id) {
                                                 setClientErrors(ce => {
                                                     const copy = { ...ce };
@@ -595,30 +598,7 @@ export default function ConfirmationEvaluationCreate({ employees = [], templates
                                                 });
                                             }
                                         }}
-                                    >
-                                        <SelectTrigger id="employee-select" className={`h-11 bg-white ${mergedErrors.employee_id ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300'}`}>
-                                            <SelectValue placeholder={lang === 'bn' ? 'কর্মী নির্বাচন করুন (পিন বা নাম)' : 'Select Employee (PIN or Name)'} />
-                                        </SelectTrigger>
-                                        <SelectContent className="max-h-80">
-                                            {employees.length === 0 ? (
-                                                <div className="p-4 text-center text-sm text-slate-500">
-                                                    {lang === 'bn' ? 'শিক্ষানবিশকালে কোনো সক্রিয় কর্মী পাওয়া যায়নি।' : 'No active probationary employees found.'}
-                                                </div>
-                                            ) : (
-                                                employees.map((emp: any) => {
-                                                    const empName = lang === 'bn' ? (emp.name_bn || emp.name_en) : emp.name_en;
-                                                    const desig = emp.designation?.name || emp.designation?.title || 'No Designation';
-                                                    const brName = emp.branch?.name || (lang === 'bn' ? 'প্রধান কার্যালয়' : 'Head Office');
-                                                    const empType = emp.employee_type?.name || 'PROBATION';
-                                                    return (
-                                                        <SelectItem key={emp.id} value={emp.id.toString()}>
-                                                            [{emp.pin}] {empName} — {desig} ({brName}) [{empType}]
-                                                        </SelectItem>
-                                                    );
-                                                })
-                                            )}
-                                        </SelectContent>
-                                    </Select>
+                                    />
                                     {mergedErrors.employee_id && (
                                         <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
                                             <AlertCircle className="h-3.5 w-3.5" />

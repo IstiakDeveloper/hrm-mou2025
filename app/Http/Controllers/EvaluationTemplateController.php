@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EvaluationCriterion;
 use App\Models\EvaluationSection;
 use App\Models\EvaluationTemplate;
+use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -48,6 +49,7 @@ class EvaluationTemplateController extends Controller
         ]);
 
         $template->update($validated);
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'মূল্যায়ন ফরমের বিবরণ সফলভাবে আপডেট করা হয়েছে।');
     }
@@ -74,6 +76,7 @@ class EvaluationTemplateController extends Controller
             'max_marks' => $validated['max_marks'],
             'order' => $maxOrder + 1,
         ]);
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'নতুন সেকশন সফলভাবে তৈরি হয়েছে।');
     }
@@ -91,6 +94,7 @@ class EvaluationTemplateController extends Controller
         ]);
 
         $section->update($validated);
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'সেকশন তথ্য সফলভাবে আপডেট করা হয়েছে।');
     }
@@ -102,6 +106,7 @@ class EvaluationTemplateController extends Controller
         }
 
         $section->delete();
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'সেকশনটি সফলভাবে মুছে ফেলা হয়েছে।');
     }
@@ -120,6 +125,7 @@ class EvaluationTemplateController extends Controller
         ]);
 
         $criterion->update($validated);
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'মানদণ্ডটি সফলভাবে আপডেট করা হয়েছে।');
     }
@@ -147,6 +153,7 @@ class EvaluationTemplateController extends Controller
             'order' => $maxOrder + 1,
             'is_active' => true,
         ]);
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'নতুন মানদণ্ড সফলভাবে যুক্ত করা হয়েছে।');
     }
@@ -158,6 +165,7 @@ class EvaluationTemplateController extends Controller
         }
 
         $criterion->delete();
+        AppraisalTemplateCache::flush();
 
         return redirect()->back()->with('success', 'মানদণ্ডটি সফলভাবে মুছে ফেলা হয়েছে।');
     }
