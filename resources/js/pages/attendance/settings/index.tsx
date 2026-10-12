@@ -80,15 +80,26 @@ interface AttendanceSetting {
   branch: Branch;
 }
 
+interface DeviceEmployeeRow {
+  id: number;
+  name: string;
+  employee_code: string;
+  pin: string;
+  on_device: boolean;
+  queued: boolean;
+}
+
 interface DevicePushRow {
   id: number;
   name: string;
   branch_name?: string | null;
   adms_enabled: boolean;
   adms_link: string;
+  last_adms_at?: string | null;
   known_users: number;
   pending_commands: number;
   missing_users: number | null;
+  employees?: DeviceEmployeeRow[];
 }
 
 interface AttendanceSettingsIndexProps {
@@ -188,7 +199,9 @@ export default function AttendanceSettingsIndex({
   const [deviceModalOpen, setDeviceModalOpen] = useState(false);
   const [logKeepDays, setLogKeepDays] = useState(attlogKeepDays);
   const [savingLogDays, setSavingLogDays] = useState(false);
-  const [allowEmptyDevice, setAllowEmptyDevice] = useState(false);
+  const [activeDeviceId, setActiveDeviceId] = useState<number | null>(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [employeeQuery, setEmployeeQuery] = useState('');
   const [pushingId, setPushingId] = useState<number | null>(null);
 
   const handleToggleBulk = async (checked: boolean) => {
@@ -259,7 +272,9 @@ export default function AttendanceSettingsIndex({
 
   const openDeviceModal = () => {
     setLogKeepDays(attlogKeepDays);
-    setAllowEmptyDevice(false);
+    setActiveDeviceId(devicePushes[0]?.id ?? null);
+    setSelectedEmployeeIds([]);
+    setEmployeeQuery('');
     setDeviceModalOpen(true);
   };
 
@@ -278,12 +293,17 @@ export default function AttendanceSettingsIndex({
     });
   };
 
-  const pushMissingUsers = (device: DevicePushRow) => {
+  const pushSelectedUsers = (device: DevicePushRow) => {
+    if (selectedEmployeeIds.length === 0) {
+      return;
+    }
+
     setPushingId(device.id);
     router.post(route('attendance.settings.devices.push-missing', device.id), {
-      allow_empty: allowEmptyDevice,
+      employee_ids: selectedEmployeeIds,
     }, {
       preserveScroll: true,
+      onSuccess: () => setSelectedEmployeeIds([]),
       onFinish: () => setPushingId(null),
     });
   };
@@ -651,76 +671,141 @@ export default function AttendanceSettingsIndex({
               </div>
             </div>
 
-            <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
-              <Checkbox
-                id="allowEmptyDevice"
-                checked={allowEmptyDevice}
-                onCheckedChange={(checked) => setAllowEmptyDevice(checked === true)}
-              />
-              <Label htmlFor="allowEmptyDevice" className="text-xs leading-5 text-slate-600">
-                Device has no users yet. Leave this off when people are already enrolled.
-              </Label>
-            </div>
+            {(() => {
+              const device = devicePushes.find((row) => row.id === activeDeviceId) ?? devicePushes[0];
+              if (!device) {
+                return <p className="text-xs text-slate-400">No attendance devices yet.</p>;
+              }
 
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/80">
-                    <TableHead className="h-9 pl-3 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Device</TableHead>
-                    <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">On device</TableHead>
-                    <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Missing</TableHead>
-                    <TableHead className="h-9 pr-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-700">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {devicePushes.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-6 text-center text-xs text-slate-400">
-                        No attendance devices yet.
-                      </TableCell>
-                    </TableRow>
-                  ) : devicePushes.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell className="py-2.5 pl-3">
-                        <div className="text-xs font-semibold text-slate-800">{device.name}</div>
-                        <div className="text-[10px] text-slate-500">{device.branch_name || 'No branch'}</div>
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-700">
-                        {device.known_users > 0 ? device.known_users : 'Not listed yet'}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-700">
-                        {device.missing_users === null ? 'Ask the device' : device.missing_users}
-                        {device.pending_commands > 0 && (
-                          <span className="ml-2 text-[10px] text-amber-700">Waiting {device.pending_commands}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="pr-3 text-right">
+              const employees = device.employees ?? [];
+              const query = employeeQuery.trim().toLowerCase();
+              const visible = employees.filter((employee) => {
+                if (!query) return true;
+                return employee.name.toLowerCase().includes(query)
+                  || employee.employee_code.toLowerCase().includes(query)
+                  || employee.pin.includes(query);
+              });
+              const selectable = visible.filter((employee) => !employee.on_device);
+              const allSelectableChecked = selectable.length > 0 && selectable.every((employee) => selectedEmployeeIds.includes(employee.id));
+              const lastContact = device.last_adms_at ? format(new Date(device.last_adms_at), 'dd MMM yyyy, h:mm a') : null;
+
+              return (
+                <div className="space-y-3">
+                  {devicePushes.length > 1 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {devicePushes.map((row) => (
                         <Button
+                          key={row.id}
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          disabled={!device.adms_enabled || pushingId === device.id}
-                          onClick={() => pushMissingUsers(device)}
-                          className="h-7 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                          onClick={() => {
+                            setActiveDeviceId(row.id);
+                            setSelectedEmployeeIds([]);
+                          }}
+                          className={`h-7 text-[11px] ${row.id === device.id ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : ''}`}
                         >
-                          Push missing
+                          {row.name}
                         </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      ))}
+                    </div>
+                  )}
 
-            <DialogFooter>
-              <Button
-                type="button"
-                onClick={() => setDeviceModalOpen(false)}
-                className="h-8 bg-emerald-600 px-4 text-xs text-white hover:bg-emerald-700"
-              >
-                Done
-              </Button>
-            </DialogFooter>
+                  <p className="text-[11px] leading-5 text-slate-500">
+                    {device.known_users > 0
+                      ? `${device.known_users} people are already on ${device.name}. They cannot be selected.`
+                      : `${device.name} has not sent its user list yet, so everyone below only has a device number in HRM. Push someone only if you know they are not enrolled.`}
+                    {device.adms_link !== 'connected' && (
+                      <> The machine is offline{lastContact ? ` (last contact ${lastContact})` : ''}, so a push waits until it calls this server.</>
+                    )}
+                  </p>
+
+                  <Input
+                    value={employeeQuery}
+                    onChange={(event) => setEmployeeQuery(event.target.value)}
+                    placeholder="Search name or device ID"
+                    className="h-8 text-xs"
+                  />
+
+                  <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50/80">
+                          <TableHead className="h-9 w-10 pl-3">
+                            <Checkbox
+                              checked={allSelectableChecked}
+                              onCheckedChange={(checked) => {
+                                const ids = selectable.map((employee) => employee.id);
+                                setSelectedEmployeeIds((current) => checked === true
+                                  ? Array.from(new Set([...current, ...ids]))
+                                  : current.filter((id) => !ids.includes(id)));
+                              }}
+                              aria-label="Select employees who are not on the device"
+                              disabled={selectable.length === 0}
+                            />
+                          </TableHead>
+                          <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Employee</TableHead>
+                          <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Device ID</TableHead>
+                          <TableHead className="h-9 pr-3 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visible.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="py-6 text-center text-xs text-slate-400">
+                              No employee with a device number.
+                            </TableCell>
+                          </TableRow>
+                        ) : visible.map((employee) => (
+                          <TableRow key={employee.id}>
+                            <TableCell className="py-2 pl-3">
+                              <Checkbox
+                                checked={employee.on_device || selectedEmployeeIds.includes(employee.id)}
+                                disabled={employee.on_device}
+                                onCheckedChange={(checked) => {
+                                  setSelectedEmployeeIds((current) => checked === true
+                                    ? Array.from(new Set([...current, employee.id]))
+                                    : current.filter((id) => id !== employee.id));
+                                }}
+                                aria-label={`Select ${employee.name}`}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2">
+                              <div className="text-xs font-semibold text-slate-800">{employee.name}</div>
+                              <div className="text-[10px] text-slate-500">{employee.employee_code}</div>
+                            </TableCell>
+                            <TableCell className="text-xs text-slate-700">{employee.pin}</TableCell>
+                            <TableCell className="pr-3 text-[11px]">
+                              {employee.on_device ? (
+                                <span className="text-emerald-700">On device</span>
+                              ) : employee.queued ? (
+                                <span className="text-amber-700">Waiting</span>
+                              ) : (
+                                <span className="text-slate-500">Not on device</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setDeviceModalOpen(false)} className="h-8 text-xs">
+                      Done
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => pushSelectedUsers(device)}
+                      disabled={!device.adms_enabled || selectedEmployeeIds.length === 0 || pushingId === device.id}
+                      className="h-8 bg-emerald-600 px-4 text-xs text-white hover:bg-emerald-700"
+                    >
+                      Push selected{selectedEmployeeIds.length > 0 ? ` (${selectedEmployeeIds.length})` : ''}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 

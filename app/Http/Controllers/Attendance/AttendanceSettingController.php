@@ -127,8 +127,9 @@ class AttendanceSettingController extends Controller
      */
     public function pushMissingDeviceUsers(Request $request, AttendanceDevice $device, AdmsDeviceCommandService $commands)
     {
-        $request->validate([
-            'allow_empty' => 'sometimes|boolean',
+        $data = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'integer',
         ]);
 
         if (! $device->acceptsAdms()) {
@@ -141,10 +142,19 @@ class AttendanceSettingController extends Controller
                 ->with('error', 'Device push is not ready yet. Run the latest migration.');
         }
 
-        $message = $commands->requestPush($device, $request->boolean('allow_empty'));
+        $queued = $commands->queueSelected($device, $data['employee_ids']);
+
+        if ($queued === 0) {
+            return redirect()->route('attendance.settings.index')
+                ->with('error', 'No one was queued. They are already on the device, or they have no device number.');
+        }
+
+        $waiting = $device->adms_link === 'connected'
+            ? 'The device will add them on its next check-in.'
+            : 'The device is not connected right now, so this waits until the machine calls the server.';
 
         return redirect()->route('attendance.settings.index')
-            ->with('success', $message);
+            ->with('success', "{$queued} selected employees are queued. Only their ID and name are sent. People already on the device are skipped. {$waiting}");
     }
 
     /**
@@ -296,9 +306,11 @@ class AttendanceSettingController extends Controller
                 'branch_name' => $device->branch?->name,
                 'adms_enabled' => $device->acceptsAdms(),
                 'adms_link' => $device->adms_link,
+                'last_adms_at' => $device->last_adms_at?->toIso8601String(),
                 'known_users' => $known,
                 'pending_commands' => $pending,
                 'missing_users' => $known > 0 ? $commands->missingCount($device) : null,
+                'employees' => $hasUsers ? $commands->candidateRows($device) : [],
             ];
         }
 

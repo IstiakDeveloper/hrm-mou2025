@@ -182,6 +182,20 @@ test('the next command skips a known user and never sends a wipe', function () {
         ->and(AttendanceDeviceCommand::query()->where('body', 'CLEAR DATA')->value('status'))->toBe('failed');
 });
 
+test('only the chosen employee is queued and someone already on the device is skipped', function () {
+    $missing = makePushEmployee($this->branch->id, 'E-2', 'Missing Person', '2020');
+    $present = makePushEmployee($this->branch->id, 'E-1', 'Already There', '1015');
+
+    $this->service->recordPins($this->device, ['1015']);
+
+    $queued = $this->service->queueSelected($this->device, [$missing->id, $present->id, 9999]);
+    $pins = AttendanceDeviceCommand::query()->where('kind', 'update_user')->pluck('pin')->all();
+
+    expect($queued)->toBe(1)
+        ->and($pins)->toBe(['2020'])
+        ->and(AttendanceDeviceCommand::query()->where('kind', 'query_users')->where('status', 'pending')->exists())->toBeTrue();
+});
+
 test('an empty device is not filled until the user list has had time to arrive', function () {
     Carbon::setTestNow(Carbon::parse('2026-10-12 12:00:00'));
     makePushEmployee($this->branch->id, 'E-9', 'Brand New', '9090');

@@ -15,6 +15,81 @@ use Illuminate\Support\Facades\Schema;
  */
 class AdmsDeviceCommandService
 {
+    /**
+     * Queue a user-list read, then add only the chosen employees who are not already known on the device.
+     *
+     * @param  list<int>  $employeeIds
+     */
+    public function queueSelected(AttendanceDevice $device, array $employeeIds): int
+    {
+        $employeeIds = array_values(array_unique(array_filter(array_map('intval', $employeeIds))));
+        if ($employeeIds === []) {
+            return 0;
+        }
+
+        $this->ensureUserQuery($device);
+
+        $known = array_flip($this->knownPins($device));
+        $queued = 0;
+
+        foreach ($this->branchEmployees($device)->whereIn('id', $employeeIds) as $employee) {
+            $pin = $this->devicePin($employee);
+            if ($pin === null || isset($known[$pin])) {
+                continue;
+            }
+
+            if ($this->enqueueUpdate($device, $pin, $this->safeName($employee))) {
+                $queued++;
+            }
+        }
+
+        return $queued;
+    }
+
+    /**
+     * @return list<array{id: int, name: string, employee_code: string, pin: string, on_device: bool, queued: bool}>
+     */
+    public function candidateRows(AttendanceDevice $device): array
+    {
+        $known = array_flip($this->knownPins($device));
+        $queuedPins = array_flip(
+            AttendanceDeviceCommand::query()
+                ->where('attendance_device_id', $device->id)
+                ->where('kind', 'update_user')
+                ->whereIn('status', ['pending', 'sent'])
+                ->pluck('pin')
+                ->map(fn ($pin) => (string) $pin)
+                ->all()
+        );
+
+        $rows = [];
+        foreach ($this->branchEmployees($device) as $employee) {
+            $pin = $this->devicePin($employee);
+            if ($pin === null) {
+                continue;
+            }
+
+            $rows[] = [
+                'id' => (int) $employee->id,
+                'name' => trim((string) ($employee->name_en ?: $employee->employee_id)),
+                'employee_code' => (string) $employee->employee_id,
+                'pin' => $pin,
+                'on_device' => isset($known[$pin]),
+                'queued' => isset($queuedPins[$pin]),
+            ];
+        }
+
+        usort($rows, function (array $left, array $right): int {
+            if ($left['on_device'] !== $right['on_device']) {
+                return $left['on_device'] <=> $right['on_device'];
+            }
+
+            return strcasecmp($left['name'], $right['name']);
+        });
+
+        return $rows;
+    }
+
     public function requestPush(AttendanceDevice $device, bool $allowEmpty): string
     {
         $pending = AttendanceDeviceCommand::query()
@@ -326,6 +401,33 @@ class AdmsDeviceCommandService
         }
 
         $this->queueMissing($device, true);
+    }
+
+    private function ensureUserQuery(AttendanceDevice $device): void
+    {
+        $pending = AttendanceDeviceCommand::query()
+            ->where('attendance_device_id', $device->id)
+            ->where('kind', 'query_users')
+            ->where(function ($query) {
+                $query->where('status', 'pending')
+                    ->orWhere(function ($sent) {
+                        $sent->where('status', 'sent')
+                            ->where('sent_at', '>', now()->subMinutes(5));
+                    });
+            })
+            ->exists();
+
+        if ($pending) {
+            return;
+        }
+
+        AttendanceDeviceCommand::query()->create([
+            'attendance_device_id' => $device->id,
+            'kind' => 'query_users',
+            'body' => 'DATA QUERY USERINFO',
+            'status' => 'pending',
+            'allow_empty' => false,
+        ]);
     }
 
     private function enqueueUpdate(AttendanceDevice $device, string $pin, string $name): bool
