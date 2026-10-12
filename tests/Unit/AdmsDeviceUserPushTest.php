@@ -196,6 +196,19 @@ test('only the chosen employee is queued and someone already on the device is sk
         ->and(AttendanceDeviceCommand::query()->where('kind', 'query_users')->where('status', 'pending')->exists())->toBeTrue();
 });
 
+test('the branch list keeps the real pin and still includes employees without a device number', function () {
+    makePushEmployee($this->branch->id, '0128', 'Erfan Ali', '128', '0128');
+    makePushEmployee($this->branch->id, 'SG-1', 'Guard Pin', null, null);
+
+    $rows = collect($this->service->candidateRows($this->device))->keyBy('pin');
+
+    expect($rows->has('0128'))->toBeTrue()
+        ->and($rows['0128']['search'])->toContain('0128')
+        ->and($rows['0128']['can_push'])->toBeTrue()
+        ->and($rows->has('SG-1'))->toBeTrue()
+        ->and($rows['SG-1']['can_push'])->toBeFalse();
+});
+
 test('an empty device is not filled until the user list has had time to arrive', function () {
     Carbon::setTestNow(Carbon::parse('2026-10-12 12:00:00'));
     makePushEmployee($this->branch->id, 'E-9', 'Brand New', '9090');

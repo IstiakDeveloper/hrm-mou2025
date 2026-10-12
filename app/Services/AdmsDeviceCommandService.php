@@ -47,7 +47,7 @@ class AdmsDeviceCommandService
     }
 
     /**
-     * @return list<array{id: int, name: string, employee_code: string, pin: string, on_device: bool, queued: bool}>
+     * @return list<array{id: int, name: string, employee_code: string, pin: string, search: string, on_device: bool, queued: bool, can_push: bool}>
      */
     public function candidateRows(AttendanceDevice $device): array
     {
@@ -64,18 +64,18 @@ class AdmsDeviceCommandService
 
         $rows = [];
         foreach ($this->branchEmployees($device) as $employee) {
-            $pin = $this->devicePin($employee);
-            if ($pin === null) {
-                continue;
-            }
+            $devicePin = $this->devicePin($employee);
+            $pin = $this->displayPin($employee);
 
             $rows[] = [
                 'id' => (int) $employee->id,
                 'name' => trim((string) ($employee->name_en ?: $employee->employee_id)),
                 'employee_code' => (string) $employee->employee_id,
                 'pin' => $pin,
-                'on_device' => isset($known[$pin]),
-                'queued' => isset($queuedPins[$pin]),
+                'search' => $this->searchText($employee, $pin, $devicePin),
+                'on_device' => $devicePin !== null && isset($known[$devicePin]),
+                'queued' => $devicePin !== null && isset($queuedPins[$devicePin]),
+                'can_push' => $devicePin !== null && ! isset($known[$devicePin]),
             ];
         }
 
@@ -458,6 +458,45 @@ class AdmsDeviceCommandService
         ]);
 
         return true;
+    }
+
+    private function displayPin(Employee $employee): string
+    {
+        foreach (['pin', 'employee_id', 'biometric_id', 'device_user_id'] as $field) {
+            if (! array_key_exists($field, $employee->getAttributes())) {
+                continue;
+            }
+
+            $value = trim((string) $employee->{$field});
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function searchText(Employee $employee, string $displayPin, ?string $devicePin): string
+    {
+        $parts = [
+            $employee->name_en,
+            $displayPin,
+            $employee->employee_id,
+            $employee->pin,
+            $devicePin,
+        ];
+
+        if (Schema::hasColumn('employees', 'biometric_id')) {
+            $parts[] = $employee->biometric_id;
+        }
+        if (Schema::hasColumn('employees', 'device_user_id')) {
+            $parts[] = $employee->device_user_id;
+        }
+
+        return strtolower(trim(implode(' ', array_filter(
+            array_map(fn ($value) => trim((string) $value), $parts),
+            fn (string $value) => $value !== ''
+        ))));
     }
 
     private function rememberPin(AttendanceDevice $device, string $pin): void

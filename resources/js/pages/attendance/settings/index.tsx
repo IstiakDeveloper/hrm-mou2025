@@ -85,8 +85,10 @@ interface DeviceEmployeeRow {
   name: string;
   employee_code: string;
   pin: string;
+  search?: string;
   on_device: boolean;
   queued: boolean;
+  can_push?: boolean;
 }
 
 interface DevicePushRow {
@@ -679,13 +681,13 @@ export default function AttendanceSettingsIndex({
 
               const employees = device.employees ?? [];
               const query = employeeQuery.trim().toLowerCase();
+              const significant = query.replace(/^0+/, '');
               const visible = employees.filter((employee) => {
                 if (!query) return true;
-                return employee.name.toLowerCase().includes(query)
-                  || employee.employee_code.toLowerCase().includes(query)
-                  || employee.pin.includes(query);
+                const haystack = (employee.search || `${employee.name} ${employee.employee_code} ${employee.pin}`).toLowerCase();
+                return haystack.includes(query) || (significant !== '' && significant !== query && haystack.includes(significant));
               });
-              const selectable = visible.filter((employee) => !employee.on_device);
+              const selectable = visible.filter((employee) => employee.can_push !== false && !employee.on_device);
               const allSelectableChecked = selectable.length > 0 && selectable.every((employee) => selectedEmployeeIds.includes(employee.id));
               const lastContact = device.last_adms_at ? format(new Date(device.last_adms_at), 'dd MMM yyyy, h:mm a') : null;
 
@@ -712,9 +714,8 @@ export default function AttendanceSettingsIndex({
                   )}
 
                   <p className="text-[11px] leading-5 text-slate-500">
-                    {device.known_users > 0
-                      ? `${device.known_users} people are already on ${device.name}. They cannot be selected.`
-                      : `${device.name} has not sent its user list yet, so everyone below only has a device number in HRM. Push someone only if you know they are not enrolled.`}
+                    {employees.length} active employees of {device.branch_name || device.name}. Search by name or PIN, including leading zeros.
+                    {device.known_users > 0 ? ` ${device.known_users} are already on the machine and cannot be selected.` : ''}
                     {device.adms_link !== 'connected' && (
                       <> The machine is offline{lastContact ? ` (last contact ${lastContact})` : ''}, so a push waits until it calls this server.</>
                     )}
@@ -723,11 +724,11 @@ export default function AttendanceSettingsIndex({
                   <Input
                     value={employeeQuery}
                     onChange={(event) => setEmployeeQuery(event.target.value)}
-                    placeholder="Search name or device ID"
+                    placeholder="Search name or PIN"
                     className="h-8 text-xs"
                   />
 
-                  <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
+                  <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-slate-50/80">
@@ -753,15 +754,15 @@ export default function AttendanceSettingsIndex({
                         {visible.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={4} className="py-6 text-center text-xs text-slate-400">
-                              No employee with a device number.
+                              No employee matches that name or PIN.
                             </TableCell>
                           </TableRow>
                         ) : visible.map((employee) => (
                           <TableRow key={employee.id}>
                             <TableCell className="py-2 pl-3">
                               <Checkbox
-                                checked={employee.on_device || selectedEmployeeIds.includes(employee.id)}
-                                disabled={employee.on_device}
+                                checked={employee.on_device || (employee.can_push !== false && selectedEmployeeIds.includes(employee.id))}
+                                disabled={employee.on_device || employee.can_push === false}
                                 onCheckedChange={(checked) => {
                                   setSelectedEmployeeIds((current) => checked === true
                                     ? Array.from(new Set([...current, employee.id]))
@@ -778,6 +779,8 @@ export default function AttendanceSettingsIndex({
                             <TableCell className="pr-3 text-[11px]">
                               {employee.on_device ? (
                                 <span className="text-emerald-700">On device</span>
+                              ) : employee.can_push === false ? (
+                                <span className="text-slate-400">No device number</span>
                               ) : employee.queued ? (
                                 <span className="text-amber-700">Waiting</span>
                               ) : (
