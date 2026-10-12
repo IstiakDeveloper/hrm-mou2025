@@ -51,7 +51,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Employee, organization & transfers',
         icon: Users,
         href: '/sections/human-resources',
-        menuKeys: ['my-notices', 'employee-management', 'organization-setup', 'holidays', 'transfer-promotion', 'performance-appraisal', 'section-reports'],
+        menuKeys: ['my-notices', 'employee-management', 'organization-setup', 'holidays', 'transfer-promotion', 'performance-appraisal', 'final-clearance', 'section-reports'],
     },
     {
         id: 'attendance-movement',
@@ -209,6 +209,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         return 'employee-loan';
     }
     if (
+        p.startsWith('/final-clearances') ||
         p.startsWith('/promotion-evaluations') ||
         p.startsWith('/confirmation-evaluations') ||
         p.startsWith('/probation-increment-evaluations') ||

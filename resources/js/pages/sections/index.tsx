@@ -180,9 +180,9 @@ const getTheme = (id: string) => {
 };
 
 export default function SectionsIndex() {
-    const { auth, pendingLeaveCount, pendingAppraisalCounts, recentNotices } = usePage().props as any;
+    const { auth, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, recentNotices } = usePage().props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
-    const pendingAppraisal = (pendingAppraisalCounts?.total as number) ?? 0;
+    const pendingAppraisal = ((pendingAppraisalCounts?.total as number) ?? 0) + (Number(pendingFinalClearanceCount) || 0);
 
     const handleSelect = (sectionId: AdminSectionId) => {
         storeSection(sectionId);
@@ -371,6 +371,7 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'confirmation-evaluations.view') ||
                                         hasAppPermission(auth, 'probation-increment-evaluations.view') ||
                                         hasAppPermission(auth, 'trainee-evaluations.view') ||
+                                        hasAppPermission(auth, 'final-clearances.view') ||
                                         hasAppPermission(auth, 'admin.access')
                                     );
                                 case 'attendance-movement':
@@ -428,7 +429,11 @@ export default function SectionsIndex() {
 
                         const enabled = moduleActive && hasAccess;
                         const sectionPending =
-                            section.id === 'leave' ? pendingLeave : section.id === 'human-resources' ? pendingAppraisal : 0;
+                            section.id === 'leave'
+                                ? pendingLeave
+                                : section.id === 'human-resources'
+                                  ? pendingAppraisal
+                                  : 0;
                         const theme = getTheme(section.id);
                         const commonCardClasses = "group relative select-none rounded-xl sm:rounded-2xl border p-2 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2 transition-all duration-300 ease-out will-change-transform w-full bg-white/90 hover:bg-white border-slate-200/80 shadow-xs hover:-translate-y-1 hover:shadow-md max-w-[110px] sm:max-w-none aspect-square sm:aspect-auto sm:min-h-[120px] md:min-h-[140px]";
 

@@ -50,6 +50,7 @@ export interface SharedData {
         trainee: number;
         total: number;
     };
+    pendingFinalClearanceCount?: number;
     [key: string]: unknown;
 }
 

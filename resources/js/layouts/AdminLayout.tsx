@@ -183,8 +183,12 @@ const APPRAISAL_COUNT_BY_PATH: Record<string, keyof AppraisalPendingCounts> = {
     '/trainee-evaluations': 'trainee',
 };
 
-function appraisalPendingForPath(path: string, counts?: AppraisalPendingCounts | null): number {
-    const key = APPRAISAL_COUNT_BY_PATH[path.split('?')[0]];
+function appraisalPendingForPath(path: string, counts?: AppraisalPendingCounts | null, clearanceCount = 0): number {
+    const clean = path.split('?')[0];
+    if (clean === '/final-clearances') {
+        return clearanceCount;
+    }
+    const key = APPRAISAL_COUNT_BY_PATH[clean];
     if (!key || key === 'total') {
         return 0;
     }
@@ -303,10 +307,11 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
-    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts } = page.props as any;
+    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount } = page.props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
     const appraisalCounts = (pendingAppraisalCounts ?? null) as AppraisalPendingCounts | null;
     const pendingAppraisal = appraisalCounts?.total ?? 0;
+    const pendingFinalClearance = Number(pendingFinalClearanceCount ?? 0);
     const inertiaUrl = page.url;
     const { navLayout, setNavLayout, toggleNavLayout, isTopNav, isSidebarNav } = useNavLayout();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -625,6 +630,41 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     { title: 'Promotions', path: '/promotions', permission: 'promotions.view' },
                     { title: 'Annual Increment', path: '/salary-increments', permission: 'salary-increments.view' },
                     { title: 'Demotions', path: '/demotions', permission: 'demotions.view' },
+                ],
+            },
+            {
+                title: 'Final Payment & Clearance',
+                menuKey: 'final-clearance',
+                icon: <HandCoins className="h-5 w-5" />,
+                path: '/final-clearances',
+                hasSubmenu: true,
+                anyPermissions: [
+                    'final-clearances.view',
+                    'final-clearances.create',
+                    'final-clearances.hr',
+                    'final-clearances.accounts',
+                    'promotion-evaluations.create',
+                    'promotion-evaluations.hr_verify',
+                    'promotion-evaluations.approve',
+                    'promotion-evaluations.review',
+                    'separations.view',
+                ],
+                submenu: [
+                    {
+                        title: 'Clearance Applications',
+                        path: '/final-clearances',
+                        anyPermissions: [
+                            'final-clearances.view',
+                            'final-clearances.create',
+                            'final-clearances.hr',
+                            'final-clearances.accounts',
+                            'promotion-evaluations.create',
+                            'promotion-evaluations.hr_verify',
+                            'promotion-evaluations.approve',
+                            'promotion-evaluations.review',
+                            'separations.view',
+                        ],
+                    },
                 ],
             },
             {
@@ -1220,7 +1260,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         title: subItem.title,
                         href: subItem.path,
                         icon: getSubNavIcon(subItem.title, subItem.path),
-                        badge: appraisalPendingForPath(subItem.path, appraisalCounts),
+                        badge: appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance),
                     });
                 });
             } else {
@@ -1239,7 +1279,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             seen.add(clean);
             return true;
         });
-    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts]);
+    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts, pendingFinalClearance]);
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
@@ -1283,7 +1323,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         const submenuSectionActive = permittedSubmenu?.some((s) => !s.isGroupLabel && isActive(s.path)) ?? false;
         const isMenuOpen = activeMenu === item.title;
 
-        const menuPending = item.menuKey === 'performance-appraisal' ? pendingAppraisal : 0;
+        const menuPending = item.menuKey === 'performance-appraisal'
+            ? pendingAppraisal
+            : item.menuKey === 'final-clearance'
+                ? pendingFinalClearance
+                : 0;
 
         return item.hasSubmenu ? (
             <div className="group relative mb-1">
@@ -1347,7 +1391,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     onClick={closeMobileSidebar}
                                 >
                                     <span className="truncate">{subItem.title}</span>
-                                    <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts)} />
+                                    <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance)} />
                                 </Link>
                             ),
                         )}
@@ -1467,6 +1511,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     {item.menuKey === 'performance-appraisal' && (
                                         <PendingCountBadge count={pendingAppraisal} className="min-w-[16px] text-[8px]" />
                                     )}
+                                    {item.menuKey === 'final-clearance' && (
+                                        <PendingCountBadge count={pendingFinalClearance} className="min-w-[16px] text-[8px]" />
+                                    )}
                                 </span>
                                 <ChevronDown
                                     className={cn(
@@ -1510,8 +1557,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             )}
                                         >
                                             <span>{subItem.title}</span>
-                                            {appraisalPendingForPath(subItem.path, appraisalCounts) > 0 ? (
-                                                <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts)} />
+                                            {appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance) > 0 ? (
+                                                <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance)} />
                                             ) : isActive(subItem.path) ? (
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                                             ) : null}

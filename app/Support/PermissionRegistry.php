@@ -165,6 +165,14 @@ class PermissionRegistry
                 default => [],
             };
 
+            if ($sectionId === 'staff-fund') {
+                foreach (['final-clearances.view', 'final-clearances.accounts'] as $key) {
+                    if (in_array($key, self::keys(), true)) {
+                        $resolved[] = $key;
+                    }
+                }
+            }
+
             if (empty($prefixes)) {
                 continue;
             }

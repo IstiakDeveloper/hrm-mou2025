@@ -7,6 +7,7 @@ use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\User;
 use App\Services\Appraisal\AppraisalPendingCountService;
+use App\Services\FinalClearanceService;
 use App\Services\AssetFinancialYearService;
 use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
@@ -140,11 +141,15 @@ class HandleInertiaRequests extends Middleware
             'trainee' => 0,
             'total' => 0,
         ];
+        $pendingFinalClearanceCount = 0;
         if ($user) {
             $leaveQuery = LeaveApplication::query()->where('status', 'pending');
             OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
             $pendingLeaveCount = $leaveQuery->count();
             $pendingAppraisalCounts = app(AppraisalPendingCountService::class)->countsFor($user);
+            if (Schema::hasTable('final_clearances')) {
+                $pendingFinalClearanceCount = app(FinalClearanceService::class)->pendingCount($user);
+            }
         }
 
         return [
@@ -190,6 +195,7 @@ class HandleInertiaRequests extends Middleware
             'assetFinancialYear' => $assetFinancialYear,
             'pendingLeaveCount' => $pendingLeaveCount,
             'pendingAppraisalCounts' => $pendingAppraisalCounts,
+            'pendingFinalClearanceCount' => $pendingFinalClearanceCount,
         ];
     }
 

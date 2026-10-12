@@ -379,3 +379,19 @@ use Inertia\Inertia;
         });
     });
 
+    Route::prefix('final-clearances')->name('final-clearances.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\FinalClearanceController::class, 'index'])->name('index');
+        Route::get('/employees/lookup', [\App\Http\Controllers\FinalClearanceController::class, 'lookup'])->name('lookup');
+        Route::get('/create', [\App\Http\Controllers\FinalClearanceController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\FinalClearanceController::class, 'store'])->name('store');
+        Route::get('/{finalClearance}/print', [\App\Http\Controllers\FinalClearanceController::class, 'print'])->name('print');
+        Route::get('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'show'])->name('show');
+        Route::put('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'update'])->name('update');
+        Route::delete('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'destroy'])->name('destroy');
+        Route::post('/{finalClearance}/submit', [\App\Http\Controllers\FinalClearanceController::class, 'submit'])->name('submit');
+        Route::post('/{finalClearance}/forward', [\App\Http\Controllers\FinalClearanceController::class, 'forward'])->name('forward');
+        Route::post('/{finalClearance}/send-back', [\App\Http\Controllers\FinalClearanceController::class, 'sendBack'])->name('send-back');
+        Route::post('/{finalClearance}/approve', [\App\Http\Controllers\FinalClearanceController::class, 'approve'])->name('approve');
+        Route::post('/{finalClearance}/reject', [\App\Http\Controllers\FinalClearanceController::class, 'reject'])->name('reject');
+    });
+
