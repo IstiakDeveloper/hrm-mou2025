@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
@@ -215,19 +216,22 @@ export default function ConfirmationOfficialFormDocument({
     const totalScore = Number(evaluation.total_score || 0);
 
     return (
-        <div className="bg-white text-black text-[12px] leading-tight font-serif p-6 max-w-[210mm] mx-auto shadow-none print:p-0 print:max-w-none print:m-0">
+        <AppraisalPrintRoot className="bg-white text-black text-[12px] leading-tight font-serif p-6 max-w-[210mm] mx-auto shadow-none print:p-0 print:max-w-none print:m-0">
+            <div className="appraisal-print-page">
+            <div>
             {/* Header with Logo */}
-            <div className="text-center mb-3">
-                <div className="flex justify-center mb-1">
-                    <img src="/logo.png" alt="Organization Logo" className="h-14 w-auto object-contain" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+            <div className="mb-3 flex items-start gap-2 pt-0.5">
+                <img src="/logo.png" alt="Organization Logo" className="h-12 w-auto shrink-0 object-contain object-left" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                <div className="min-w-0 flex-1 text-center leading-snug">
+                    <h1 className="text-xl font-bold tracking-wide leading-snug">মৌসুমী</h1>
+                    <p className="text-xs">উকিলপাড়া, নওগাঁ।</p>
+                    <div className="mt-1 inline-block border-b-2 border-black pb-0.5">
+                        <h2 className="text-sm font-bold">
+                            {lang === 'bn' ? formTitleBn : formTitleEn}
+                        </h2>
+                    </div>
                 </div>
-                <h1 className="text-xl font-bold tracking-wide">মৌসুমী</h1>
-                <p className="text-xs">উকিলপাড়া, নওগাঁ।</p>
-                <div className="mt-1 inline-block border-b-2 border-black pb-0.5">
-                    <h2 className="text-sm font-bold">
-                        {lang === 'bn' ? formTitleBn : formTitleEn}
-                    </h2>
-                </div>
+                <div className="w-12 shrink-0" aria-hidden="true" />
             </div>
 
             {/* Basic Info Table */}
@@ -462,9 +466,11 @@ export default function ConfirmationOfficialFormDocument({
                 </table>
             </div>
 
-            {/* Page Break for printing */}
-            <div className="print:break-before-page pt-4" />
+            </div>
+            </div>
 
+            <div className="appraisal-print-page">
+            <div>
             {/* Score & Grading Summary Table */}
             <div className="grid grid-cols-2 gap-4 mb-4 text-[11px]">
                 {/* Left: Section-wise Scores Table */}
@@ -691,6 +697,8 @@ export default function ConfirmationOfficialFormDocument({
                     </div>
                 </div>
             </div>
-        </div>
+            </div>
+            </div>
+        </AppraisalPrintRoot>
     );
 }

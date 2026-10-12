@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
 import Layout from '@/layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { 
@@ -75,117 +75,19 @@ export default function ProbationIncrementEvaluationIndex({
     const [formType, setFormType] = useState(filters.form_type || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || '15');
 
-    // Quick Approval / Action Modal State
     const [selectedEvaluationForApproval, setSelectedEvaluationForApproval] = useState<any | null>(null);
-    const [approvalComments, setApprovalComments] = useState('');
-    const [approvalRecommendation, setApprovalRecommendation] = useState('recommend_increment');
-    const [hrFinancialIrregularity, setHrFinancialIrregularity] = useState(false);
-    const [hrDisciplinaryAction, setHrDisciplinaryAction] = useState(false);
-    const [hrAuditObjection, setHrAuditObjection] = useState(false);
-    const [hrLeaveWithoutPay, setHrLeaveWithoutPay] = useState(false);
-    const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
-    const [approvalMode, setApprovalMode] = useState<'approve' | 'send_back'>('approve');
 
     const openApprovalModal = (ev: any) => {
         if (!userHasSignature) {
             alert(
-                lang === 'bn' 
-                    ? 'শিক্ষানবিশ মূল্যায়ন অনুমোদন দেওয়ার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।' 
+                lang === 'bn'
+                    ? 'শিক্ষানবিশ মূল্যায়ন অনুমোদন দেওয়ার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।'
                     : 'You must upload a digital signature to your profile before approving an evaluation.'
             );
             window.location.href = '/settings/profile';
             return;
         }
         setSelectedEvaluationForApproval(ev);
-        setApprovalMode('approve');
-        setApprovalRecommendation(ev.supervisor_recommendation || 'recommend_increment');
-        setHrFinancialIrregularity(Boolean(ev.hr_financial_irregularity));
-        setHrDisciplinaryAction(Boolean(ev.hr_disciplinary_action));
-        setHrAuditObjection(Boolean(ev.hr_audit_objection));
-        setHrLeaveWithoutPay(Boolean(ev.hr_leave_without_pay));
-        if (ev.status === 'submitted_to_hr') {
-            setApprovalComments('ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।');
-        } else {
-            setApprovalComments('সুপারিশ ও স্বাক্ষরসহ অনুমোদন ও পরবর্তী স্তরে অগ্রবর্তী করা হলো।');
-        }
-    };
-
-    const submitApproval = (isApproved: boolean = true) => {
-        if (!selectedEvaluationForApproval) return;
-        setIsSubmittingApproval(true);
-
-        const ev = selectedEvaluationForApproval;
-        if (ev.status === 'submitted_to_hr') {
-            router.post(`/probation-increment-evaluations/${ev.id}/hr-verify`, {
-                comments: approvalComments || 'ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।',
-                hr_financial_irregularity: hrFinancialIrregularity,
-                hr_disciplinary_action: hrDisciplinaryAction,
-                hr_audit_objection: hrAuditObjection,
-                hr_leave_without_pay: hrLeaveWithoutPay,
-            }, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setSelectedEvaluationForApproval(null);
-                    setIsSubmittingApproval(false);
-                },
-                onError: () => {
-                    setIsSubmittingApproval(false);
-                }
-            });
-            return;
-        }
-
-        if (ev.status === 'submitted_to_ed') {
-            router.post(`/probation-increment-evaluations/${ev.id}/ed-approve`, {
-                comments: approvalComments || 'চূড়ান্ত অনুমোদন প্রদান করা হলো।',
-                is_approved: isApproved,
-            }, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setSelectedEvaluationForApproval(null);
-                    setIsSubmittingApproval(false);
-                },
-                onError: () => {
-                    setIsSubmittingApproval(false);
-                }
-            });
-            return;
-        }
-
-        router.post(`/probation-increment-evaluations/${ev.id}/forward`, {
-            comments: approvalComments || 'সুপারিশ ও স্বাক্ষরসহ পরবর্তী স্তরে অগ্রবর্তী করা হলো।',
-            supervisor_recommendation: approvalRecommendation,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setSelectedEvaluationForApproval(null);
-                setIsSubmittingApproval(false);
-            },
-            onError: () => {
-                setIsSubmittingApproval(false);
-            }
-        });
-    };
-
-    const submitSendBack = () => {
-        if (!selectedEvaluationForApproval) return;
-        if (!approvalComments.trim()) {
-            alert(lang === 'bn' ? 'সংশোধনে ফেরত পাঠানোর কারণ উল্লেখ আবশ্যক।' : 'Please provide return reason.');
-            return;
-        }
-        setIsSubmittingApproval(true);
-        router.post(`/probation-increment-evaluations/${selectedEvaluationForApproval.id}/send-back`, {
-            comments: approvalComments.trim(),
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setSelectedEvaluationForApproval(null);
-                setIsSubmittingApproval(false);
-            },
-            onError: () => {
-                setIsSubmittingApproval(false);
-            }
-        });
     };
 
     const handleSearch = () => {
@@ -725,174 +627,13 @@ export default function ProbationIncrementEvaluationIndex({
                 </Card>
             </div>
 
-            {/* Quick Action / Review Modal */}
-            <Dialog 
-                open={Boolean(selectedEvaluationForApproval)} 
-                onOpenChange={(open) => !open && setSelectedEvaluationForApproval(null)}
-            >
-                <DialogContent className="max-w-lg p-6">
-                    <DialogHeader>
-                        <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <Award className="h-5 w-5 text-emerald-600" />
-                            {lang === 'bn' ? 'মূল্যায়ন পর্যালোচনা ও অনুমোদন' : 'Evaluation Review & Approval'}
-                        </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-500 mt-1">
-                            {selectedEvaluationForApproval?.employee?.name_bn || selectedEvaluationForApproval?.employee?.name_en} 
-                            ({selectedEvaluationForApproval?.employee?.pin}) - এর বেতন বৃদ্ধি মূল্যায়ন
-                        </DialogDescription>
-                    </DialogHeader>
+            <AppraisalApprovalDialog
+                kind="probation"
+                lang={lang}
+                evaluation={selectedEvaluationForApproval}
+                onClose={() => setSelectedEvaluationForApproval(null)}
+            />
 
-                    <div className="space-y-4 my-2">
-                        {/* Mode Switcher: Approve vs Send Back */}
-                        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
-                            <button
-                                type="button"
-                                onClick={() => setApprovalMode('approve')}
-                                className={`flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    approvalMode === 'approve'
-                                        ? 'bg-emerald-600 text-white shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                            >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                <span>{lang === 'bn' ? 'অনুমোদন ও অগ্রবর্তী' : 'Approve & Forward'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setApprovalMode('send_back')}
-                                className={`flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    approvalMode === 'send_back'
-                                        ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                            >
-                                <RotateCcw className="h-3.5 w-3.5" />
-                                <span>{lang === 'bn' ? 'সংশোধনে ফেরত পাঠান' : 'Send Back'}</span>
-                            </button>
-                        </div>
-
-                        {approvalMode === 'approve' ? (
-                            <div className="space-y-3">
-                                {selectedEvaluationForApproval?.status === 'submitted_to_hr' && (
-                                    <div className="space-y-2 rounded-xl border border-slate-200 p-3">
-                                        <p className="text-xs font-bold text-slate-800">
-                                            ব্যক্তিগত ফাইল পর্যবেক্ষণ (গত ০৩ মাস)
-                                        </p>
-                                        <p className="text-[11px] text-slate-500">নিচের যেকোনো একটি গত ০৩ মাসের মধ্যে হয়েছে কি না?</p>
-                                        {[
-                                            { label: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', value: hrFinancialIrregularity, set: setHrFinancialIrregularity },
-                                            { label: 'যেকোনো শাস্তিমূলক ব্যবস্থার আওতায় দেওয়া কোনো চিঠিপত্র', value: hrDisciplinaryAction, set: setHrDisciplinaryAction },
-                                            { label: 'সর্বশেষ অডিটে গুরুতর আপত্তি', value: hrAuditObjection, set: setHrAuditObjection },
-                                            { label: 'বিনা বেতনে ছুটি ভোগ', value: hrLeaveWithoutPay, set: setHrLeaveWithoutPay },
-                                        ].map((item) => (
-                                            <div key={item.label} className="flex items-center justify-between gap-3 text-xs">
-                                                <span className="text-slate-700">{item.label}</span>
-                                                <span className="flex shrink-0 gap-3">
-                                                    <label className="flex items-center gap-1">
-                                                        <input type="radio" checked={item.value === true} onChange={() => item.set(true)} />
-                                                        হ্যাঁ
-                                                    </label>
-                                                    <label className="flex items-center gap-1">
-                                                        <input type="radio" checked={item.value === false} onChange={() => item.set(false)} />
-                                                        না
-                                                    </label>
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {selectedEvaluationForApproval?.status !== 'submitted_to_hr' && selectedEvaluationForApproval?.status !== 'submitted_to_ed' && (
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-700">
-                                            {lang === 'bn' ? 'সুপারভাইজারের সুপারিশ:' : 'Recommendation:'}
-                                        </label>
-                                        <Select 
-                                            value={approvalRecommendation} 
-                                            onValueChange={setApprovalRecommendation}
-                                        >
-                                            <SelectTrigger className="h-9 text-xs bg-white border-slate-300">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="recommend_increment">
-                                                    বেতন বৃদ্ধির জন্য সুপারিশ করা হলো
-                                                </SelectItem>
-                                                <SelectItem value="defer_increment">
-                                                    বেতন বৃদ্ধি স্থগিত রেখে পুনমূল্যায়ন করা হোক
-                                                </SelectItem>
-                                                <SelectItem value="not_suitable">
-                                                    বেতন বৃদ্ধির উপযুক্ত নয়, অব্যাহতি প্রদান করা যেতে পারে
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-700">
-                                        {lang === 'bn' ? 'মন্তব্য বা পর্যবেক্ষণ (যদি থাকে):' : 'Remarks / Comments:'}
-                                    </label>
-                                    <textarea
-                                        rows={3}
-                                        value={approvalComments}
-                                        onChange={(e) => setApprovalComments(e.target.value)}
-                                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                        placeholder={lang === 'bn' ? 'অনুমোদনের মন্তব্য লিখুন...' : 'Enter approval notes...'}
-                                    />
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-700">
-                                    {lang === 'bn' ? 'সংশোধনের কারণ (আবশ্যক):' : 'Reason for Revision (Required):'}
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    value={approvalComments}
-                                    onChange={(e) => setApprovalComments(e.target.value)}
-                                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                    placeholder={lang === 'bn' ? 'স্রষ্টার নিকট ফেরত পাঠানোর সুনির্দিষ্ট কারণ লিখুন...' : 'Specify reasons for return...'}
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isSubmittingApproval}
-                            onClick={() => setSelectedEvaluationForApproval(null)}
-                            className="text-xs h-9 border-slate-300"
-                        >
-                            {lang === 'bn' ? 'বাতিল' : 'Cancel'}
-                        </Button>
-
-                        {approvalMode === 'approve' ? (
-                            <Button
-                                size="sm"
-                                disabled={isSubmittingApproval}
-                                onClick={() => submitApproval(true)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-4 font-bold shadow-xs"
-                            >
-                                <Check className="h-4 w-4 mr-1" />
-                                {isSubmittingApproval ? (lang === 'bn' ? 'অগ্রবর্তী হচ্ছে...' : 'Processing...') : (lang === 'bn' ? 'অনুমোদন ও স্বাক্ষর' : 'Approve & Sign')}
-                            </Button>
-                        ) : (
-                            <Button
-                                size="sm"
-                                disabled={isSubmittingApproval}
-                                onClick={submitSendBack}
-                                className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-9 px-4 font-bold shadow-xs"
-                            >
-                                <RotateCcw className="h-4 w-4 mr-1" />
-                                {isSubmittingApproval ? (lang === 'bn' ? 'ফেরত হচ্ছে...' : 'Processing...') : (lang === 'bn' ? 'ফেরত পাঠান' : 'Send Back')}
-                            </Button>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
         </Layout>
     );
 }

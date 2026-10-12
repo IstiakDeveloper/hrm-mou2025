@@ -53,6 +53,12 @@ class SalaryProcessController extends Controller
             (clone $baseQuery)->where('status', 'processed')->orderByDesc('processed_at')->get()
         );
 
+        $options = $this->payrollFilterOptions(payrollReadyEmployeesOnly: true);
+        $options['salaryTypes'] = array_values(array_filter(
+            $options['salaryTypes'],
+            fn (array $type) => ($type['value'] ?? '') !== 'arrear',
+        ));
+
         $filterYear = $request->filled('year') ? (int) $request->input('year') : (int) date('Y');
         $filterMonth = $request->filled('month') ? (int) $request->input('month') : (int) date('n');
         $defaultProcessDate = $request->input(
@@ -61,7 +67,7 @@ class SalaryProcessController extends Controller
         );
 
         return Inertia::render('payroll/salary-process/index', [
-            ...$this->payrollFilterOptions(payrollReadyEmployeesOnly: true),
+            ...$options,
             'filters' => array_merge($this->payrollFilterValues($request), [
                 'process_date' => $defaultProcessDate,
                 'is_partial' => $request->boolean('is_partial'),
@@ -86,7 +92,7 @@ class SalaryProcessController extends Controller
                 'branch_id' => 'nullable|exists:branches,id',
                 'year' => 'required|integer|min:2000|max:2100',
                 'month' => 'required|integer|min:1|max:12',
-                'salary_type' => 'required|in:salary,bonus,arrear',
+                'salary_type' => 'required|in:salary,bonus',
                 'process_date' => 'required|string',
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',

@@ -18,6 +18,7 @@ import {
     Clock,
     AlertTriangle
 } from 'lucide-react';
+import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
 import ConfirmationOfficialFormDocument from './components/ConfirmationOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 
@@ -56,6 +57,19 @@ export default function ConfirmationEvaluationShow({
         }
         return 'bn';
     });
+
+    const [approvalOpen, setApprovalOpen] = useState(false);
+
+    const openApproval = () => {
+        if (!userHasSignature) {
+            alert(lang === 'bn'
+                ? 'অনুমোদন বা স্বাক্ষর করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।'
+                : 'Digital signature is required before signing/approving.');
+            window.location.href = '/settings/profile';
+            return;
+        }
+        setApprovalOpen(true);
+    };
 
     const { data, setData, post, processing, reset } = useForm({
         comments: '',
@@ -145,8 +159,6 @@ export default function ConfirmationEvaluationShow({
     const employeeName = lang === 'bn' 
         ? (evaluation.employee?.name_bn || evaluation.employee?.name_en) 
         : (evaluation.employee?.name_en || evaluation.employee?.name_bn);
-
-    const isActionRequired = canApprove;
 
     return (
         <Layout>
@@ -267,103 +279,65 @@ export default function ConfirmationEvaluationShow({
                 {/* Workflow Stepper */}
                 <WorkflowTimelineStepper evaluation={evaluation} lang={lang} />
 
-                {/* Action Card: Submit Draft or Forward / Approve */}
-                {(canSubmit || isActionRequired) && (
+                {canSubmit && (
                     <Card className="border-2 border-blue-400 bg-blue-50/20 shadow-sm">
                         <CardHeader className="pb-3 border-b border-blue-100">
                             <div className="flex items-center gap-2">
                                 <ShieldCheck className="h-5 w-5 text-blue-600" />
                                 <CardTitle className="text-sm font-bold text-blue-950">
-                                    {canSubmit 
-                                        ? (lang === 'bn' ? 'খসড়া দাখিল করুন' : 'Submit Draft Evaluation')
-                                        : (lang === 'bn' ? 'মূল্যায়ন পর্যালোচনা ও অনুমোদন ব্যবস্থা' : 'Review & Approval Actions')}
+                                    {lang === 'bn' ? 'খসড়া দাখিল করুন' : 'Submit Draft Evaluation'}
                                 </CardTitle>
                             </div>
                         </CardHeader>
-                        <CardContent className="p-4 sm:p-5 space-y-4">
+                        <CardContent className="space-y-4 p-4 sm:p-5">
                             <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-800">
                                     {lang === 'bn' ? 'আপনার মন্তব্য বা সুপারিশ (যদি থাকে):' : 'Remarks / Comments:'}
                                 </label>
-                                <Textarea 
-                                    placeholder={lang === 'bn' ? 'অনুমোদন বা পর্যালোচনার মন্তব্য লিখুন...' : 'Enter your remarks...'}
+                                <Textarea
+                                    placeholder={lang === 'bn' ? 'দাখিলের মন্তব্য লিখুন...' : 'Enter your remarks...'}
                                     value={data.comments}
                                     onChange={e => setData('comments', e.target.value)}
                                     className="bg-white border-slate-300 text-xs"
                                     rows={2}
                                 />
                             </div>
-
-                            <div className="flex flex-wrap items-center gap-2.5 justify-end pt-2 border-t border-blue-100">
-                                {canSendBack && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={processing}
-                                        onClick={(e) => handleAction(e, 'send-back', 'send_back')}
-                                        className="border-amber-300 text-amber-800 hover:bg-amber-100 text-xs h-9 font-semibold"
-                                    >
-                                        <RotateCcw className="h-3.5 w-3.5 mr-1 text-amber-700" />
-                                        {lang === 'bn' ? 'সংশোধনে ফেরত পাঠান' : 'Send Back for Revision'}
-                                    </Button>
-                                )}
-
-                                {canSubmit && (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        disabled={processing}
-                                        onClick={(e) => handleAction(e, 'forward', 'forward')}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-5 font-bold shadow-xs"
-                                    >
-                                        <Send className="h-3.5 w-3.5 mr-1.5" />
-                                        {processing ? (lang === 'bn' ? 'দাখিল হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'মূল্যায়ন দাখিল করুন' : 'Submit Evaluation')}
-                                    </Button>
-                                )}
-
-                                {canApprove && (
-                                    <>
-                                        {evaluation.status === 'submitted_to_hr' ? (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                disabled={processing}
-                                                onClick={(e) => handleAction(e, 'hr-verify', 'approve')}
-                                                className="bg-purple-600 hover:bg-purple-700 text-white text-xs h-9 px-5 font-bold shadow-xs"
-                                            >
-                                                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                                {lang === 'bn' ? 'এইচআর যাচাই ও পরবর্তী স্তরে পাঠান' : 'Verify HR Records & Forward'}
-                                            </Button>
-                                        ) : evaluation.status === 'submitted_to_ed' ? (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                disabled={processing}
-                                                onClick={(e) => handleAction(e, 'ed-approve', 'approve')}
-                                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-5 font-bold shadow-xs"
-                                            >
-                                                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                                {lang === 'bn' ? 'চূড়ান্ত অনুমোদন প্রদান করুন (ED)' : 'Grant Final Approval (ED)'}
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                disabled={processing}
-                                                onClick={(e) => handleAction(e, 'forward', 'forward')}
-                                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-5 font-bold shadow-xs"
-                                            >
-                                                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                                {lang === 'bn' ? 'সুপারিশ ও স্বাক্ষরপূর্বক অনুমোদন' : 'Recommend, Sign & Forward'}
-                                            </Button>
-                                        )}
-                                    </>
-                                )}
+                            <div className="flex justify-end border-t border-blue-100 pt-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={processing}
+                                    onClick={(e) => handleAction(e, 'forward', 'forward')}
+                                    className="h-9 bg-blue-600 px-5 text-xs font-bold text-white shadow-xs hover:bg-blue-700"
+                                >
+                                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                                    {processing ? (lang === 'bn' ? 'দাখিল হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'মূল্যায়ন দাখিল করুন' : 'Submit Evaluation')}
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
                 )}
+
+                {canApprove && (
+                    <div className="flex justify-end">
+                        <Button
+                            type="button"
+                            onClick={openApproval}
+                            className="h-10 bg-emerald-600 px-5 text-sm font-bold text-white shadow-xs hover:bg-emerald-700"
+                        >
+                            <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                            {lang === 'bn' ? 'অনুমোদন' : 'Approve'}
+                        </Button>
+                    </div>
+                )}
+
+                <AppraisalApprovalDialog
+                    kind="confirmation"
+                    lang={lang}
+                    evaluation={approvalOpen ? { ...evaluation, current_stage_label: evaluation.current_stage_label || currentStageLabel } : null}
+                    canSendBack={canSendBack}
+                    onClose={() => setApprovalOpen(false)}
+                />
 
                 {/* Printable Official Paper Document Container */}
                 <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">

@@ -9,7 +9,7 @@ class ActivateScheduledHrActions extends Command
 {
     protected $signature = 'hr:activate-scheduled';
 
-    protected $description = 'Complete approved transfers, promotions, demotions, confirmations, and separations whose effective date has started (Bangladesh time)';
+    protected $description = 'Complete approved transfers, promotions, demotions, confirmations, separations, and increments whose effective date has started (Bangladesh time)';
 
     public function handle(ScheduledHrActivationService $scheduledHrActivationService): int
     {
@@ -18,7 +18,8 @@ class ActivateScheduledHrActions extends Command
         $this->info(
             "Activated {$counts['transfers']} transfer(s), {$counts['promotions']} promotion(s), "
             ."{$counts['demotions']} demotion(s), {$counts['confirmations']} confirmation(s), "
-            ."{$counts['separations']} separation(s)."
+            ."{$counts['separations']} separation(s), "
+            ."{$counts['increments']} increment order(s)."
         );
 
         return self::SUCCESS;

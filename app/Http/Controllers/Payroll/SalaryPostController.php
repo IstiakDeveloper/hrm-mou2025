@@ -7,6 +7,7 @@ use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Services\ArrearPayrollService;
 use App\Services\EmployeeLoanService;
 use App\Services\PayrollRunRecalculateService;
 use App\Services\PayrollRunRollbackService;
@@ -29,6 +30,7 @@ class SalaryPostController extends Controller
         protected PayrollRunRollbackService $rollbackService,
         protected PayrollRunRecalculateService $recalculateService,
         protected SeparationPayrollService $separationPayrollService,
+        protected ArrearPayrollService $arrears,
     ) {}
 
     public function index(Request $request)
@@ -188,6 +190,41 @@ class SalaryPostController extends Controller
                 'basic_percentage' => (float) $bonusConfig->basic_percentage,
             ] : null,
         ]);
+    }
+
+    public function applyArrear(Request $request, PayrollRun $payroll_run)
+    {
+        $redirect = $this->redirectIfWrongPostSection($request, $payroll_run);
+        if ($redirect) {
+            return $redirect;
+        }
+
+        if (! $request->user()?->hasPermission('payroll.edit')) {
+            throw ValidationException::withMessages([
+                'run' => 'You do not have permission to adjust arrear.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'rows' => 'nullable|array',
+            'rows.*.payslip_id' => 'required|integer',
+            'rows.*.amount' => 'required|numeric|min:0.01',
+            'rows.*.note' => 'nullable|string|max:255',
+            'rows.*.line_ids' => 'nullable|array',
+            'rows.*.line_ids.*' => 'integer',
+            'clear_payslip_ids' => 'nullable|array',
+            'clear_payslip_ids.*' => 'integer',
+        ]);
+
+        $message = $this->arrears->apply(
+            $payroll_run,
+            $validated['rows'] ?? [],
+            $validated['clear_payslip_ids'] ?? [],
+        );
+
+        return redirect()
+            ->back()
+            ->with('success', $message);
     }
 
     public function recall(Request $request, PayrollRun $payroll_run)
@@ -387,6 +424,17 @@ class SalaryPostController extends Controller
                 }
 
                 $rounded = round((float) $row['computed_amount'], 2);
+
+                if ($payroll_run->salary_type === 'salary' && $this->arrears->isArrearLine($line) && $rounded <= 0) {
+                    $payslip = Payslip::query()->find($line->payslip_id);
+                    if ($payslip) {
+                        $this->arrears->clear($payslip);
+                    }
+                    $touchedPayslipIds[$line->payslip_id] = true;
+
+                    continue;
+                }
+
                 $isLoanLine = (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', (string) $line->head_name));
 
                 $updates = ['computed_amount' => $rounded];

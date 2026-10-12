@@ -714,6 +714,7 @@ class PayrollCalculationService
             $this->activeComponentHeads = SalaryHead::query()
                 ->where('is_active', true)
                 ->where('is_basic_head', false)
+                ->where('is_arrear_head', false)
                 ->where('is_pf_head', false)
                 ->where('is_income_tax_head', false)
                 ->where('is_loan_head', false)

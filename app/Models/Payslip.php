@@ -30,6 +30,7 @@ class Payslip extends Model
         'total_deduction',
         'net_payable',
         'is_withheld',
+        'arrear_note',
     ];
 
     protected $casts = [

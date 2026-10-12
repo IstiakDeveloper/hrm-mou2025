@@ -43,6 +43,13 @@ export interface SharedData {
         end_date: string;
     } | null;
     pendingLeaveCount?: number;
+    pendingAppraisalCounts?: {
+        promotion: number;
+        confirmation: number;
+        probation_increment: number;
+        trainee: number;
+        total: number;
+    };
     [key: string]: unknown;
 }
 

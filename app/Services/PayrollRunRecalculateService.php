@@ -17,6 +17,7 @@ class PayrollRunRecalculateService
         protected EmployeeProvidentFundService $pfService,
         protected EmployeeLoanService $loanService,
         protected EmployeeAssignmentHistoryService $assignmentHistory,
+        protected ArrearPayrollService $arrears,
     ) {}
 
     public function recalculate(PayrollRun $run): void
@@ -90,6 +91,8 @@ class PayrollRunRecalculateService
                         continue;
                     }
 
+                    $savedArrear = $this->arrears->capture($payslip);
+
                     $this->loanService->releaseScheduledInstallmentsForPayslip($payslip);
                     $this->reversePfForPayslip($payslip);
 
@@ -150,9 +153,16 @@ class PayrollRunRecalculateService
                         $this->loanService->scheduleInstallmentsForPayslip($payslip, $calc['loan_deductions']);
                     }
 
-                    $totalGross += $calc['gross_salary'];
-                    $totalDeduction += $calc['total_deduction'];
-                    $totalNet += $calc['net_payable'];
+                    if ($savedArrear && ($calc['is_withheld'] ?? false)) {
+                        $this->arrears->releaseLink($payslip);
+                    } elseif ($savedArrear) {
+                        $this->arrears->restore($payslip, $savedArrear);
+                    }
+
+                    $payslip->refresh();
+                    $totalGross += (float) $payslip->gross_salary;
+                    $totalDeduction += (float) $payslip->total_deduction;
+                    $totalNet += (float) $payslip->net_payable;
                 }
             } finally {
                 $this->calculator->clearBatch();

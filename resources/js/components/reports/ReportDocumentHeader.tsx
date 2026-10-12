@@ -9,13 +9,13 @@ type Props = {
 
 export function ReportDocumentHeader({ title, periodLabel, companyName, rowCount }: Props) {
     return (
-        <div className="relative mb-3 min-h-[44px] border-b border-black pb-2 text-black print:mb-2">
+        <div className="relative mb-3 min-h-[44px] border-b border-black px-14 pb-2 pt-1.5 text-black print:mb-2">
             <img
                 src="/logo.png"
                 alt="Organization logo"
-                className="absolute left-0 top-1/2 h-10 w-14 -translate-y-1/2 object-contain object-left"
+                className="absolute left-0 top-1.5 h-10 w-14 object-contain object-left"
             />
-            <div className="w-full px-14 text-center leading-tight">
+            <div className="w-full text-center leading-snug">
                 {companyName && (
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900">{companyName}</p>
                 )}

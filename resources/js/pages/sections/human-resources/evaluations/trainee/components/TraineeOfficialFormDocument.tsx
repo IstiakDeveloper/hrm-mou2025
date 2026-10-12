@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
 import {
     TRAINEE_FORM_CONFIGS,
     QUALITATIVE_RATING_OPTIONS,
@@ -92,30 +93,31 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
     };
 
     return (
-        <div className="bg-white text-black text-[12px] leading-tight font-serif p-6 max-w-[210mm] mx-auto shadow-none print:p-0 print:max-w-none print:m-0 space-y-6">
+        <AppraisalPrintRoot className="bg-white text-black text-[12px] leading-tight font-serif p-6 max-w-[210mm] mx-auto shadow-none print:p-0 print:max-w-none print:m-0">
             
             {/* ======================================================== */}
             {/* PAGE 1 */}
             {/* ======================================================== */}
-            <div className="min-h-[1050px] relative print:page-break-after-always">
+            <div className="appraisal-print-page relative">
+                <div>
                 {/* Header with Logo */}
-                <div className="text-center mb-3">
-                    <div className="flex justify-center mb-1">
-                        <img 
-                            src="/logo.png" 
-                            alt="Organization Logo" 
-                            className="h-14 w-auto object-contain" 
-                            onError={(e) => { (e.target as any).style.display = 'none'; }} 
-                        />
+                <div className="mb-3 flex items-start gap-2 pt-0.5">
+                    <img
+                        src="/logo.png"
+                        alt="Organization Logo"
+                        className="h-12 w-auto shrink-0 object-contain object-left"
+                        onError={(e) => { (e.target as any).style.display = 'none'; }}
+                    />
+                    <div className="min-w-0 flex-1 text-center leading-snug">
+                        <h1 className="text-xl font-bold tracking-wide leading-snug">মৌসুমী</h1>
+                        <p className="text-xs">উকিলপাড়া, নওগাঁ।</p>
+                        <div className="mt-1 inline-block border-b-2 border-black pb-0.5">
+                            <h2 className="text-sm font-bold">
+                                {lang === 'bn' ? config.titleBn : config.titleEn}
+                            </h2>
+                        </div>
                     </div>
-                    <h1 className="text-xl font-bold tracking-wide">মৌসুমী</h1>
-                    <p className="text-xs">উকিলপাড়া, নওগাঁ।</p>
-                    <div className="mt-1 inline-block border-b-2 border-black pb-0.5">
-                        <h2 className="text-sm font-bold">
-                            {lang === 'bn' ? config.titleBn : config.titleEn}
-                        </h2>
-                    </div>
-                    <div className="text-right text-[10px] text-slate-500 font-sans mt-0.5">
+                    <div className="w-12 shrink-0 text-right text-[10px] text-slate-500 font-sans pt-0.5">
                         Page 1 of 2
                     </div>
                 </div>
@@ -294,12 +296,14 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </tbody>
                     </table>
                 </div>
+                </div>
             </div>
 
             {/* ======================================================== */}
             {/* PAGE 2 */}
             {/* ======================================================== */}
-            <div className="min-h-[1050px] relative pt-4 border-t border-dashed border-slate-300 print:border-t-0 print:pt-0">
+            <div className="appraisal-print-page relative">
+                <div>
                 <div className="text-right text-[10px] text-slate-500 font-sans mb-3">
                     Page 2 of 2
                 </div>
@@ -448,7 +452,8 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
-        </div>
+        </AppraisalPrintRoot>
     );
 }

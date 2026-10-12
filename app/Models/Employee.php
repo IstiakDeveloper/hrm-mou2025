@@ -76,6 +76,9 @@ class Employee extends Model
         'final_payment_date',
         'final_payment_amount',
         'last_promotion_date',
+        'last_increment_date',
+        'increment_stopped',
+        'increment_stop_reason',
         'probation_period_days',
         'pf_balance',
         'pf_enrolled',
@@ -99,6 +102,8 @@ class Employee extends Model
         'final_payment_date' => 'date',
         'final_payment_amount' => 'decimal:2',
         'last_promotion_date' => 'date',
+        'last_increment_date' => 'date',
+        'increment_stopped' => 'boolean',
         'probation_salary' => 'decimal:2',
         'fixed_salary' => 'decimal:2',
         'basic_salary' => 'decimal:2',
@@ -125,6 +130,7 @@ class Employee extends Model
             'dropout_date',
             'final_payment_date',
             'last_promotion_date',
+            'last_increment_date',
             'pf_enrollment_date',
         ];
     }

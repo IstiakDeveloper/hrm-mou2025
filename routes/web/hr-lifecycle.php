@@ -79,6 +79,7 @@ use App\Http\Controllers\Payroll\PayscaleController;
 use App\Http\Controllers\Payroll\SalaryGradeController;
 use App\Http\Controllers\Payroll\SalaryHeadController;
 use App\Http\Controllers\Payroll\SalaryStepController;
+use App\Http\Controllers\Payroll\SalaryIncrementController;
 use App\Http\Controllers\Payroll\SalaryStructureController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Promotion\PromotionController;
@@ -228,6 +229,24 @@ use Inertia\Inertia;
             Route::post('/{promotion}/approve', [PromotionController::class, 'approve'])->name('approve');
             Route::post('/{promotion}/reject', [PromotionController::class, 'reject'])->name('reject');
         });
+    });
+
+    // ANNUAL SALARY INCREMENT (same grade, next step)
+    Route::middleware(['permission:salary-increments.view'])->prefix('salary-increments')->name('salary-increments.')->group(function () {
+        Route::get('/', [SalaryIncrementController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:salary-increments.create'])->group(function () {
+            Route::get('/create', [SalaryIncrementController::class, 'create'])->name('create');
+            Route::post('/', [SalaryIncrementController::class, 'store'])->name('store');
+        });
+
+        Route::middleware(['permission:salary-increments.edit'])->group(function () {
+            Route::post('/employees/{employee}/release-stop', [SalaryIncrementController::class, 'releaseStop'])->name('release-stop');
+        });
+
+        Route::post('/{salaryIncrement}/rollback', [SalaryIncrementController::class, 'rollback'])->name('rollback');
+
+        Route::get('/{salaryIncrement}', [SalaryIncrementController::class, 'show'])->name('show');
     });
 
     // PROMOTION EVALUATIONS

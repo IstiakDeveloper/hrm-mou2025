@@ -7,6 +7,7 @@ use App\Models\Demotion;
 use App\Models\Employee;
 use App\Models\EmployeeAssignmentHistory;
 use App\Models\Promotion;
+use App\Models\SalaryIncrementLine;
 use App\Models\Separation;
 use App\Models\Transfer;
 use Carbon\Carbon;
@@ -697,6 +698,40 @@ class EmployeeAssignmentHistoryService
                 ];
             });
 
+        SalaryIncrementLine::query()
+            ->with('salaryIncrement:id,order_no,effective_date,status')
+            ->where('employee_id', $employee->id)
+            ->where('action', SalaryIncrementLine::ACTION_GRANT)
+            ->where('status', SalaryIncrementLine::STATUS_APPLIED)
+            ->whereHas('salaryIncrement', fn ($q) => $q->where('status', 'applied'))
+            ->get()
+            ->each(function (SalaryIncrementLine $line) use (&$events) {
+                if (! $line->salaryIncrement || ! $line->to_salary_step_id) {
+                    return;
+                }
+
+                $patch = array_filter([
+                    'salary_grade_id' => $line->salary_grade_id,
+                    'salary_step_id' => $line->to_salary_step_id,
+                    'basic_salary' => $line->to_basic,
+                ], fn ($v) => $v !== null && $v !== '');
+
+                if ($line->salary_grade_id) {
+                    $payscaleId = DB::table('salary_grades')->where('id', $line->salary_grade_id)->value('payscale_id');
+                    if ($payscaleId) {
+                        $patch['payscale_id'] = (int) $payscaleId;
+                    }
+                }
+
+                $events[] = [
+                    'date' => Carbon::parse($line->salaryIncrement->effective_date ?? $line->updated_at)->startOfDay(),
+                    'source_type' => EmployeeAssignmentHistory::SOURCE_INCREMENT,
+                    'source_id' => $line->salary_increment_id,
+                    'notes' => 'Annual increment '.$line->salaryIncrement->order_no,
+                    'patch' => $patch,
+                ];
+            });
+
         Separation::query()
             ->where('employee_id', $employee->id)
             ->where('status', 'completed')
@@ -834,6 +869,50 @@ class EmployeeAssignmentHistoryService
             }
             if ($firstConfirmation->from_basic_salary !== null) {
                 $state['basic_salary'] = $firstConfirmation->from_basic_salary;
+            }
+        }
+
+        $firstIncrement = SalaryIncrementLine::query()
+            ->select('salary_increment_lines.*', 'salary_increments.effective_date as increment_effective_date')
+            ->join('salary_increments', 'salary_increments.id', '=', 'salary_increment_lines.salary_increment_id')
+            ->where('salary_increment_lines.employee_id', $employee->id)
+            ->where('salary_increment_lines.action', SalaryIncrementLine::ACTION_GRANT)
+            ->where('salary_increment_lines.status', SalaryIncrementLine::STATUS_APPLIED)
+            ->where('salary_increments.status', 'applied')
+            ->orderBy('salary_increments.effective_date')
+            ->orderBy('salary_increment_lines.id')
+            ->first();
+
+        $otherDates = array_filter([
+            $firstPromotion?->effective_date,
+            $firstDemotion?->effective_date,
+            $firstConfirmation?->confirmation_date,
+        ]);
+        $earliestOther = null;
+        foreach ($otherDates as $date) {
+            $parsed = Carbon::parse($date)->startOfDay();
+            if ($earliestOther === null || $parsed->lt($earliestOther)) {
+                $earliestOther = $parsed;
+            }
+        }
+
+        $incrementDate = $firstIncrement?->increment_effective_date
+            ? Carbon::parse($firstIncrement->increment_effective_date)->startOfDay()
+            : null;
+
+        if ($incrementDate && ($earliestOther === null || $incrementDate->lt($earliestOther))) {
+            if ($firstIncrement->salary_grade_id) {
+                $state['salary_grade_id'] = $firstIncrement->salary_grade_id;
+                $payscaleId = DB::table('salary_grades')->where('id', $firstIncrement->salary_grade_id)->value('payscale_id');
+                if ($payscaleId) {
+                    $state['payscale_id'] = (int) $payscaleId;
+                }
+            }
+            if ($firstIncrement->from_salary_step_id) {
+                $state['salary_step_id'] = $firstIncrement->from_salary_step_id;
+            }
+            if ($firstIncrement->from_basic !== null) {
+                $state['basic_salary'] = $firstIncrement->from_basic;
             }
         }
 

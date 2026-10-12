@@ -275,6 +275,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/salary-withheld') ||
         p.startsWith('/salary-process') ||
         p.startsWith('/salary-post') ||
+        p.startsWith('/salary-arrear') ||
         p.startsWith('/salary-rollback') ||
         p.startsWith('/payroll/reports')
     ) {

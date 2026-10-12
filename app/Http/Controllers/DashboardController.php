@@ -21,6 +21,7 @@ use App\Models\LeaveType;
 use App\Models\Movement;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
+use App\Models\PayslipLine;
 use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
@@ -316,14 +317,17 @@ class DashboardController extends Controller
         $userCount = User::query()->count();
         $roleCount = Role::query()->count();
         $recentUsers = User::query()
+            ->with(['role:id,name', 'employee:id,pin'])
             ->orderByDesc('created_at')
-            ->take(8)
-            ->get(['id', 'name', 'email', 'created_at'])
+            ->take(6)
+            ->get()
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
-                'created_at' => $u->created_at?->toIso8601String(),
+                'role_name' => $u->role?->name ?? 'User',
+                'employee_pin' => $u->employee?->pin,
+                'created_at' => $u->created_at?->diffForHumans() ?? '—',
             ])
             ->values()
             ->all();
@@ -340,11 +344,43 @@ class DashboardController extends Controller
             ->whereDate('created_at', '>=', Carbon::now()->subDays(30))
             ->count();
 
+        $recentActivities = \Spatie\Activitylog\Models\Activity::query()
+            ->with('causer:id,name')
+            ->latest('id')
+            ->take(6)
+            ->get()
+            ->map(fn ($act) => [
+                'id' => $act->id,
+                'description' => $act->description,
+                'log_name' => $act->log_name,
+                'causer_name' => $act->causer?->name ?? 'System',
+                'created_at' => $act->created_at?->diffForHumans(),
+            ])
+            ->values()
+            ->all();
+
+        $recentNotices = \App\Models\AdminNotice::query()
+            ->latest('id')
+            ->take(3)
+            ->get(['id', 'title', 'type', 'audience', 'created_at', 'recipient_count'])
+            ->map(fn ($n) => [
+                'id' => $n->id,
+                'title' => $n->title,
+                'type' => $n->type ?? 'info',
+                'audience' => $n->audience,
+                'recipient_count' => (int) ($n->recipient_count ?? 0),
+                'created_at' => $n->created_at?->format('d M Y'),
+            ])
+            ->values()
+            ->all();
+
         return Inertia::render('sections/administration/dashboard', [
             'userCount' => $userCount,
             'roleCount' => $roleCount,
             'activityCount' => $activityCount,
             'recentUsers' => $recentUsers,
+            'recentActivities' => $recentActivities,
+            'recentNotices' => $recentNotices,
             'userRole' => $role?->name ?? 'User',
             'sessionStats' => $sessionStats,
         ]);
@@ -399,6 +435,58 @@ class DashboardController extends Controller
         $employeeDashboard = $this->buildPayrollEmployeeDashboardProps($user);
         $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
 
+        $latestRun = PayrollRun::query()->orderByDesc('year')->orderByDesc('month')->orderByDesc('id')->first();
+        $cycleYear = $latestRun ? (int) $latestRun->year : (int) date('Y');
+        $cycleMonth = $latestRun ? (int) $latestRun->month : (int) date('n');
+        $cycleLabel = Carbon::createFromDate($cycleYear, $cycleMonth, 1)->format('F Y');
+
+        $cycleRuns = PayrollRun::query()
+            ->where('year', $cycleYear)
+            ->where('month', $cycleMonth)
+            ->where('salary_type', 'salary')
+            ->get();
+
+        $cycleRunIds = $cycleRuns->pluck('id')->all();
+        $cycleNet = (float) $cycleRuns->sum('total_net');
+        $cycleGross = (float) $cycleRuns->sum('total_gross');
+        $cycleDeduction = (float) $cycleRuns->sum('total_deduction');
+        $cycleEmployeeCount = (int) $cycleRuns->sum('employee_count');
+        $cycleOpenRuns = $cycleRuns->where('status', 'processed')->count();
+        $cyclePostedRuns = $cycleRuns->where('status', 'posted')->count();
+
+        $cycleArrearTotal = $cycleRunIds !== []
+            ? (float) PayslipLine::query()
+                ->join('payslips', 'payslips.id', '=', 'payslip_lines.payslip_id')
+                ->whereIn('payslips.payroll_run_id', $cycleRunIds)
+                ->where('payslip_lines.head_name', 'Arrear')
+                ->sum('payslip_lines.computed_amount')
+            : 0.0;
+
+        $recentRuns = PayrollRun::query()
+            ->with('branch:id,name,branch_code')
+            ->latest('id')
+            ->take(6)
+            ->get()
+            ->map(function (PayrollRun $run) {
+                return [
+                    'id' => $run->id,
+                    'branch' => $run->branch ? $run->branch->name : 'All / Central',
+                    'branch_code' => $run->branch?->branch_code,
+                    'salary_type' => $run->salary_type,
+                    'year' => (int) $run->year,
+                    'month' => (int) $run->month,
+                    'period_label' => Carbon::createFromDate($run->year, $run->month, 1)->format('M Y'),
+                    'status' => $run->status,
+                    'employee_count' => (int) $run->employee_count,
+                    'total_net' => (float) $run->total_net,
+                    'processed_at' => $run->processed_at?->format('d M Y, h:i A'),
+                    'posted_at' => $run->posted_at?->format('d M Y, h:i A'),
+                ];
+            });
+
+        $totalEmployees = Employee::query()->count();
+        $withheldCount = SafeSchema::modelCount(\App\Models\SalaryWithheld::class, fn ($q) => $q->where('year', $cycleYear)->where('month', $cycleMonth));
+
         return Inertia::render('sections/payroll/dashboard', [
             'stats' => [
                 'payscales' => SafeSchema::modelCount(Payscale::class),
@@ -411,6 +499,21 @@ class DashboardController extends Controller
                 'processedRuns' => SafeSchema::modelCount(PayrollRun::class, fn ($q) => $q->where('status', 'processed')),
                 'postedRuns' => SafeSchema::modelCount(PayrollRun::class, fn ($q) => $q->where('status', 'posted')),
             ],
+            'cycle' => [
+                'year' => $cycleYear,
+                'month' => $cycleMonth,
+                'label' => $cycleLabel,
+                'net' => $cycleNet,
+                'gross' => $cycleGross,
+                'deduction' => $cycleDeduction,
+                'employee_count' => $cycleEmployeeCount,
+                'total_employees' => $totalEmployees,
+                'open_runs' => $cycleOpenRuns,
+                'posted_runs' => $cyclePostedRuns,
+                'arrear_total' => $cycleArrearTotal,
+                'withheld_count' => $withheldCount,
+            ],
+            'recentRuns' => $recentRuns,
             'userRole' => $role?->name ?? 'User',
             'showEmployeeTab' => $showEmployeeTab,
             'employeeDashboard' => $employeeDashboard,

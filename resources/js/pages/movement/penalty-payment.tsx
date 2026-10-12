@@ -81,8 +81,13 @@ export default function PenaltyPayment({ penalty, merchantNumbers, whatsappNumbe
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const cleanSender = data.sender_number.replace(/\D/g, '');
+    const cleanMerchant = (merchantNumbers?.bkash || numberToCopy || '').replace(/\D/g, '');
+    const isSameAsMerchant = cleanSender.length >= 11 && cleanMerchant.length >= 11 && cleanSender.slice(-11) === cleanMerchant.slice(-11);
+    const isValidPhone = /^01[3-9]\d{8}$/.test(cleanSender);
+
     const isFormValid = () => {
-        return data.sender_number.trim().length >= 11;
+        return isValidPhone && !isSameAsMerchant;
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -433,20 +438,53 @@ export default function PenaltyPayment({ penalty, merchantNumbers, whatsappNumbe
 
                                         {/* SENDER MOBILE NUMBER ONLY */}
                                         <div className="space-y-1.5">
-                                            <Label htmlFor="sender_number" className="text-xs font-bold text-zinc-800">
-                                                যে বিকাশ নম্বর থেকে পেমেন্ট করেছেন (প্রেরকের মোবাইল নম্বর) <span className="text-rose-500">*</span>
-                                            </Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="sender_number" className="text-xs font-bold text-zinc-800">
+                                                    যে বিকাশ নম্বর থেকে পেমেন্ট করেছেন (প্রেরকের মোবাইল নম্বর) <span className="text-rose-500">*</span>
+                                                </Label>
+                                                <span className="text-[10px] font-mono font-semibold text-zinc-500">
+                                                    {cleanSender.length}/11 ডিজিট
+                                                </span>
+                                            </div>
                                             <Input
                                                 id="sender_number"
                                                 type="tel"
+                                                inputMode="numeric"
+                                                maxLength={11}
                                                 placeholder="যেমন: 01712345678"
                                                 value={data.sender_number}
-                                                onChange={(e) => setData('sender_number', e.target.value)}
-                                                className="bg-white border-zinc-300 text-zinc-900 font-mono h-10 text-sm font-bold tracking-wider"
+                                                onChange={(e) => {
+                                                    const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                                    setData('sender_number', digits);
+                                                }}
+                                                className={`bg-white border-zinc-300 text-zinc-900 font-mono h-10 text-sm font-bold tracking-wider ${
+                                                    isSameAsMerchant ? 'border-rose-500 ring-1 ring-rose-500' : ''
+                                                }`}
                                                 required
                                             />
+                                            {isSameAsMerchant && (
+                                                <p className="text-xs text-rose-600 font-bold">
+                                                    ⚠️ এটি আমাদের বিকাশ পেমেন্ট নম্বর! আপনি যে বিকাশ নম্বর থেকে টাকা পাঠিয়েছেন সেই নম্বরটি দিন।
+                                                </p>
+                                            )}
+                                            {!isSameAsMerchant && cleanSender.length > 0 && cleanSender.length < 11 && (
+                                                <p className="text-xs text-amber-600 font-medium">
+                                                    ১১ ডিজিট পূর্ণ করুন (আর {11 - cleanSender.length} ডিজিট বাকি)
+                                                </p>
+                                            )}
+                                            {!isSameAsMerchant && cleanSender.length === 11 && !isValidPhone && (
+                                                <p className="text-xs text-rose-600 font-medium">
+                                                    সঠিক বাংলাদেশি মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)
+                                                </p>
+                                            )}
+                                            {!isSameAsMerchant && isValidPhone && (
+                                                <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                                    ১১ ডিজিটের নম্বর সঠিক আছে
+                                                </p>
+                                            )}
                                             {errors.sender_number && (
-                                                <p className="text-xs text-rose-600">{errors.sender_number}</p>
+                                                <p className="text-xs text-rose-600 font-semibold">{errors.sender_number}</p>
                                             )}
                                         </div>
 

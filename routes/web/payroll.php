@@ -208,12 +208,18 @@ use Inertia\Inertia;
         Route::get('/salary-process', [\App\Http\Controllers\Payroll\SalaryProcessController::class, 'index'])->name('salary-process.index');
         Route::post('/salary-process', [\App\Http\Controllers\Payroll\SalaryProcessController::class, 'process'])->name('salary-process.process')->middleware('permission:payroll.edit');
 
+        Route::get('/salary-arrear', [\App\Http\Controllers\Payroll\SalaryArrearController::class, 'index'])->name('salary-arrear.index');
+        Route::get('/salary-arrear/period/{year}/{month}', [\App\Http\Controllers\Payroll\SalaryArrearController::class, 'period'])->name('salary-arrear.period')->where(['year' => '[0-9]+', 'month' => '[0-9]+']);
+        Route::post('/salary-arrear/apply', [\App\Http\Controllers\Payroll\SalaryArrearController::class, 'apply'])->name('salary-arrear.apply')->middleware('permission:payroll.edit');
+        Route::get('/salary-arrear/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryArrearController::class, 'show'])->name('salary-arrear.show');
+
         Route::get('/salary-post', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'index'])->name('salary-post.index');
         Route::get('/salary-post/period/{year}/{month}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'period'])->name('salary-post.period')->where(['year' => '[0-9]+', 'month' => '[0-9]+']);
         Route::post('/salary-post/period/{year}/{month}/finalize', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'postPeriod'])->name('salary-post.period.finalize')->where(['year' => '[0-9]+', 'month' => '[0-9]+'])->middleware('permission:payroll.edit');
         Route::post('/salary-post/period/{year}/{month}/cancel', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'cancelPeriod'])->name('salary-post.period.cancel')->where(['year' => '[0-9]+', 'month' => '[0-9]+'])->middleware('permission:payroll.edit');
         Route::get('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'show'])->name('salary-post.show');
         Route::put('/salary-post/{payroll_run}/payslips', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'updatePayslips'])->name('salary-post.update-payslips')->middleware('permission:payroll.edit');
+        Route::post('/salary-post/{payroll_run}/arrear', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'applyArrear'])->name('salary-post.arrear')->middleware('permission:payroll.edit');
         Route::post('/salary-post/{payroll_run}/recall', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'recall'])->name('salary-post.recall')->middleware('permission:payroll.edit');
         Route::post('/salary-post/{payroll_run}/cancel', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'cancel'])->name('salary-post.cancel')->middleware('permission:payroll.edit');
         Route::post('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'post'])->name('salary-post.post')->middleware('permission:payroll.edit');

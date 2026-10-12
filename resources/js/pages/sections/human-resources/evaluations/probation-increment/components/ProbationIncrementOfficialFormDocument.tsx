@@ -21,16 +21,21 @@ function FitPage({ children, breakAfter = true }: { children: React.ReactNode; b
             const inner = innerRef.current;
             if (!frame || !inner) return;
 
-            inner.style.setProperty('zoom', '1');
+            inner.style.transform = 'none';
+            inner.style.transformOrigin = 'top left';
             inner.style.width = '100%';
+            inner.style.height = 'auto';
 
-            const available = frame.clientHeight;
-            const needed = inner.scrollHeight;
+            const box = getComputedStyle(frame);
+            const padTop = parseFloat(box.paddingTop) || 0;
+            const padBottom = parseFloat(box.paddingBottom) || 0;
+            const available = frame.clientHeight - padTop - padBottom;
+            const needed = Math.max(inner.scrollHeight, inner.offsetHeight);
             if (available <= 0 || needed <= 0) return;
 
             const scale = Math.min(1, (available * 0.985) / needed);
-            inner.style.setProperty('zoom', String(scale));
             inner.style.width = scale < 0.995 ? `${100 / scale}%` : '100%';
+            inner.style.transform = scale < 0.995 ? `scale(${Number(scale.toFixed(4))})` : 'none';
         };
 
         fit();
@@ -38,9 +43,16 @@ function FitPage({ children, breakAfter = true }: { children: React.ReactNode; b
             fit();
             requestAnimationFrame(fit);
         };
+        const soon = window.setTimeout(fit, 60);
+        const later = window.setTimeout(fit, 300);
+        const images = Array.from(frameRef.current?.querySelectorAll('img') ?? []);
+        images.forEach((img) => img.addEventListener('load', fit));
         window.addEventListener('beforeprint', onPrint);
         window.addEventListener('resize', fit);
         return () => {
+            window.clearTimeout(soon);
+            window.clearTimeout(later);
+            images.forEach((img) => img.removeEventListener('load', fit));
             window.removeEventListener('beforeprint', onPrint);
             window.removeEventListener('resize', fit);
         };
@@ -49,11 +61,12 @@ function FitPage({ children, breakAfter = true }: { children: React.ReactNode; b
     return (
         <div
             ref={frameRef}
-            className="probation-fit-page mx-auto w-full max-w-[200mm] bg-white mb-6 print:mb-0"
+            className="probation-fit-page mx-auto w-full max-w-[194mm] bg-white mb-6 print:mb-0 print:max-w-none"
             style={{
                 height: '270mm',
                 overflow: 'hidden',
                 boxSizing: 'border-box',
+                paddingTop: '2mm',
                 breakInside: 'avoid',
                 pageBreakInside: 'avoid',
                 breakAfter: breakAfter ? 'page' : 'auto',
@@ -385,7 +398,7 @@ export default function ProbationIncrementOfficialFormDocument({
     );
 
     const pageHeader = (
-        <div className="flex justify-between items-start mb-1 border-b border-black pb-1">
+        <div className="flex justify-between items-start mb-1 border-b border-black pb-1 pt-0.5">
             <img
                 src="/logo.png"
                 alt="মৌসুমী"
@@ -393,7 +406,7 @@ export default function ProbationIncrementOfficialFormDocument({
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
             <div className="text-center flex-1 px-2">
-                <h1 className="text-lg font-black leading-none">{lang === 'bn' ? 'মৌসুমী' : 'MOUSUMI'}</h1>
+                <h1 className="text-lg font-black leading-snug">{lang === 'bn' ? 'মৌসুমী' : 'MOUSUMI'}</h1>
                 <p className="text-[10px] mt-0.5">{lang === 'bn' ? 'উকিলপাড়া, নওগাঁ।' : 'Ukilpara, Naogaon.'}</p>
                 <h2 className="text-[12px] font-bold mt-0.5">{lang === 'bn' ? copy.titleBn : copy.titleEn}</h2>
                 <h3 className="text-[10px] font-bold">{lang === 'bn' ? copy.subtitleBn : copy.subtitleEn}</h3>
@@ -599,7 +612,7 @@ export default function ProbationIncrementOfficialFormDocument({
 
     return (
         <div className="bg-white text-black font-sans mx-auto print:m-0">
-            <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } .probation-fit-page { height: 270mm !important; max-height: 270mm !important; overflow: hidden !important; } }`}</style>
+            <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } .probation-fit-page { height: 270mm !important; max-height: 270mm !important; overflow: hidden !important; margin: 0 !important; break-inside: avoid; page-break-inside: avoid; } }`}</style>
             <FitPage>
                 {pageHeader}
 

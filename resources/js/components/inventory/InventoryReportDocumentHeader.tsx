@@ -8,13 +8,13 @@ type Props = {
 
 export function InventoryReportDocumentHeader({ title, dateLabel, companyName }: Props) {
     return (
-        <div className="relative mb-2 border-b border-black pb-1.5 text-black print:mb-1.5">
+        <div className="relative mb-2 border-b border-black px-11 pb-1.5 pt-1 text-black print:mb-1.5 print:px-10">
             <img
                 src="/logo.png"
                 alt="Organization logo"
-                className="absolute left-0 top-1/2 h-8 w-11 -translate-y-1/2 object-contain object-left print:h-7 print:w-10"
+                className="absolute left-0 top-1 h-8 w-11 object-contain object-left print:h-7 print:w-10"
             />
-            <div className="px-11 text-center leading-tight print:px-10">
+            <div className="text-center leading-snug">
                 {companyName && (
                     <p className="text-[9px] font-bold uppercase tracking-wide text-slate-900 print:text-[8px]">{companyName}</p>
                 )}

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Layout from '@/layouts/AdminLayout';
 import { Head, useForm, Link, router } from '@inertiajs/react';
-import { Textarea } from '@/components/ui/textarea';
 import { 
     Award, 
     ArrowLeft, 
@@ -12,12 +11,12 @@ import {
     CheckCircle2, 
     Send, 
     RotateCcw,
-    ShieldCheck,
     Edit3,
     Trash2,
     Clock,
     AlertTriangle
 } from 'lucide-react';
+import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
 import { evalTranslations } from './evaluation-config';
 import OfficialFormDocument from './components/OfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
@@ -40,6 +39,18 @@ export default function PromotionEvaluationShow({
         return (localStorage.getItem('eval_lang') as 'bn' | 'en') || 'bn';
     });
     const t = evalTranslations[lang];
+    const [approvalOpen, setApprovalOpen] = useState(false);
+
+    const openApproval = () => {
+        if (!userHasSignature) {
+            alert(lang === 'bn'
+                ? 'অনুমোদন বা স্বাক্ষর করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।'
+                : 'Digital signature is required before signing/approving.');
+            window.location.href = '/settings/profile';
+            return;
+        }
+        setApprovalOpen(true);
+    };
 
     interface ShowFormData {
         [key: string]: any;
@@ -134,8 +145,6 @@ export default function PromotionEvaluationShow({
     const employeeName = lang === 'bn' 
         ? (evaluation.employee?.name_bn || evaluation.employee?.name_en) 
         : (evaluation.employee?.name_en || evaluation.employee?.name_bn);
-
-    const isActionRequired = canApprove;
 
     return (
         <Layout>
@@ -287,7 +296,7 @@ export default function PromotionEvaluationShow({
                 )}
 
                 {/* Draft Banner if status is draft */}
-                {!userHasSignature && (canSubmit || isActionRequired) && (
+                {!userHasSignature && (canSubmit || canApprove) && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 shadow-xs">
                         <div className="flex items-center gap-3">
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-200/80 text-amber-800 shrink-0">
@@ -367,233 +376,26 @@ export default function PromotionEvaluationShow({
                     </Card>
                 )}
 
-                {/* Workflow Action Box if awaiting review */}
-                {isActionRequired && (
-                    <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50/40 via-white to-slate-50 shadow-sm overflow-hidden">
-                        <CardHeader className="bg-emerald-50/80 border-b border-emerald-100 py-3 px-5">
-                            <CardTitle className="text-xs font-bold text-emerald-900 flex items-center gap-2">
-                                <ShieldCheck className="h-4 w-4 text-emerald-700" />
-                                {t.workflowReviewTitle} — {getStatusBadge(evaluation.status)}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5 space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-semibold text-slate-700">{t.commentsLabel}</label>
-                                <Textarea 
-                                    placeholder={t.commentsPlaceholder} 
-                                    value={data.comments}
-                                    onChange={e => setData('comments', e.target.value)}
-                                    className="text-xs bg-white"
-                                    rows={2}
-                                />
-                            </div>
-
-                            {/* HR Verification Checklist if at HR Stage */}
-                            {evaluation.status === 'submitted_to_hr' && (
-                                <div className="space-y-3 p-4 bg-purple-50/70 border border-purple-200 rounded-xl text-xs">
-                                    <div className="flex items-center justify-between border-b border-purple-200 pb-2">
-                                        <span className="font-bold text-xs text-purple-950">
-                                            {t.hrChecklistTitle}
-                                        </span>
-                                        <span className="text-[10px] text-purple-700 font-semibold px-2 py-0.5 bg-purple-100 rounded-full">
-                                            {lang === 'bn' ? 'এইচআর যাচাই' : 'HR Verification'}
-                                        </span>
-                                    </div>
-                                    <p className="text-[11px] text-purple-800 italic">
-                                        {lang === 'bn' ? 'নিচের যেকোনো একটি গত ০২ বছরের মধ্যে হয়েছে কি না?' : 'Has any of the following occurred within the last 02 years?'}
-                                    </p>
-
-                                    <div className="overflow-hidden rounded-lg border border-purple-200 bg-white shadow-2xs">
-                                        <table className="w-full text-xs">
-                                            <thead>
-                                                <tr className="bg-purple-100/70 text-purple-900 font-semibold text-[11px]">
-                                                    <th className="p-2 text-left">{lang === 'bn' ? 'বিষয়' : 'Subject'}</th>
-                                                    <th className="p-2 text-center w-16">{lang === 'bn' ? 'হ্যাঁ' : 'Yes'}</th>
-                                                    <th className="p-2 text-center w-16">{lang === 'bn' ? 'না' : 'No'}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-purple-100 text-[11px]">
-                                                <tr className="hover:bg-purple-50/30">
-                                                    <td className="p-2 text-slate-800">১. {t.hrFinancialIrregularity}</td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_financial_irregularity" 
-                                                            checked={data.hr_financial_irregularity === true} 
-                                                            onChange={() => setData('hr_financial_irregularity', true)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_financial_irregularity" 
-                                                            checked={data.hr_financial_irregularity === false} 
-                                                            onChange={() => setData('hr_financial_irregularity', false)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                </tr>
-                                                <tr className="hover:bg-purple-50/30">
-                                                    <td className="p-2 text-slate-800">২. {t.hrDisciplinaryAction}</td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_disciplinary_action" 
-                                                            checked={data.hr_disciplinary_action === true} 
-                                                            onChange={() => setData('hr_disciplinary_action', true)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_disciplinary_action" 
-                                                            checked={data.hr_disciplinary_action === false} 
-                                                            onChange={() => setData('hr_disciplinary_action', false)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                </tr>
-                                                <tr className="hover:bg-purple-50/30">
-                                                    <td className="p-2 text-slate-800">৩. {t.hrAuditObjection}</td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_audit_objection" 
-                                                            checked={data.hr_audit_objection === true} 
-                                                            onChange={() => setData('hr_audit_objection', true)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_audit_objection" 
-                                                            checked={data.hr_audit_objection === false} 
-                                                            onChange={() => setData('hr_audit_objection', false)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                </tr>
-                                                <tr className="hover:bg-purple-50/30">
-                                                    <td className="p-2 text-slate-800">৪. {t.hrLeaveWithoutPay}</td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_leave_without_pay" 
-                                                            checked={data.hr_leave_without_pay === true} 
-                                                            onChange={() => setData('hr_leave_without_pay', true)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_leave_without_pay" 
-                                                            checked={data.hr_leave_without_pay === false} 
-                                                            onChange={() => setData('hr_leave_without_pay', false)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                </tr>
-                                                <tr className="hover:bg-purple-50/30">
-                                                    <td className="p-2 text-slate-800">৫. {t.hrAcrSatisfactory}</td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_acr_satisfactory" 
-                                                            checked={data.hr_acr_satisfactory === true} 
-                                                            onChange={() => setData('hr_acr_satisfactory', true)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <input 
-                                                            type="radio" 
-                                                            name="show_hr_acr_satisfactory" 
-                                                            checked={data.hr_acr_satisfactory === false} 
-                                                            onChange={() => setData('hr_acr_satisfactory', false)} 
-                                                            className="text-purple-600 focus:ring-purple-500 cursor-pointer" 
-                                                        />
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    
-                                    <Button 
-                                        className="w-full mt-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-10 shadow-sm" 
-                                        onClick={e => handleAction(e, 'hr-verify', 'verify')} 
-                                        disabled={processing}
-                                    >
-                                        <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                                        {lang === 'bn' ? 'এইচআর যাচাই ও স্বাক্ষরসহ ইডি বরাবর অগ্রবর্তী করুন' : t.submitHrVerification}
-                                    </Button>
-                                </div>
-                            )}
-
-                            {/* ED Approval Actions */}
-                            {evaluation.status === 'submitted_to_ed' && (
-                                <div className="flex gap-3 pt-1">
-                                    <Button 
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-10 px-5" 
-                                        onClick={e => handleAction(e, 'ed-approve', 'approve')} 
-                                        disabled={processing}
-                                    >
-                                        <CheckCircle2 className="h-4 w-4 mr-1.5" /> {t.approvePromotion}
-                                    </Button>
-                                    <Button 
-                                        variant="destructive" 
-                                        className="text-xs h-10 px-5" 
-                                        onClick={e => handleAction(e, 'ed-approve', 'reject')} 
-                                        disabled={processing}
-                                    >
-                                        {t.rejectPromotion}
-                                    </Button>
-                                </div>
-                            )}
-
-                            {/* Line Manager / Stage Reviewer Forward & Send Back */}
-                            {!['submitted_to_hr', 'submitted_to_ed'].includes(evaluation.status) && (
-                                <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
-                                    <Button 
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-6 shadow-sm" 
-                                        onClick={e => handleAction(e, 'forward', 'forward')} 
-                                        disabled={processing}
-                                    >
-                                        <CheckCircle2 className="h-4 w-4 mr-1.5" /> 
-                                        {lang === 'bn' ? 'অনুমোদন ও অগ্রবর্তী করুন' : 'Approve & Forward'}
-                                    </Button>
-
-                                    {canEdit && (
-                                        <Link href={`/promotion-evaluations/${evaluation.id}/edit`}>
-                                            <Button 
-                                                type="button"
-                                                variant="outline" 
-                                                className="border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs h-10 px-4 font-semibold"
-                                            >
-                                                <Edit3 className="h-3.5 w-3.5 mr-1.5 text-amber-700" /> 
-                                                {lang === 'bn' ? 'প্রয়োজনে আগে সম্পাদনা করুন' : 'Edit Before Approval'}
-                                            </Button>
-                                        </Link>
-                                    )}
-
-                                    <Button 
-                                        type="button"
-                                        variant="outline" 
-                                        className="border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100 text-xs h-10 px-5 font-semibold" 
-                                        onClick={e => handleAction(e, 'send-back', 'send_back')} 
-                                        disabled={processing}
-                                    >
-                                        <RotateCcw className="h-3.5 w-3.5 mr-1.5 text-rose-600" /> 
-                                        {lang === 'bn' ? 'স্রষ্টার কাছে ফেরত পাঠান' : 'Send Back to Creator'}
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                {canApprove && (
+                    <div className="flex justify-end">
+                        <Button
+                            type="button"
+                            onClick={openApproval}
+                            className="h-10 bg-emerald-600 px-5 text-sm font-bold text-white shadow-xs hover:bg-emerald-700"
+                        >
+                            <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                            {lang === 'bn' ? 'অনুমোদন' : 'Approve'}
+                        </Button>
+                    </div>
                 )}
+
+                <AppraisalApprovalDialog
+                    kind="promotion"
+                    lang={lang}
+                    evaluation={approvalOpen ? { ...evaluation, current_stage_label: evaluation.current_stage_label || currentStageLabel } : null}
+                    canSendBack={canSendBack}
+                    onClose={() => setApprovalOpen(false)}
+                />
 
                 {/* The Central Official Document Preview */}
                 <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">

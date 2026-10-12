@@ -180,8 +180,9 @@ const getTheme = (id: string) => {
 };
 
 export default function SectionsIndex() {
-    const { auth, pendingLeaveCount, recentNotices } = usePage().props as any;
+    const { auth, pendingLeaveCount, pendingAppraisalCounts, recentNotices } = usePage().props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
+    const pendingAppraisal = (pendingAppraisalCounts?.total as number) ?? 0;
 
     const handleSelect = (sectionId: AdminSectionId) => {
         storeSection(sectionId);
@@ -426,6 +427,8 @@ export default function SectionsIndex() {
                         })();
 
                         const enabled = moduleActive && hasAccess;
+                        const sectionPending =
+                            section.id === 'leave' ? pendingLeave : section.id === 'human-resources' ? pendingAppraisal : 0;
                         const theme = getTheme(section.id);
                         const commonCardClasses = "group relative select-none rounded-xl sm:rounded-2xl border p-2 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2 transition-all duration-300 ease-out will-change-transform w-full bg-white/90 hover:bg-white border-slate-200/80 shadow-xs hover:-translate-y-1 hover:shadow-md max-w-[110px] sm:max-w-none aspect-square sm:aspect-auto sm:min-h-[120px] md:min-h-[140px]";
 
@@ -441,11 +444,11 @@ export default function SectionsIndex() {
                                 onClick={() => handleSelect(section.id)}
                                 className={`${commonCardClasses} ${theme.bg} ${theme.border} ${theme.hoverBorder} ${theme.glow}`}
                             >
-                                {/* Top-right Indicator: pending badge for leave, checkmark for others */}
+                                {/* Top-right Indicator: pending badge for leave and appraisal, checkmark for others */}
                                 <div className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 z-10">
-                                    {section.id === 'leave' && pendingLeave > 0 ? (
+                                    {sectionPending > 0 ? (
                                         <span className="inline-flex min-w-[18px] sm:min-w-[22px] items-center justify-center rounded-full bg-rose-600 px-1 py-0.5 text-[9px] sm:text-[10px] font-bold leading-none text-white shadow-md shadow-rose-600/40 ring-2 ring-white animate-pulse">
-                                            {pendingLeave > 99 ? '99+' : pendingLeave}
+                                            {sectionPending > 99 ? '99+' : sectionPending}
                                         </span>
                                     ) : (
                                         <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600 bg-white rounded-full" />

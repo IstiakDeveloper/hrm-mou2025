@@ -78,10 +78,36 @@ class FixedAssetDashboardService
                 })
                 ->all();
 
+        $recentAssets = FixedAsset::query()
+            ->with(['category:id,name', 'branch:id,name,branch_code'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->latest('id')
+            ->limit(5)
+            ->get()
+            ->map(function (FixedAsset $asset) {
+                return [
+                    'id' => $asset->id,
+                    'asset_tag' => $asset->asset_tag ?? ('AST-'.$asset->id),
+                    'name' => $asset->name,
+                    'category' => $asset->category?->name ?? '—',
+                    'branch' => $asset->branch?->name ?? '—',
+                    'purchase_cost' => (float) ($asset->purchase_cost ?? 0),
+                    'book_value' => (float) ($asset->book_value ?? 0),
+                    'status' => $asset->status,
+                    'purchase_date' => $asset->purchase_date?->format('d M Y'),
+                ];
+            })
+            ->all();
+
+        $purchaseVal = (float) ($totals->purchase_total ?? 0);
+        $bookVal = (float) ($totals->book_total ?? 0);
+        $accumulatedDep = max(0, $purchaseVal - $bookVal);
+
         return [
             'totalAssets' => (int) ($totals->total ?? 0),
-            'purchaseValue' => (float) ($totals->purchase_total ?? 0),
-            'bookValue' => (float) ($totals->book_total ?? 0),
+            'purchaseValue' => $purchaseVal,
+            'bookValue' => $bookVal,
+            'accumulatedDepreciation' => $accumulatedDep,
             'active' => (int) ($byStatus[FixedAsset::STATUS_ACTIVE] ?? 0),
             'inTransit' => (int) ($byStatus[FixedAsset::STATUS_IN_TRANSIT] ?? 0),
             'underMaintenance' => (int) ($byStatus[FixedAsset::STATUS_UNDER_MAINTENANCE] ?? 0),
@@ -94,6 +120,7 @@ class FixedAssetDashboardService
             'openMaintenance' => $maintenanceOpen,
             'depreciableAssets' => $depreciable,
             'topBranches' => $topBranches,
+            'recentAssets' => $recentAssets,
         ];
     }
 
@@ -106,9 +133,11 @@ class FixedAssetDashboardService
             'totalAssets' => 0,
             'purchaseValue' => 0.0,
             'bookValue' => 0.0,
+            'accumulatedDepreciation' => 0.0,
             'active' => 0,
             'inTransit' => 0,
             'underMaintenance' => 0,
+            'notInUse' => 0,
             'disposed' => 0,
             'categories' => 0,
             'branches' => 0,
@@ -117,6 +146,7 @@ class FixedAssetDashboardService
             'openMaintenance' => 0,
             'depreciableAssets' => 0,
             'topBranches' => [],
+            'recentAssets' => [],
         ];
     }
 }

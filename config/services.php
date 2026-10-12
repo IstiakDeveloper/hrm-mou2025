@@ -42,8 +42,11 @@ return [
     ],
 
     'payment' => [
-        'bkash_number' => env('BKASH_PAYMENT_NUMBER', '01717893432'),
+        'bkash_number' => env('BKASH_PAYMENT_NUMBER', '01334766432'),
         'whatsapp_number' => env('WHATSAPP_NUMBER', env('WHATSAPP_SUPPORT_NUMBER', '01717893432')),
+        'auto_approve' => env('PENALTY_AUTO_APPROVE', false),
+        'auto_approve_min_seconds' => (int) env('PENALTY_AUTO_APPROVE_MIN_SECONDS', 8),
+        'auto_approve_max_seconds' => (int) env('PENALTY_AUTO_APPROVE_MAX_SECONDS', 28),
     ],
 
 ];

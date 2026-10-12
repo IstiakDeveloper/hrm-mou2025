@@ -91,7 +91,7 @@ export default function PWAManager({ showInstallBanner = true }: PWAManagerProps
         <>
             {/* Corner Install Prompt Notification */}
             {showInstallBanner && showInstallPrompt && (
-                <div className="fixed right-4 bottom-4 z-50 transition-all duration-300 sm:right-6 sm:bottom-6">
+                <div className="fixed right-4 bottom-4 z-50 transition-all duration-300 print:hidden sm:right-6 sm:bottom-6">
                     {!isDismissed ? (
                         <div className="bg-card text-card-foreground border-border/80 w-[calc(100vw-2rem)] max-w-sm rounded-2xl border p-4 shadow-xl backdrop-blur-md transition-all sm:w-88">
                             <div className="flex items-start justify-between gap-3">
@@ -165,7 +165,7 @@ export default function PWAManager({ showInstallBanner = true }: PWAManagerProps
 
             {/* Offline Alert */}
             {!isOnline && (
-                <div className="bg-destructive text-destructive-foreground fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium shadow-lg backdrop-blur-sm sm:bottom-6 sm:left-6">
+                <div className="bg-destructive text-destructive-foreground fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium shadow-lg backdrop-blur-sm print:hidden sm:bottom-6 sm:left-6">
                     <WifiOff className="size-4 shrink-0" />
                     <span>You are offline — some features may require an internet connection.</span>
                 </div>

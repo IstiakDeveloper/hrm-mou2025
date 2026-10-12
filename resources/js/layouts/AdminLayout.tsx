@@ -168,6 +168,44 @@ interface MenuItemType {
     }[];
 }
 
+type AppraisalPendingCounts = {
+    promotion?: number;
+    confirmation?: number;
+    probation_increment?: number;
+    trainee?: number;
+    total?: number;
+};
+
+const APPRAISAL_COUNT_BY_PATH: Record<string, keyof AppraisalPendingCounts> = {
+    '/promotion-evaluations': 'promotion',
+    '/confirmation-evaluations': 'confirmation',
+    '/probation-increment-evaluations': 'probation_increment',
+    '/trainee-evaluations': 'trainee',
+};
+
+function appraisalPendingForPath(path: string, counts?: AppraisalPendingCounts | null): number {
+    const key = APPRAISAL_COUNT_BY_PATH[path.split('?')[0]];
+    if (!key || key === 'total') {
+        return 0;
+    }
+    return counts?.[key] ?? 0;
+}
+
+function PendingCountBadge({ count, className = '' }: { count: number; className?: string }) {
+    if (!count || count <= 0) {
+        return null;
+    }
+
+    return (
+        <span
+            title="Approval pending"
+            className={`inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 py-0.5 text-[9px] font-bold leading-none text-white shadow-sm ${className}`}
+        >
+            {count > 99 ? '99+' : count}
+        </span>
+    );
+}
+
 function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<MenuItemType['submenu']> {
     switch (sectionId) {
         case 'human-resources':
@@ -265,8 +303,10 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
-    const { auth, notifications, activeMovement, pendingLeaveCount } = page.props as any;
+    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts } = page.props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
+    const appraisalCounts = (pendingAppraisalCounts ?? null) as AppraisalPendingCounts | null;
+    const pendingAppraisal = appraisalCounts?.total ?? 0;
     const inertiaUrl = page.url;
     const { navLayout, setNavLayout, toggleNavLayout, isTopNav, isSidebarNav } = useNavLayout();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -583,6 +623,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 submenu: [
                     { title: 'Transfers', path: '/transfers', permission: 'transfers.view' },
                     { title: 'Promotions', path: '/promotions', permission: 'promotions.view' },
+                    { title: 'Annual Increment', path: '/salary-increments', permission: 'salary-increments.view' },
                     { title: 'Demotions', path: '/demotions', permission: 'demotions.view' },
                 ],
             },
@@ -658,10 +699,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 permission: 'payroll.view',
                 hrOnly: true,
                 submenu: [
+                    { title: 'Annual Increment', path: '/salary-increments', permission: 'salary-increments.view' },
                     { title: 'Head Modification', path: '/salary-head-modifications', permission: 'payroll.view' },
                     { title: 'Salary Withheld', path: '/salary-withheld', permission: 'payroll.view' },
                     { title: 'Salary Process', path: '/salary-process', permission: 'payroll.view' },
                     { title: 'Salary Post', path: '/salary-post', permission: 'payroll.view' },
+                    { title: 'Arrear', path: '/salary-arrear', permission: 'payroll.view' },
                     { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
                 ],
             },
@@ -1142,7 +1185,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const mobileSubNavItems = useMemo(() => {
         if (!activeSectionId) return [];
 
-        const items: Array<{ title: string; href: string; icon: React.ReactNode }> = [];
+        const items: Array<{ title: string; href: string; icon: React.ReactNode; badge?: number }> = [];
 
         sectionDashboardEntries.forEach((entry) => {
             items.push({
@@ -1177,6 +1220,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         title: subItem.title,
                         href: subItem.path,
                         icon: getSubNavIcon(subItem.title, subItem.path),
+                        badge: appraisalPendingForPath(subItem.path, appraisalCounts),
                     });
                 });
             } else {
@@ -1195,7 +1239,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             seen.add(clean);
             return true;
         });
-    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id]);
+    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts]);
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
@@ -1239,8 +1283,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         const submenuSectionActive = permittedSubmenu?.some((s) => !s.isGroupLabel && isActive(s.path)) ?? false;
         const isMenuOpen = activeMenu === item.title;
 
+        const menuPending = item.menuKey === 'performance-appraisal' ? pendingAppraisal : 0;
+
         return item.hasSubmenu ? (
             <div className="group relative mb-1">
+                {!isSidebarOpen && !isMobileSidebarOpen && menuPending > 0 && (
+                    <PendingCountBadge count={menuPending} className="absolute top-0 right-1 z-10 min-w-[16px] px-1 text-[8px]" />
+                )}
                 <button
                     onClick={() => toggleMenu(item.title)}
                     title={!isSidebarOpen && !isMobileSidebarOpen ? item.title : undefined}
@@ -1266,6 +1315,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                         {pendingLeave > 99 ? '99+' : pendingLeave}
                                     </span>
                                 )}
+                                {menuPending > 0 && <PendingCountBadge count={menuPending} />}
                             </span>
                         )}
                     </div>
@@ -1289,14 +1339,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 <Link
                                     key={idx}
                                     href={subItem.path}
-                                    className={`block rounded-md px-3 py-2 text-[12px] tracking-wide transition-all duration-200 ${
+                                    className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-[12px] tracking-wide transition-all duration-200 ${
                                         isActive(subItem.path)
                                             ? 'bg-emerald-50 font-semibold text-emerald-700'
                                             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                                     }`}
                                     onClick={closeMobileSidebar}
                                 >
-                                    {subItem.title}
+                                    <span className="truncate">{subItem.title}</span>
+                                    <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts)} />
                                 </Link>
                             ),
                         )}
@@ -1413,6 +1464,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             {pendingLeave > 99 ? '99+' : pendingLeave}
                                         </span>
                                     )}
+                                    {item.menuKey === 'performance-appraisal' && (
+                                        <PendingCountBadge count={pendingAppraisal} className="min-w-[16px] text-[8px]" />
+                                    )}
                                 </span>
                                 <ChevronDown
                                     className={cn(
@@ -1456,9 +1510,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             )}
                                         >
                                             <span>{subItem.title}</span>
-                                            {isActive(subItem.path) && (
+                                            {appraisalPendingForPath(subItem.path, appraisalCounts) > 0 ? (
+                                                <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts)} />
+                                            ) : isActive(subItem.path) ? (
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                            )}
+                                            ) : null}
                                         </Link>
                                     </DropdownMenuItem>
                                 ),
@@ -2045,6 +2101,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             >
                                                 {item.icon}
                                                 <span className="whitespace-nowrap leading-none">{item.title}</span>
+                                                {(item.badge ?? 0) > 0 && (
+                                                    <PendingCountBadge
+                                                        count={item.badge ?? 0}
+                                                        className={active ? 'bg-white text-rose-600' : ''}
+                                                    />
+                                                )}
                                             </Link>
                                         );
                                     })}

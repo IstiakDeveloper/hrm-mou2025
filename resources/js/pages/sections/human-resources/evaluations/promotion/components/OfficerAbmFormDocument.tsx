@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
@@ -129,15 +130,15 @@ export default function OfficerAbmFormDocument({
     let overallItemCounter = 0;
 
     return (
-        <div className="bg-white text-black p-4 sm:p-7 max-w-[850px] mx-auto shadow-sm border border-gray-300 font-sans print:p-0 print:border-none print:shadow-none print:max-w-none text-[11px] leading-tight">
+        <AppraisalPrintRoot className="bg-white text-black p-4 sm:p-7 max-w-[850px] mx-auto shadow-sm border border-gray-300 font-sans print:p-0 print:border-none print:shadow-none print:max-w-none text-[11px] leading-tight">
             {/* ================= PAGE 1 ================= */}
-            <div className="min-h-[1050px] flex flex-col justify-between print:min-h-0 print:break-after-page mb-6 pb-6 border-b print:border-b-0 print:mb-0 print:pb-0">
+            <div className="appraisal-print-page">
                 <div>
                     {/* Page 1 Header */}
-                    <div className="flex justify-between items-start mb-2 border-b border-black/80 pb-2">
-                        <img src="/images/mousumi-logo.png" alt="Mousumi Logo" className="h-12 w-auto object-contain shrink-0" />
+                    <div className="flex justify-between items-start mb-2 border-b border-black/80 pb-2 pt-0.5">
+                        <img src="/logo.png" alt="Mousumi Logo" className="h-12 w-auto object-contain shrink-0" />
                         <div className="text-center flex-1 px-2">
-                            <h1 className="text-xl font-black tracking-tight text-black leading-none">
+                            <h1 className="text-xl font-black tracking-tight text-black leading-snug">
                                 {lang === 'bn' ? 'মৌসুমী' : 'MOUSUMI'}
                             </h1>
                             <p className="text-[11px] text-gray-700 mt-0.5">
@@ -374,7 +375,7 @@ export default function OfficerAbmFormDocument({
             </div>
 
             {/* ================= PAGE 2 ================= */}
-            <div className="min-h-[1050px] flex flex-col justify-between print:min-h-0">
+            <div className="appraisal-print-page">
                 <div>
                     {/* Page 2 Header */}
                     <div className="flex justify-between items-center mb-2 pb-1 border-b border-black/80">
@@ -728,6 +729,6 @@ export default function OfficerAbmFormDocument({
                     </div>
                 </div>
             </div>
-        </div>
+        </AppraisalPrintRoot>
     );
 }

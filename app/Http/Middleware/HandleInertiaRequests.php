@@ -6,6 +6,7 @@ use App\Models\LeaveApplication;
 use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\User;
+use App\Services\Appraisal\AppraisalPendingCountService;
 use App\Services\AssetFinancialYearService;
 use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
@@ -132,10 +133,18 @@ class HandleInertiaRequests extends Middleware
         }
 
         $pendingLeaveCount = 0;
+        $pendingAppraisalCounts = [
+            'promotion' => 0,
+            'confirmation' => 0,
+            'probation_increment' => 0,
+            'trainee' => 0,
+            'total' => 0,
+        ];
         if ($user) {
             $leaveQuery = LeaveApplication::query()->where('status', 'pending');
             OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
             $pendingLeaveCount = $leaveQuery->count();
+            $pendingAppraisalCounts = app(AppraisalPendingCountService::class)->countsFor($user);
         }
 
         return [
@@ -180,6 +189,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'assetFinancialYear' => $assetFinancialYear,
             'pendingLeaveCount' => $pendingLeaveCount,
+            'pendingAppraisalCounts' => $pendingAppraisalCounts,
         ];
     }
 

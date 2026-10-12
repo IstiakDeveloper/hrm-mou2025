@@ -19,6 +19,10 @@ class EmployeeAssignmentHistory extends Model
 
     public const SOURCE_CONFIRMATION = 'confirmation';
 
+    public const SOURCE_INCREMENT = 'increment';
+
+    public const SOURCE_INCREMENT_ROLLBACK = 'increment_rollback';
+
     public const SOURCE_SEPARATION = 'separation';
 
     public const SOURCE_SEPARATION_RESTORE = 'separation_restore';
