@@ -206,7 +206,22 @@ test('the branch list keeps the real pin and still includes employees without a 
         ->and($rows['0128']['search'])->toContain('0128')
         ->and($rows['0128']['can_push'])->toBeTrue()
         ->and($rows->has('SG-1'))->toBeTrue()
-        ->and($rows['SG-1']['can_push'])->toBeFalse();
+        ->and($rows['SG-1']['can_push'])->toBeTrue();
+});
+
+test('a text pin can be queued without changing someone already on the device', function () {
+    $guard = makePushEmployee($this->branch->id, 'SG-3', 'Ratan Ali', null, null);
+    $present = makePushEmployee($this->branch->id, '0050', 'Arun Ghosh', '50', '0050');
+
+    $this->service->recordPins($this->device, ['0050']);
+    $queued = $this->service->queueSelected($this->device, [$guard->id, $present->id]);
+    $body = (string) AttendanceDeviceCommand::query()->where('kind', 'update_user')->value('body');
+
+    expect($queued)->toBe(1)
+        ->and($body)->toContain('PIN=SG3')
+        ->and($body)->not->toContain('SG-3')
+        ->and($this->service->isSafeBody($body))->toBeTrue()
+        ->and($body)->not->toContain('PIN=50');
 });
 
 test('an empty device is not filled until the user list has had time to arrive', function () {

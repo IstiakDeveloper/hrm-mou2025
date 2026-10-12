@@ -33,7 +33,7 @@ class AdmsDeviceCommandService
         $queued = 0;
 
         foreach ($this->branchEmployees($device)->whereIn('id', $employeeIds) as $employee) {
-            $pin = $this->devicePin($employee);
+            $pin = $this->pushPin($employee);
             if ($pin === null || isset($known[$pin])) {
                 continue;
             }
@@ -64,7 +64,7 @@ class AdmsDeviceCommandService
 
         $rows = [];
         foreach ($this->branchEmployees($device) as $employee) {
-            $devicePin = $this->devicePin($employee);
+            $devicePin = $this->pushPin($employee);
             $pin = $this->displayPin($employee);
 
             $rows[] = [
@@ -130,7 +130,7 @@ class AdmsDeviceCommandService
     {
         $normalized = [];
         foreach ($pins as $pin) {
-            $pin = $this->normalizePin((string) $pin);
+            $pin = $this->canonicalPin((string) $pin);
             if ($pin !== null) {
                 $normalized[] = $pin;
             }
@@ -316,9 +316,33 @@ class AdmsDeviceCommandService
         return null;
     }
 
+    /**
+     * Numeric IDs stay numeric. A hyphen in a text PIN is removed, so SG-3 is sent as SG3.
+     */
+    public function pushPin(Employee $employee): ?string
+    {
+        $numeric = $this->devicePin($employee);
+        if ($numeric !== null) {
+            return $numeric;
+        }
+
+        foreach (['pin', 'employee_id'] as $field) {
+            if (! array_key_exists($field, $employee->getAttributes())) {
+                continue;
+            }
+
+            $pin = $this->canonicalPin((string) $employee->{$field});
+            if ($pin !== null) {
+                return $pin;
+            }
+        }
+
+        return null;
+    }
+
     public function updateUserCommand(string $pin, string $name): string
     {
-        $pin = $this->normalizePin($pin);
+        $pin = $this->canonicalPin($pin);
         if ($pin === null) {
             return '';
         }
@@ -339,7 +363,7 @@ class AdmsDeviceCommandService
         }
 
         return (bool) preg_match(
-            '/^DATA UPDATE USERINFO PIN=\d{1,9}\tName=[^\t]{1,24}\tPri=0\tPasswd=\tCard=\tGrp=1\tTZ=0000000100000000$/',
+            '/^DATA UPDATE USERINFO PIN=[A-Za-z0-9]{1,20}\tName=[^\t]{1,24}\tPri=0\tPasswd=\tCard=\tGrp=1\tTZ=0000000100000000$/',
             $body
         );
     }
@@ -351,7 +375,7 @@ class AdmsDeviceCommandService
     {
         $pins = [];
         foreach (preg_split('/\r\n|\n|\r/', $body) ?: [] as $line) {
-            if (preg_match('/\bPIN=(\d{1,9})\b/', $line, $matches)) {
+            if (preg_match('/\bPIN=([A-Za-z0-9][A-Za-z0-9-]{0,19})\b/', $line, $matches)) {
                 $pins[] = $matches[1];
             }
         }
@@ -369,6 +393,19 @@ class AdmsDeviceCommandService
         $pin = ltrim($pin, '0');
 
         return $pin === '' ? '0' : $pin;
+    }
+
+    public function canonicalPin(string $pin): ?string
+    {
+        $pin = trim($pin);
+        $numeric = $this->normalizePin($pin);
+        if ($numeric !== null) {
+            return $numeric;
+        }
+
+        $pin = str_replace('-', '', $pin);
+
+        return preg_match('/^[A-Za-z0-9]{1,20}$/', $pin) ? $pin : null;
     }
 
     /**
@@ -501,7 +538,7 @@ class AdmsDeviceCommandService
 
     private function rememberPin(AttendanceDevice $device, string $pin): void
     {
-        $pin = $this->normalizePin($pin);
+        $pin = $this->canonicalPin($pin);
         if ($pin === null) {
             return;
         }
@@ -517,7 +554,7 @@ class AdmsDeviceCommandService
 
     private function pinIsKnown(AttendanceDevice $device, string $pin): bool
     {
-        $pin = $this->normalizePin($pin);
+        $pin = $this->canonicalPin($pin);
         if ($pin === null) {
             return false;
         }
