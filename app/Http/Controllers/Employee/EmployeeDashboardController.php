@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\GuardShiftSetting;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
@@ -20,7 +21,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
-use App\Support\ProjectPdf;
 use Mpdf\Mpdf;
 
 class EmployeeDashboardController extends Controller
@@ -422,9 +422,9 @@ class EmployeeDashboardController extends Controller
                 'auto_remarks' => null,
             ];
 
-            // Check for movements on this specific date (start day only — never next day)
+            // Check for movements covering this specific date
             $movementsOnDate = $movements->filter(function ($movement) use ($date) {
-                return Carbon::parse($movement->from_datetime)->format('Y-m-d') === $date;
+                return $movement->coversAttendanceDate($date);
             });
 
             // Check for leave on this date (Carbon-safe + respect `days` vs end_date)
@@ -447,6 +447,15 @@ class EmployeeDashboardController extends Controller
                 $hasValidAttendance,
                 is_string($attendanceRowStatus) ? $attendanceRowStatus : null
             );
+
+            $guardStatus = GuardShiftSetting::punchedShiftStatus(
+                $existingAttendance?->shift_type,
+                $hasValidAttendance,
+                is_string($attendanceRowStatus) ? $attendanceRowStatus : null
+            );
+            if ($guardStatus !== null) {
+                $status = $guardStatus;
+            }
 
             // If there are movements on this date, add movement information
             if ($movementsOnDate->count() > 0) {

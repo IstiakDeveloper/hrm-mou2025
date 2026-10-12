@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
 
 class ZktecoAttendanceIngestService
 {
+    public function __construct(private readonly GuardShiftService $guardShifts) {}
+
     /**
      * Save one device punch using the same check-in / check-out rules as the local agent.
      */
@@ -80,6 +82,7 @@ class ZktecoAttendanceIngestService
 
             if ($pin === '' || $timestamp === '') {
                 $skipped++;
+
                 continue;
             }
 
@@ -192,9 +195,13 @@ class ZktecoAttendanceIngestService
     private function saveAttendanceRecord(Employee $employee, AttendanceDevice $device, string $date, string $time): bool
     {
         return DB::transaction(function () use ($employee, $device, $date, $time) {
+            if ($this->guardShifts->applyDevicePunch($employee, $device, $date, $time)) {
+                return true;
+            }
+
             if (AttendanceSetting::isWeekendForEmployee($date, (int) $employee->id)) {
                 $weekendRow = Attendance::where('employee_id', $employee->id)
-                    ->where('date', $date)
+                    ->whereDate('date', $date)
                     ->first();
 
                 if (! $weekendRow) {
@@ -213,7 +220,7 @@ class ZktecoAttendanceIngestService
             }
 
             $attendance = Attendance::where('employee_id', $employee->id)
-                ->where('date', $date)
+                ->whereDate('date', $date)
                 ->first();
 
             $isOnMovement = $this->isEmployeeOnMovement($employee->id, $date);

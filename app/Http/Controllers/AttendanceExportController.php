@@ -2,22 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
-use App\Support\ProjectPdf;
-use App\Models\Branch;
-use App\Models\Holiday;
-use App\Models\Employee;
-use App\Models\Department;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
+use App\Models\Branch;
+use App\Models\Department;
+use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\LeaveApplication;
+use App\Services\OrganogramAccessService;
+use App\Support\HeadOfficeOrganogram;
 use App\Support\MonthlyAttendanceCalculator;
 use App\Support\PayrollReportPrintPdf;
-use Mpdf\Mpdf;
-use App\Support\HeadOfficeOrganogram;
-use App\Services\OrganogramAccessService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use App\Models\AttendanceSetting;
 use Illuminate\Support\Facades\Auth;
+use Mpdf\Mpdf;
 
 class AttendanceExportController extends Controller
 {
@@ -35,7 +34,7 @@ class AttendanceExportController extends Controller
         $user = Auth::user();
 
         try {
-            $month = $request->month ? Carbon::parse($request->month . '-01') : Carbon::today()->startOfMonth();
+            $month = $request->month ? Carbon::parse($request->month.'-01') : Carbon::today()->startOfMonth();
             $startDate = $month->copy()->startOfMonth();
             $endDate = $month->copy()->endOfMonth();
             $daysInMonth = $month->daysInMonth;
@@ -112,6 +111,7 @@ class AttendanceExportController extends Controller
                     $applicableBranches = json_decode($holiday->applicable_branches ?? '[]', true) ?? [];
                     if (empty($applicableBranches)) {
                         $holidayApplicable['*'][$dateKey] = true;
+
                         continue;
                     }
                     foreach ($applicableBranches as $bid) {
@@ -125,10 +125,11 @@ class AttendanceExportController extends Controller
                 ->mapWithKeys(function ($setting) {
                     $raw = $setting->weekend_days ?? [];
                     $weekendDays = is_array($raw) ? $raw : (json_decode($raw ?? '[]', true) ?: []);
+
                     return [
                         (int) $setting->branch_id => [
                             'weekend_days' => array_values(array_map('intval', $weekendDays)),
-                        ]
+                        ],
                     ];
                 })->toArray();
 
@@ -140,6 +141,7 @@ class AttendanceExportController extends Controller
                         'status' => $row->status,
                         'check_in' => $row->check_in,
                         'check_out' => $row->check_out,
+                        'shift_type' => $row->shift_type,
                     ];
                 }
             }
@@ -190,7 +192,7 @@ class AttendanceExportController extends Controller
                 $employeesWithSummary->push([
                     'employee' => $employee,
                     'summary' => $summary,
-                    'dailyStatus' => $dailyStatus
+                    'dailyStatus' => $dailyStatus,
                 ]);
             }
 
@@ -214,7 +216,7 @@ class AttendanceExportController extends Controller
             }
 
             // Generate file name
-            $fileName = 'monthly_attendance_' . $month->format('Y-m') . '.pdf';
+            $fileName = 'monthly_attendance_'.$month->format('Y-m').'.pdf';
 
             // Render view to HTML
             $html = view('exports.attendance-monthly', [
@@ -232,9 +234,10 @@ class AttendanceExportController extends Controller
             // Fast PDF Engine 1: Chrome Browsershot (Super fast, ~1-2 seconds)
             if (PayrollReportPrintPdf::canGenerate()) {
                 $pdfBinary = PayrollReportPrintPdf::generate($html);
+
                 return response()->make($pdfBinary, 200, [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
                     'Cache-Control' => 'private, max-age=0, must-revalidate',
                 ]);
             }
@@ -252,9 +255,10 @@ class AttendanceExportController extends Controller
                     'shrink_tables_to_fit' => 1.2,
                 ]);
                 $mpdf->WriteHTML($html);
+
                 return response()->make($mpdf->Output($fileName, 'S'), 200, [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
                     'Cache-Control' => 'private, max-age=0, must-revalidate',
                 ]);
             }
@@ -274,7 +278,7 @@ class AttendanceExportController extends Controller
 
             // Direct output - important for large PDFs
             header('Content-Type: application/pdf');
-            header('Content-Disposition: attachment; filename="' . $fileName . '"');
+            header('Content-Disposition: attachment; filename="'.$fileName.'"');
             header('Cache-Control: private, max-age=0, must-revalidate');
             header('Pragma: public');
 
@@ -282,9 +286,10 @@ class AttendanceExportController extends Controller
             exit;
 
         } catch (\Exception $e) {
-            \Log::error('PDF Generation Error: ' . $e->getMessage());
+            \Log::error('PDF Generation Error: '.$e->getMessage());
             \Log::error($e->getTraceAsString());
-            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+
+            return back()->with('error', 'Failed to generate PDF: '.$e->getMessage());
         }
     }
 
@@ -323,8 +328,8 @@ class AttendanceExportController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('employees.name_en', 'like', "%{$search}%")
-                  ->orWhere('employees.name_bn', 'like', "%{$search}%")
-                  ->orWhere('employees.employee_id', 'like', "%{$search}%");
+                    ->orWhere('employees.name_bn', 'like', "%{$search}%")
+                    ->orWhere('employees.employee_id', 'like', "%{$search}%");
             });
         }
 

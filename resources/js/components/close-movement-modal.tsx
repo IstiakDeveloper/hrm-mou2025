@@ -51,6 +51,8 @@ export function CloseMovementModal({
     const [resolvingPlace, setResolvingPlace] = useState(false);
     const [closeError, setCloseError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [isMultiDay, setIsMultiDay] = useState(false);
+    const [expectedReturnDate, setExpectedReturnDate] = useState<string | null>(null);
 
     const isPersonalMovement = (movementType || propMovementType || '').toLowerCase() === 'personal';
 
@@ -66,6 +68,8 @@ export function CloseMovementModal({
             setMovementType(propMovementType || null);
             setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
             setStartPlace(propStartPlace || branchFallbackName);
+            setIsMultiDay(false);
+            setExpectedReturnDate(null);
 
             const initialProp = (propStartMeterReading !== undefined && propStartMeterReading !== null && propStartMeterReading !== '')
                 ? Number(propStartMeterReading)
@@ -81,6 +85,12 @@ export function CloseMovementModal({
                         }
                         if (data?.start_place) {
                             setStartPlace(data.start_place);
+                        }
+                        if (data?.is_multi_day) {
+                            setIsMultiDay(Boolean(data.is_multi_day));
+                        }
+                        if (data?.to_datetime) {
+                            setExpectedReturnDate(data.to_datetime);
                         }
 
                         // Prefer last day's closing meter for this employee
@@ -232,6 +242,16 @@ export function CloseMovementModal({
                             </DialogDescription>
                         </div>
                     </div>
+                    {isMultiDay && (
+                        <div className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-xs text-blue-900">
+                            <span className="font-semibold text-blue-700">Multi-Day Movement</span>
+                            {expectedReturnDate && (
+                                <span className="text-[11px] text-blue-800">
+                                    · Scheduled end: {format(new Date(expectedReturnDate), 'MMM d, yyyy h:mm a')}
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </DialogHeader>
 
                 <div className="space-y-3 py-1">

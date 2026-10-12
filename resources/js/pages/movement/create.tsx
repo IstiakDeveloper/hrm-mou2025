@@ -53,6 +53,8 @@ interface CreateMovementProps {
     movementTypes: string[];
     weekendDays?: number[];
     weekendDaysByEmployee?: Record<number, number[]>;
+    multiDayAllowedBranchIds?: number[];
+    isMultiDayAllowedForCurrent?: boolean;
 }
 
 function isWeekendDate(date: Date | undefined, weekendDays: number[]): boolean {
@@ -265,6 +267,8 @@ export default function CreateMovement({
     movementTypes,
     weekendDays = [5, 6],
     weekendDaysByEmployee = {},
+    multiDayAllowedBranchIds = [],
+    isMultiDayAllowedForCurrent = false,
 }: CreateMovementProps) {
     const { flash } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>().props;
 
@@ -277,6 +281,7 @@ export default function CreateMovement({
     const [movementType, setMovementType] = useState(() =>
         isWeekendDate(new Date(), weekendDays.length ? weekendDays : [5, 6]) ? 'personal' : 'official'
     );
+    const [isMultiDay, setIsMultiDay] = useState(false);
     const [fromDate, setFromDate] = useState<Date | undefined>(new Date());
     const [fromTime, setFromTime] = useState<string>(getCurrentTime());
     const [toDate, setToDate] = useState<Date | undefined>(new Date());
@@ -288,9 +293,28 @@ export default function CreateMovement({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
     const [fromDateOpen, setFromDateOpen] = useState(false);
+    const [toDateOpen, setToDateOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
     const [showDropdown, setShowDropdown] = useState(false);
     const [timeSnappedNotice, setTimeSnappedNotice] = useState<string | null>(null);
+
+    const selectedEmployeeObj = useMemo(() => {
+        if (!employeeId) return currentEmployee;
+        return employees.find(e => e.id.toString() === employeeId) || currentEmployee;
+    }, [employeeId, employees, currentEmployee]);
+
+    const isMultiDayAllowed = useMemo(() => {
+        if (!selectedEmployeeObj) return Boolean(isMultiDayAllowedForCurrent);
+        const branchId = (selectedEmployeeObj as any).current_branch_id || (selectedEmployeeObj as any).branch_id;
+        if (!branchId) return Boolean(isMultiDayAllowedForCurrent);
+        return Boolean(multiDayAllowedBranchIds?.includes(Number(branchId)));
+    }, [selectedEmployeeObj, multiDayAllowedBranchIds, isMultiDayAllowedForCurrent]);
+
+    useEffect(() => {
+        if (!isMultiDayAllowed && isMultiDay) {
+            setIsMultiDay(false);
+        }
+    }, [isMultiDayAllowed, isMultiDay]);
 
     const serverErrorMessages = useMemo(
         () => Object.values(errors).filter((message): message is string => Boolean(message)),
@@ -351,8 +375,9 @@ export default function CreateMovement({
         }
     }, [isWeekendMovement, movementType]);
 
-    // Background calculation for return time (same calendar day only)
+    // Background calculation for return time (same calendar day only when not multi-day)
     useEffect(() => {
+        if (isMultiDay) return;
         if (!fromDate || !fromTime) return;
 
         const hm = parseHourMinute24(fromTime);
@@ -368,7 +393,7 @@ export default function CreateMovement({
 
         setToDate(new Date(fromDate));
         setToTime(`${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`);
-    }, [fromDate, fromTime, durationHours]);
+    }, [fromDate, fromTime, durationHours, isMultiDay]);
 
     const getFromDateTime = () => {
         if (!fromDate || !fromTime) return null;
@@ -395,6 +420,10 @@ export default function CreateMovement({
         if (!movementType) newErrors.movement_type = 'Movement type is required';
         if (!fromDate) newErrors.from_date = 'From date is required';
         if (!fromTime) newErrors.from_time = 'From time is required';
+        if (isMultiDay) {
+            if (!toDate) newErrors.to_date = 'Expected return date is required';
+            if (!toTime) newErrors.to_time = 'Expected return time is required';
+        }
         if (!purpose.trim()) newErrors.purpose = 'Purpose is required';
         if (!destination.trim()) newErrors.destination = 'Destination is required';
 
@@ -406,14 +435,16 @@ export default function CreateMovement({
         let fromDateTime = getFromDateTime();
         if (!fromDateTime) return { fromDateTime: null, toDateTime: null };
 
-        const now = new Date();
-        const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-        if (fromDateTime < fiveMinutesAgo) {
-            const durationMs = durationHours * 60 * 60 * 1000;
-            fromDateTime = now;
-            const toDateTime = new Date(fromDateTime.getTime() + durationMs);
-            setTimeSnappedNotice('Start time was updated to the current time because the form was open for a while.');
-            return { fromDateTime, toDateTime };
+        if (!isMultiDay) {
+            const now = new Date();
+            const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+            if (fromDateTime < fiveMinutesAgo) {
+                const durationMs = durationHours * 60 * 60 * 1000;
+                fromDateTime = now;
+                const toDateTime = new Date(fromDateTime.getTime() + durationMs);
+                setTimeSnappedNotice('Start time was updated to the current time because the form was open for a while.');
+                return { fromDateTime, toDateTime };
+            }
         }
 
         return { fromDateTime, toDateTime: getToDateTime() };
@@ -452,23 +483,26 @@ export default function CreateMovement({
             return;
         }
 
-        const sameDay =
-            fromDateTime.getFullYear() === toDateTime.getFullYear() &&
-            fromDateTime.getMonth() === toDateTime.getMonth() &&
-            fromDateTime.getDate() === toDateTime.getDate();
-        if (!sameDay) {
-            setErrors((prev) => ({
-                ...prev,
-                to_datetime: 'Movement is allowed for one day only. Expected return must be on the same date.',
-            }));
-            setSubmitting(false);
-            setActiveTab('details');
-            return;
+        if (!isMultiDay) {
+            const sameDay =
+                fromDateTime.getFullYear() === toDateTime.getFullYear() &&
+                fromDateTime.getMonth() === toDateTime.getMonth() &&
+                fromDateTime.getDate() === toDateTime.getDate();
+            if (!sameDay) {
+                setErrors((prev) => ({
+                    ...prev,
+                    to_datetime: 'Movement is allowed for one day only. Expected return must be on the same date.',
+                }));
+                setSubmitting(false);
+                setActiveTab('details');
+                return;
+            }
         }
 
         router.post(route('movements.store'), {
             employee_id: isAdmin ? employeeId : undefined,
             movement_type: isWeekendMovement ? 'personal' : movementType,
+            is_multi_day: isMultiDay,
             from_datetime: formatISO(fromDateTime),
             to_datetime: formatISO(toDateTime),
             purpose,
@@ -648,9 +682,72 @@ export default function CreateMovement({
                                                 )}
                                             </div>
 
+                                            {/* Movement Duration Selector (Head Office & Allowed Branches) */}
+                                            {isMultiDayAllowed && (
+                                                <div className="space-y-1.5 p-3 rounded-xl border border-slate-200/90 bg-slate-50/40">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-xs font-semibold text-slate-700">
+                                                            Movement Duration (মুভমেন্টের সময়কাল)
+                                                        </Label>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={cn(
+                                                                "text-[10px] font-semibold",
+                                                                isMultiDay
+                                                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                                    : "bg-blue-50 text-blue-700 border-blue-200"
+                                                            )}
+                                                        >
+                                                            {isMultiDay ? 'Multiple Days (একাধিক দিন)' : 'Single Day (একদিনের)'}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 pt-0.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsMultiDay(false)}
+                                                            className={cn(
+                                                                "py-2 px-3 rounded-lg border text-center transition-all text-xs font-semibold",
+                                                                !isMultiDay
+                                                                    ? "border-blue-600 bg-blue-50/60 text-blue-700 shadow-xs"
+                                                                    : "border-slate-200 text-slate-600 hover:bg-slate-100/60"
+                                                            )}
+                                                        >
+                                                            Single Day (ডিফল্ট)
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsMultiDay(true);
+                                                                if (toDate && fromDate && isBefore(toDate, fromDate)) {
+                                                                    const next = new Date(fromDate);
+                                                                    next.setDate(next.getDate() + 1);
+                                                                    setToDate(next);
+                                                                }
+                                                                if (!toTime) setToTime('18:00');
+                                                            }}
+                                                            className={cn(
+                                                                "py-2 px-3 rounded-lg border text-center transition-all text-xs font-semibold",
+                                                                isMultiDay
+                                                                    ? "border-emerald-600 bg-emerald-50/70 text-emerald-800 shadow-xs"
+                                                                    : "border-slate-200 text-slate-600 hover:bg-slate-100/60"
+                                                            )}
+                                                        >
+                                                            Multiple Day (একাধিক দিন)
+                                                        </button>
+                                                    </div>
+                                                    {isMultiDay && (
+                                                        <p className="text-[11px] text-emerald-800 bg-emerald-50/90 border border-emerald-200 rounded-md px-2.5 py-1.5 mt-1 leading-relaxed">
+                                                            মুভমেন্টের প্রতিটি দিন স্বয়ংক্রিয়ভাবে টাইম ছাড়া 'On Duty' প্রেজেন্ট গণনা হবে। তবে উল্লেখিত শেষ তারিখ রাত ১১:৫৯ এর মধ্যে মুভমেন্ট ক্লোজ না করলে পরদিন থেকে পেনাল্টি ও জরিমানা প্রযোজ্য হবে।
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div className="space-y-1">
-                                                    <Label className="text-xs font-semibold text-slate-700">From Date</Label>
+                                                    <Label className="text-xs font-semibold text-slate-700">
+                                                        {isMultiDay ? 'Start Date (শুরুর তারিখ)' : 'From Date'}
+                                                    </Label>
                                                     <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
                                                         <PopoverTrigger asChild>
                                                             <Button
@@ -671,6 +768,11 @@ export default function CreateMovement({
                                                                 onSelect={(date: Date | undefined) => {
                                                                     setFromDate(date);
                                                                     setFromDateOpen(false);
+                                                                    if (isMultiDay && toDate && date && isBefore(toDate, date)) {
+                                                                        const next = new Date(date);
+                                                                        next.setDate(next.getDate() + 1);
+                                                                        setToDate(next);
+                                                                    }
                                                                 }}
                                                                 disabledDates={(date: Date) =>
                                                                     isBefore(startOfDay(date), startOfDay(new Date()))
@@ -683,10 +785,59 @@ export default function CreateMovement({
                                                 <TimePicker
                                                     value={fromTime}
                                                     onChange={setFromTime}
-                                                    label="From Time"
+                                                    label={isMultiDay ? 'Start Time (শুরুর সময়)' : 'From Time'}
                                                     error={errors.from_time}
                                                 />
                                             </div>
+
+                                            {isMultiDay && (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-xs font-semibold text-slate-700">
+                                                            Expected Close Date (সমাপ্তির তারিখ)
+                                                        </Label>
+                                                        <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "w-full justify-start text-left font-normal h-9 border-slate-200 bg-slate-50/30 hover:border-slate-300 hover:bg-slate-50 transition-all text-xs",
+                                                                        !toDate && "text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                                    {toDate ? format(toDate, 'PPP') : <span>Select close date</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0" align="start">
+                                                                <SafeCalendar
+                                                                    mode="single"
+                                                                    selected={toDate}
+                                                                    onSelect={(date: Date | undefined) => {
+                                                                        setToDate(date);
+                                                                        setToDateOpen(false);
+                                                                    }}
+                                                                    disabledDates={(date: Date) =>
+                                                                        fromDate
+                                                                            ? isBefore(startOfDay(date), startOfDay(fromDate))
+                                                                            : isBefore(startOfDay(date), startOfDay(new Date()))
+                                                                    }
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                        {errors.to_date && (
+                                                            <p className="text-xs font-medium text-red-500 mt-0.5">{errors.to_date}</p>
+                                                        )}
+                                                    </div>
+
+                                                    <TimePicker
+                                                        value={toTime}
+                                                        onChange={setToTime}
+                                                        label="Expected Close Time (সমাপ্তির সময়)"
+                                                        error={errors.to_time}
+                                                    />
+                                                </div>
+                                            )}
 
                                             {errors.from_datetime && (
                                                 <Alert variant="destructive" className="border-red-200 bg-red-50 text-red-800 p-2.5">
@@ -919,6 +1070,20 @@ export default function CreateMovement({
 
                                     <div className="space-y-1.5 text-xs pt-1 border-t border-slate-100">
                                         <div className="flex justify-between items-center py-0.5">
+                                            <span className="text-slate-400">Duration:</span>
+                                            <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                    "text-[9px] py-0 px-1.5 font-semibold",
+                                                    isMultiDay
+                                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                        : "bg-slate-50 text-slate-700 border-slate-200"
+                                                )}
+                                            >
+                                                {isMultiDay ? 'MULTIPLE DAYS' : 'SINGLE DAY'}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex justify-between items-center py-0.5">
                                             <span className="text-slate-400">Type:</span>
                                             <Badge
                                                 variant="outline"
@@ -939,10 +1104,16 @@ export default function CreateMovement({
                                             </span>
                                         </div>
                                         <div className="flex justify-between items-center py-0.5">
-                                            <span className="text-slate-400">End Time:</span>
-                                            <span className="font-semibold text-emerald-600 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] border border-emerald-100">
-                                                Auto-tracked
-                                            </span>
+                                            <span className="text-slate-400">Expected End:</span>
+                                            {isMultiDay ? (
+                                                <span className="font-semibold text-emerald-700 text-[10px]">
+                                                    {toDate ? format(toDate, 'MMM dd') : ''} @ {toTime ? formatTime12hFromHm(toTime) : '11:59 PM'}
+                                                </span>
+                                            ) : (
+                                                <span className="font-semibold text-emerald-600 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] border border-emerald-100">
+                                                    Auto-tracked (Same day)
+                                                </span>
+                                            )}
                                         </div>
                                         {destination && (
                                             <div className="flex justify-between items-start py-0.5">

@@ -13,6 +13,7 @@ export type SharedActiveMovement = {
     to_datetime: string;
     destination?: string | null;
     status?: string;
+    is_multi_day?: boolean;
 };
 
 type ActiveMovementBannerProps = {
@@ -146,6 +147,14 @@ export default function ActiveMovementBanner({
                 >
                     {typeLabel}
                 </Badge>
+                {movement.is_multi_day && (
+                    <Badge
+                        variant="outline"
+                        className="h-5 border-blue-200 bg-blue-50 text-blue-700 text-[10px] font-semibold"
+                    >
+                        Multi-Day
+                    </Badge>
+                )}
             </div>
 
             <span className="hidden h-4 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
@@ -157,7 +166,18 @@ export default function ActiveMovementBanner({
 
             <div className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-500 sm:inline-flex">
                 <Clock className="h-3.5 w-3.5 text-slate-400" />
-                <span>Start: <strong className="font-semibold text-slate-800">{format(new Date(movement.from_datetime), 'h:mm a')}</strong></span>
+                <span>
+                    {movement.is_multi_day ? (
+                        <>
+                            Start: <strong className="font-semibold text-slate-800">{format(new Date(movement.from_datetime), 'MMM d, h:mm a')}</strong>
+                            {' · '}Close: <strong className="font-semibold text-slate-800">{format(new Date(movement.to_datetime), 'MMM d, h:mm a')}</strong>
+                        </>
+                    ) : (
+                        <>
+                            Start: <strong className="font-semibold text-slate-800">{format(new Date(movement.from_datetime), 'h:mm a')}</strong>
+                        </>
+                    )}
+                </span>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2">

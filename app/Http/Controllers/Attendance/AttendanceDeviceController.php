@@ -88,12 +88,11 @@ class AttendanceDeviceController extends Controller
             'branch_id' => 'required|exists:branches,id',
             'status' => 'required|in:active,inactive,maintenance',
             'adms_enabled' => 'sometimes|boolean',
-            'adms_attlog_keep_days' => 'sometimes|integer|in:3,7',
             'agent_sync_enabled' => 'sometimes|boolean',
         ]);
 
         $data['adms_enabled'] = $request->boolean('adms_enabled');
-        $data['adms_attlog_keep_days'] = (int) ($request->input('adms_attlog_keep_days', 7));
+        $data['adms_attlog_keep_days'] = \App\Models\ZktecoSyncSetting::attlogKeepDays();
         $data['agent_sync_enabled'] = $request->has('agent_sync_enabled')
             ? $request->boolean('agent_sync_enabled')
             : true;
@@ -130,7 +129,7 @@ class AttendanceDeviceController extends Controller
         ]);
 
         $data = $request->validate([
-            'device_id' => 'required|string|max:50|unique:attendance_devices,device_id,' . $device->getKey(),
+            'device_id' => 'required|string|max:50|unique:attendance_devices,device_id,'.$device->getKey(),
             'name' => 'required|string|max:255',
             'ip_address' => 'required|ip',
             'port' => 'required|integer|min:1|max:65535',
@@ -143,12 +142,11 @@ class AttendanceDeviceController extends Controller
             'branch_id' => 'required|exists:branches,id',
             'status' => 'required|in:active,inactive,maintenance',
             'adms_enabled' => 'sometimes|boolean',
-            'adms_attlog_keep_days' => 'sometimes|integer|in:3,7',
             'agent_sync_enabled' => 'sometimes|boolean',
         ]);
 
         $data['adms_enabled'] = $request->boolean('adms_enabled');
-        $data['adms_attlog_keep_days'] = (int) ($request->input('adms_attlog_keep_days', 7));
+        unset($data['adms_attlog_keep_days']);
         $data['agent_sync_enabled'] = $request->boolean('agent_sync_enabled');
 
         $device->update($data);
@@ -256,7 +254,7 @@ class AttendanceDeviceController extends Controller
         $employees = $employeesQuery->paginate(15);
 
         return Inertia::render('attendance/devices/biometric-ids', [
-            'employees' => $employees
+            'employees' => $employees,
         ]);
     }
 
@@ -266,7 +264,7 @@ class AttendanceDeviceController extends Controller
     public function updateBiometricId(Request $request, Employee $employee)
     {
         $request->validate([
-            'biometric_id' => 'required|string|max:50|unique:employees,biometric_id,' . $employee->id,
+            'biometric_id' => 'required|string|max:50|unique:employees,biometric_id,'.$employee->id,
         ]);
 
         $employee->biometric_id = $request->biometric_id;
@@ -286,7 +284,7 @@ class AttendanceDeviceController extends Controller
             ->get();
 
         return Inertia::render('attendance/devices/sync-report', [
-            'devices' => $devices
+            'devices' => $devices,
         ]);
     }
 }

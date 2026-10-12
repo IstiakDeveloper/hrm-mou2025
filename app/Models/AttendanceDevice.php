@@ -100,9 +100,7 @@ class AttendanceDevice extends Model
 
     public function attlogKeepDays(): int
     {
-        $days = (int) ($this->adms_attlog_keep_days ?? 7);
-
-        return in_array($days, [3, 7], true) ? $days : 7;
+        return ZktecoSyncSetting::attlogKeepDays();
     }
 
     /**

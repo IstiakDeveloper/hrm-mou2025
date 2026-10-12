@@ -937,6 +937,11 @@ export default function MovementIndex({
                                                 </div>
                                             </div>
                                             <div className="shrink-0 flex items-center gap-1">
+                                                {movement.is_multi_day && (
+                                                    <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] font-semibold whitespace-nowrap">
+                                                        Multi-Day
+                                                    </Badge>
+                                                )}
                                                 {getMovementTypeBadge(movement.movement_type)}
                                                 {getStatusBadge(movement.status)}
                                             </div>
@@ -1125,7 +1130,16 @@ export default function MovementIndex({
                                                 <TableCell className="whitespace-nowrap text-[13px] text-slate-600">
                                                     {movement.employee.branch?.name || '—'}
                                                 </TableCell>
-                                                <TableCell>{getMovementTypeBadge(movement.movement_type)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {getMovementTypeBadge(movement.movement_type)}
+                                                        {movement.is_multi_day && (
+                                                            <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-semibold whitespace-nowrap">
+                                                                Multi-Day
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="whitespace-nowrap text-[13px] text-slate-600">
                                                     {format(new Date(movement.from_datetime), 'MMM dd, yyyy HH:mm')}
                                                 </TableCell>

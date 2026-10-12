@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Designation;
-use App\Models\Employee;
 
 class Branch extends Model
 {
@@ -28,6 +26,7 @@ class Branch extends Model
         'is_active',
         'login_pin',
         'branch_user_id',
+        'allow_multi_day_movement',
         'geofence_latitude',
         'geofence_longitude',
         'geofence_radius_meters',
@@ -41,6 +40,7 @@ class Branch extends Model
 
     protected $casts = [
         'is_head_office' => 'boolean',
+        'allow_multi_day_movement' => 'boolean',
         'is_active' => 'boolean',
         'geofence_latitude' => 'float',
         'geofence_longitude' => 'float',

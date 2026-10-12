@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
 
 class Movement extends Model
 {
@@ -13,6 +13,7 @@ class Movement extends Model
     protected $fillable = [
         'employee_id',
         'movement_type',
+        'is_multi_day',
         'from_datetime',
         'to_datetime',
         'purpose',
@@ -27,6 +28,7 @@ class Movement extends Model
     ];
 
     protected $casts = [
+        'is_multi_day' => 'boolean',
         'from_datetime' => 'datetime',
         'to_datetime' => 'datetime',
         'actual_return_datetime' => 'datetime',
@@ -90,7 +92,7 @@ class Movement extends Model
     // প্ল্যান করা সময়ের চেয়ে বেশি নেওয়া হয়েছে কিনা
     public function isOverdue()
     {
-        if (!$this->actual_return_datetime) {
+        if (! $this->actual_return_datetime) {
             return false;
         }
 
@@ -100,16 +102,16 @@ class Movement extends Model
     // সময়কাল যাচাই - কতক্ষণ আগে/পরে ফিরেছে
     public function getTimeDifferenceAttribute()
     {
-        if (!$this->actual_return_datetime) {
+        if (! $this->actual_return_datetime) {
             return null;
         }
 
         $diffMinutes = $this->to_datetime->diffInMinutes($this->actual_return_datetime, false);
 
         if ($diffMinutes > 0) {
-            return $diffMinutes . ' minutes later than planned';
+            return $diffMinutes.' minutes later than planned';
         } elseif ($diffMinutes < 0) {
-            return abs($diffMinutes) . ' minutes earlier than planned';
+            return abs($diffMinutes).' minutes earlier than planned';
         } else {
             return 'exactly on time';
         }
@@ -117,22 +119,45 @@ class Movement extends Model
 
     /**
      * Calendar dates this movement may affect attendance.
-     * Movements are single-day only — always just the start date.
+     * Single-day returns start date; multi-day returns date range from start to end.
      */
     public function getDatesAttribute()
     {
-        return [$this->from_datetime->copy()->format('Y-m-d')];
+        if (! $this->is_multi_day || ! $this->to_datetime) {
+            return [$this->from_datetime->copy()->format('Y-m-d')];
+        }
+
+        $dates = [];
+        $current = $this->from_datetime->copy()->startOfDay();
+        $end = $this->to_datetime->copy()->startOfDay();
+
+        while ($current->lte($end)) {
+            $dates[] = $current->format('Y-m-d');
+            $current->addDay();
+        }
+
+        return $dates;
     }
 
     /**
-     * Official movements mark attendance only on the start calendar day.
+     * Official movements mark attendance on covered calendar dates.
      */
     public function scopeCoveringAttendanceDate($query, string $ymd)
     {
         return $query
             ->where('movement_type', 'official')
             ->whereIn('status', ['active', 'completed'])
-            ->whereDate('from_datetime', $ymd);
+            ->where(function ($q) use ($ymd) {
+                $q->where(function ($sq) use ($ymd) {
+                    $sq->where(function ($mq) {
+                        $mq->where('is_multi_day', false)->orWhereNull('is_multi_day');
+                    })->whereDate('from_datetime', $ymd);
+                })->orWhere(function ($mq) use ($ymd) {
+                    $mq->where('is_multi_day', true)
+                        ->whereDate('from_datetime', '<=', $ymd)
+                        ->whereDate('to_datetime', '>=', $ymd);
+                });
+            });
     }
 
     /**
@@ -149,8 +174,15 @@ class Movement extends Model
         }
 
         $ymd = $date instanceof Carbon ? $date->toDateString() : Carbon::parse($date)->toDateString();
+        $fromYmd = $this->from_datetime->toDateString();
 
-        return $this->from_datetime->toDateString() === $ymd;
+        if ($this->is_multi_day) {
+            $toYmd = $this->to_datetime ? $this->to_datetime->toDateString() : $fromYmd;
+
+            return $ymd >= $fromYmd && $ymd <= $toYmd;
+        }
+
+        return $fromYmd === $ymd;
     }
 
     // পূর্বের অনুমোদন সম্পর্কিত মেথড গুলি সাপোর্ট হিসেবে রাখা হয়েছে

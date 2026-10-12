@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers\Movement;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
-use App\Mail\NewMovementNotification;
+use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Branch;
@@ -22,11 +21,9 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use App\Support\ProjectPdf;
 use Shuchkin\SimpleXLSXGen;
 
 class MovementController extends Controller
@@ -629,11 +626,15 @@ class MovementController extends Controller
                 ->get(['id', 'employee_id', 'pin', 'name_en', 'name_bn', 'department_id', 'designation_id', 'current_branch_id'])
             : ($employee ? collect([$employee->load(['department:id,name', 'designation:id,name'])]) : collect());
 
+        $multiDayAllowedBranchIds = Branch::where('allow_multi_day_movement', true)->pluck('id')->values()->all();
+
         return Inertia::render('movement/create', [
             'employees' => $employees,
             'currentEmployee' => $employee,
             'isAdmin' => $canSelectEmployee,
             'movementTypes' => ['official', 'personal'],
+            'multiDayAllowedBranchIds' => $multiDayAllowedBranchIds,
+            'isMultiDayAllowedForCurrent' => $employee ? AttendanceSetting::isMultiDayAllowedForBranch($employee->current_branch_id) : false,
             ...$this->weekendDaysPayload($employee, $employees),
         ]);
     }
@@ -647,13 +648,14 @@ class MovementController extends Controller
         $employee = $user->employee;
 
         $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
+        $isMultiDay = $request->boolean('is_multi_day');
 
         // Preprocess request: if to_datetime is missing, default it to from_datetime + 8 hours
-        if ($request->filled('from_datetime') && !$request->filled('to_datetime')) {
+        if ($request->filled('from_datetime') && ! $request->filled('to_datetime')) {
             try {
                 $from = \Carbon\Carbon::parse($request->from_datetime);
                 $request->merge([
-                    'to_datetime' => $from->copy()->addHours(8)->toIso8601String()
+                    'to_datetime' => $from->copy()->addHours(8)->toIso8601String(),
                 ]);
             } catch (\Exception $e) {
                 // Let validation catch invalid date formatting
@@ -664,41 +666,13 @@ class MovementController extends Controller
         $request->validate([
             'employee_id' => $canSelectEmployee ? 'required|exists:employees,id' : 'nullable',
             'movement_type' => 'required|in:official,personal',
+            'is_multi_day' => 'sometimes|boolean',
             'from_datetime' => 'required|date',
             'to_datetime' => 'required|date|after:from_datetime',
             'purpose' => 'required|string|max:500',
             'destination' => 'required|string|max:255',
             'remarks' => 'nullable|string|max:1000',
         ]);
-
-        // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
-        $from = $this->parseMovementDateTimeToApp($request->from_datetime);
-        $to = $this->parseMovementDateTimeToApp($request->to_datetime);
-        $now = Carbon::now(config('app.timezone'));
-
-        // Same-day form delay: if the user picked "now" but submitted a few minutes later, snap start to current time.
-        if ($from->lt($now) && $from->isSameDay($now)) {
-            $from = $now->copy();
-            if ($to->lte($from)) {
-                $to = $from->copy()->addHours(8);
-            }
-        }
-
-        // Movements are single calendar day only — clamp expected return to end of start day
-        if (! $to->isSameDay($from)) {
-            $to = $from->copy()->endOfDay()->seconds(0);
-        }
-        if ($to->lte($from)) {
-            return redirect()->back()
-                ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
-                ->withInput();
-        }
-
-        if ($from->lt($now->copy()->subMinutes(5))) {
-            return redirect()->back()
-                ->withErrors(['from_datetime' => 'Movement start (from date & time) cannot be more than 5 minutes in the past.'])
-                ->withInput();
-        }
 
         // Determine which employee ID to use
         if ($canSelectEmployee) {
@@ -723,6 +697,53 @@ class MovementController extends Controller
             ? $employee
             : Employee::findOrFail($employeeId);
 
+        // Branch check for multi-day movement
+        if ($isMultiDay) {
+            $branchId = $targetEmployee->current_branch_id ?? $targetEmployee->branch_id;
+            if (! AttendanceSetting::isMultiDayAllowedForBranch($branchId)) {
+                return redirect()->back()
+                    ->withErrors(['is_multi_day' => 'Multiple-day movement is not enabled for this branch. Only Head Office and authorized branches are permitted.'])
+                    ->withInput();
+            }
+        }
+
+        // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
+        $from = $this->parseMovementDateTimeToApp($request->from_datetime);
+        $to = $this->parseMovementDateTimeToApp($request->to_datetime);
+        $now = Carbon::now(config('app.timezone'));
+
+        // Same-day form delay: if the user picked "now" but submitted a few minutes later, snap start to current time.
+        if ($from->lt($now) && $from->isSameDay($now)) {
+            $from = $now->copy();
+            if ($to->lte($from)) {
+                $to = $from->copy()->addHours(8);
+            }
+        }
+
+        if (! $isMultiDay) {
+            // Movements are single calendar day only — clamp expected return to end of start day
+            if (! $to->isSameDay($from)) {
+                $to = $from->copy()->endOfDay()->seconds(0);
+            }
+            if ($to->lte($from)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
+                    ->withInput();
+            }
+        } else {
+            if ($to->lte($from)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after the start date and time.'])
+                    ->withInput();
+            }
+        }
+
+        if ($from->lt($now->copy()->subMinutes(5))) {
+            return redirect()->back()
+                ->withErrors(['from_datetime' => 'Movement start (from date & time) cannot be more than 5 minutes in the past.'])
+                ->withInput();
+        }
+
         $movementType = $this->movementTypeForDate((string) $request->movement_type, $from, $employeeId);
 
         $activeMovement = $this->getActiveMovementForEmployee($employeeId);
@@ -734,6 +755,7 @@ class MovementController extends Controller
         $movementData = [
             'employee_id' => $employeeId,
             'movement_type' => $movementType,
+            'is_multi_day' => $isMultiDay,
             'from_datetime' => $from->format('Y-m-d H:i:s'),
             'to_datetime' => $to->format('Y-m-d H:i:s'),
             'purpose' => $request->purpose,
@@ -767,11 +789,17 @@ class MovementController extends Controller
      * Update attendance records for a movement
      */
     /**
-     * Update attendance for a movement — start calendar day only (on_duty + movement_id).
-     * Never invent next-day attendance while the movement stays open.
+     * Update attendance for a movement — start calendar day only for single-day (on_duty + movement_id),
+     * or across all covered calendar dates without punch times for multi-day official movements.
      */
-    private function updateAttendanceForMovement(Movement $movement)
+    public function updateAttendanceForMovement(Movement $movement)
     {
+        if ($movement->is_multi_day) {
+            $this->updateAttendanceForMultiDayMovement($movement);
+
+            return;
+        }
+
         $movementStart = Carbon::parse($movement->from_datetime);
         $dateStr = $movementStart->format('Y-m-d');
 
@@ -812,6 +840,58 @@ class MovementController extends Controller
         }
 
         $attendance->save();
+    }
+
+    /**
+     * Pre-create daily attendance for multi-day official movement across all covered dates.
+     * Status: on_duty, No punch times (time chara), Movement remarks populated.
+     */
+    private function updateAttendanceForMultiDayMovement(Movement $movement): void
+    {
+        $start = Carbon::parse($movement->from_datetime)->startOfDay();
+        $end = Carbon::parse($movement->to_datetime)->startOfDay();
+        $employeeId = (int) $movement->employee_id;
+
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            $dateStr = $current->format('Y-m-d');
+
+            // Skip configured weekend days
+            if (AttendanceSetting::isWeekendForEmployee($current, $employeeId)) {
+                $current->addDay();
+
+                continue;
+            }
+
+            $attendance = Attendance::where('employee_id', $employeeId)
+                ->where('date', $dateStr)
+                ->first();
+
+            if (! $attendance) {
+                $attendance = new Attendance;
+                $attendance->employee_id = $employeeId;
+                $attendance->date = $dateStr;
+                $attendance->status = 'on_duty';
+            } elseif ($attendance->status === 'absent' || empty($attendance->status)) {
+                $attendance->status = 'on_duty';
+            }
+
+            // Time chara (no check_in, no check_out) — preserve existing biometric punch if already punched
+            $attendance->movement_id = $movement->id;
+
+            $remarks = 'On official movement: '.$movement->purpose;
+            if ($attendance->remarks) {
+                if (strpos($attendance->remarks, $remarks) === false) {
+                    $attendance->remarks = $attendance->remarks.' | '.$remarks;
+                }
+            } else {
+                $attendance->remarks = $remarks;
+            }
+
+            $attendance->save();
+
+            $current->addDay();
+        }
     }
 
     /**
@@ -1008,6 +1088,7 @@ class MovementController extends Controller
             'movement_type' => $movement->movement_type,
             'from_datetime' => $movement->from_datetime?->toIso8601String(),
             'to_datetime' => $movement->to_datetime?->toIso8601String(),
+            'is_multi_day' => (bool) $movement->is_multi_day,
             'purpose' => $movement->purpose,
             'destination' => $movement->destination,
             'branch_name' => $movement->employee?->branch?->name ?: '',
@@ -1245,14 +1326,24 @@ class MovementController extends Controller
         $fromParsed = $this->parseMovementDateTimeToApp($request->from_datetime);
         $toParsed = $this->parseMovementDateTimeToApp($request->to_datetime);
 
-        // Movements are single calendar day only
-        if (! $toParsed->isSameDay($fromParsed)) {
-            $toParsed = $fromParsed->copy()->endOfDay()->seconds(0);
-        }
-        if ($toParsed->lte($fromParsed)) {
-            return redirect()->back()
-                ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
-                ->withInput();
+        $isMultiDay = $request->has('is_multi_day') ? $request->boolean('is_multi_day') : (bool) $movement->is_multi_day;
+
+        if (! $isMultiDay) {
+            // Movements are single calendar day only
+            if (! $toParsed->isSameDay($fromParsed)) {
+                $toParsed = $fromParsed->copy()->endOfDay()->seconds(0);
+            }
+            if ($toParsed->lte($fromParsed)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
+                    ->withInput();
+            }
+        } else {
+            if ($toParsed->lte($fromParsed)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after the start date and time.'])
+                    ->withInput();
+            }
         }
 
         $employeeIdForWeekend = $user->hasPermission('movements.edit') && $request->filled('employee_id')
@@ -1267,6 +1358,7 @@ class MovementController extends Controller
         );
         $movement->from_datetime = $fromParsed->format('Y-m-d H:i:s');
         $movement->to_datetime = $toParsed->format('Y-m-d H:i:s');
+        $movement->is_multi_day = $isMultiDay;
         $movement->purpose = $request->purpose;
         $movement->destination = $request->destination;
         $movement->remarks = $request->remarks;
@@ -1702,13 +1794,40 @@ class MovementController extends Controller
      */
     private function updateAttendanceForCompletion(Movement $movement, $returnDateTime)
     {
-        // Single-day only: never invent next-day attendance when closed late
         $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
         $movementStart = Carbon::parse($movement->from_datetime);
         $return = $returnDateTime instanceof Carbon ? $returnDateTime : Carbon::parse($returnDateTime);
         $workStartNormalized = Carbon::parse($workTimes['work_start_time'])->format('H:i:s');
         $startDate = $movementStart->format('Y-m-d');
+        $returnDate = $return->format('Y-m-d');
 
+        if ($movement->is_multi_day) {
+            // For multi-day movements, update completion remarks on the return date's attendance record
+            if (! AttendanceSetting::isWeekendForEmployee($return, (int) $movement->employee_id)) {
+                $returnAttendance = Attendance::where('employee_id', $movement->employee_id)
+                    ->where('date', $returnDate)
+                    ->first();
+
+                if ($returnAttendance) {
+                    $returnInfo = 'Movement completed: '.$return->format('Y-m-d H:i:s');
+                    if ($returnAttendance->remarks) {
+                        if (strpos($returnAttendance->remarks, 'Movement completed:') === false) {
+                            $returnAttendance->remarks .= ' | '.$returnInfo;
+                        }
+                    } else {
+                        $returnAttendance->remarks = 'On official movement: '.$movement->purpose.' | '.$returnInfo;
+                    }
+                    $returnAttendance->save();
+                }
+            }
+
+            // Clean up any future pre-created days beyond actual return date (if returned early)
+            $this->clearMovementAttendanceSpillover($movement, $workStartNormalized, $return);
+
+            return;
+        }
+
+        // Single-day only: never invent next-day attendance when closed late
         // Never mark attendance on configured weekend days
         if (! AttendanceSetting::isWeekendForEmployee($movementStart, (int) $movement->employee_id)) {
             $attendance = Attendance::where('employee_id', $movement->employee_id)
@@ -1753,17 +1872,31 @@ class MovementController extends Controller
     }
 
     /**
-     * Remove false attendance days linked to a movement that are not the start day.
-     * (Legacy multi-day spillover / late close must not keep next-day present/on_duty.)
+     * Remove false attendance days linked to a movement that are outside the authorized dates.
+     * (Single-day: not start day. Multi-day: beyond actual return date if returned early.)
      */
-    private function clearMovementAttendanceSpillover(Movement $movement, string $workStartNormalized): void
+    public function clearMovementAttendanceSpillover(Movement $movement, string $workStartNormalized = '09:00:00', ?Carbon $return = null): void
     {
         $startDate = Carbon::parse($movement->from_datetime)->toDateString();
 
-        $spillover = Attendance::where('employee_id', $movement->employee_id)
-            ->where('movement_id', $movement->id)
-            ->whereDate('date', '!=', $startDate)
-            ->get();
+        if ($movement->is_multi_day) {
+            $effectiveEndDate = $return
+                ? $return->toDateString()
+                : Carbon::parse($movement->to_datetime)->toDateString();
+
+            $spillover = Attendance::where('employee_id', $movement->employee_id)
+                ->where('movement_id', $movement->id)
+                ->where(function ($q) use ($startDate, $effectiveEndDate) {
+                    $q->whereDate('date', '<', $startDate)
+                        ->orWhereDate('date', '>', $effectiveEndDate);
+                })
+                ->get();
+        } else {
+            $spillover = Attendance::where('employee_id', $movement->employee_id)
+                ->where('movement_id', $movement->id)
+                ->whereDate('date', '!=', $startDate)
+                ->get();
+        }
 
         foreach ($spillover as $attendance) {
             $checkIn = $attendance->check_in

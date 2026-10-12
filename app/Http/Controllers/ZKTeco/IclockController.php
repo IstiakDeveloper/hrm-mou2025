@@ -4,6 +4,8 @@ namespace App\Http\Controllers\ZKTeco;
 
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceDevice;
+use App\Models\ZktecoSyncSetting;
+use App\Services\AdmsDeviceCommandService;
 use App\Services\ZktecoAttendanceIngestService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,7 +16,8 @@ use Illuminate\Support\Facades\Schema;
 class IclockController extends Controller
 {
     public function __construct(
-        private readonly ZktecoAttendanceIngestService $ingest
+        private readonly ZktecoAttendanceIngestService $ingest,
+        private readonly AdmsDeviceCommandService $deviceCommands,
     ) {}
 
     /**
@@ -42,7 +45,18 @@ class IclockController extends Controller
             return $this->handleAttLog($request, $device, $sn);
         }
 
-        // OPERLOG / ATTPHOTO / other tables: acknowledge so the device does not retry.
+        if ($request->isMethod('post') && in_array($table, ['OPERLOG', 'USERINFO', 'USER'], true)) {
+            if ($device) {
+                $pins = AdmsDeviceCommandService::extractPins((string) $request->getContent());
+                if ($pins !== []) {
+                    $this->deviceCommands->recordPins($device, $pins);
+                }
+            }
+
+            return $this->plain('OK');
+        }
+
+        // ATTPHOTO / other tables: acknowledge so the device does not retry.
         return $this->plain('OK');
     }
 
@@ -53,6 +67,15 @@ class IclockController extends Controller
         $this->touchAdms($device);
 
         if ($device) {
+            $queued = $this->deviceCommands->nextWireCommand($device);
+            if ($queued) {
+                return $this->plain($queued);
+            }
+
+            if ($this->deviceCommands->hasInFlight($device)) {
+                return $this->plain('OK');
+            }
+
             $command = $device->pullPendingAdmsCommand();
             if ($command) {
                 return $this->plain($command);
@@ -79,7 +102,10 @@ class IclockController extends Controller
         }
 
         if ($device) {
-            $device->ackAdmsCommand($id !== '' ? $id : null, $return !== '' ? $return : '0');
+            $handled = $this->deviceCommands->ack($device, $id, $return !== '' ? $return : '0');
+            if (! $handled) {
+                $device->ackAdmsCommand($id !== '' ? $id : null, $return !== '' ? $return : '0');
+            }
         }
 
         return $this->plain('OK');
@@ -193,7 +219,7 @@ class IclockController extends Controller
     private function handshakeBody(string $sn, ?AttendanceDevice $device): string
     {
         $stamp = $device?->adms_attlog_stamp ?: 'None';
-        $keepDays = $device?->attlogKeepDays() ?? 7;
+        $keepDays = ZktecoSyncSetting::attlogKeepDays();
 
         return implode("\n", [
             'GET OPTION FROM: '.$sn,

@@ -11,7 +11,6 @@ class MonthlyAttendanceCalculator
      *
      * @param  iterable  $employees  Collection/array of Employee models (must have id, current_branch_id or branch relation id)
      * @param  Carbon  $month  Any date within the month
-     * @param  int  $daysInMonth
      * @param  array<int, array{weekend_days: array}>  $attendanceSettingsByBranchId
      * @param  array<int, array<int, array{from_datetime:mixed,to_datetime:mixed,actual_return_datetime:mixed,status:mixed}>>  $movementsByEmployeeId
      * @param  array<int, array<string, string>>  $leaveDaysByEmployee  [empId][Y-m-d] => leaveTypeName
@@ -45,7 +44,7 @@ class MonthlyAttendanceCalculator
             $weekendDays = ($branchIdInt > 0 && isset($attendanceSettingsByBranchId[$branchIdInt]))
                 ? ($attendanceSettingsByBranchId[$branchIdInt]['weekend_days'] ?? [])
                 : [];
-            if (!is_array($weekendDays)) {
+            if (! is_array($weekendDays)) {
                 $weekendDays = [];
             }
             $weekendDays = array_values(array_map('intval', $weekendDays));
@@ -82,37 +81,55 @@ class MonthlyAttendanceCalculator
                         'missing_checkout' => false,
                         'leave_type' => null,
                     ];
+
                     continue;
                 }
 
-                $isHoliday = !empty($holidayApplicable['*'][$ymd]) || ($branchId !== '' && !empty($holidayApplicable[$branchId][$ymd]));
-                $isOnLeave = !empty($leaveDaysByEmployee[$empId][$ymd]);
+                $isHoliday = ! empty($holidayApplicable['*'][$ymd]) || ($branchId !== '' && ! empty($holidayApplicable[$branchId][$ymd]));
+                $isOnLeave = ! empty($leaveDaysByEmployee[$empId][$ymd]);
 
                 $attRow = $attendanceByEmployeeDate[$empId][$ymd] ?? null;
-                $hasValidAttendance = is_array($attRow) && !empty($attRow['check_in']);
+                $hasValidAttendance = is_array($attRow) && ! empty($attRow['check_in']);
                 $attendanceRowStatus = is_array($attRow) ? ($attRow['status'] ?? null) : null;
+                $attendanceRowStatus = is_string($attendanceRowStatus) ? $attendanceRowStatus : null;
+                $shiftType = is_array($attRow) ? ($attRow['shift_type'] ?? null) : null;
 
                 $hasMovement = false;
                 if (isset($movementsByEmployeeId[$empId])) {
                     foreach ($movementsByEmployeeId[$empId] as $m) {
-                        // Single-day only: movement covers attendance on start date
                         $from = Carbon::parse($m['from_datetime'] ?? $m->from_datetime)->format('Y-m-d');
                         $status = $m['status'] ?? $m->status;
-                        if (in_array($status, ['active', 'completed'], true) && $ymd === $from) {
-                            $hasMovement = true;
-                            break;
+                        $isMulti = ! empty($m['is_multi_day'] ?? $m->is_multi_day ?? false);
+
+                        if (in_array($status, ['active', 'completed'], true)) {
+                            if ($isMulti) {
+                                $to = Carbon::parse($m['to_datetime'] ?? $m->to_datetime ?? $from)->format('Y-m-d');
+                                if ($ymd >= $from && $ymd <= $to) {
+                                    $hasMovement = true;
+                                    break;
+                                }
+                            } elseif ($ymd === $from) {
+                                $hasMovement = true;
+                                break;
+                            }
                         }
                     }
                 }
 
-                $status = self::determineDateStatusEnhanced(
+                $guardStatus = \App\Models\GuardShiftSetting::punchedShiftStatus(
+                    is_string($shiftType) ? $shiftType : null,
+                    $hasValidAttendance,
+                    $attendanceRowStatus
+                );
+
+                $status = $guardStatus ?? self::determineDateStatusEnhanced(
                     $ymd,
                     $weekendDays,
                     $isHoliday,
                     $isOnLeave,
                     $hasMovement,
                     $hasValidAttendance,
-                    is_string($attendanceRowStatus) ? $attendanceRowStatus : null
+                    $attendanceRowStatus
                 );
 
                 $missingCheckout = in_array($status, ['present', 'late', 'half_day'], true) && $hasValidAttendance && empty($attRow['check_out']);
@@ -152,19 +169,32 @@ class MonthlyAttendanceCalculator
             return 'weekend';
         }
 
-        if ($hasValidAttendance) return 'present';
+        if ($hasValidAttendance) {
+            return 'present';
+        }
         // Already marked present/late/half_day in DB even if punch times were not stored
         if (in_array($attendanceRowStatus, ['present', 'late', 'half_day'], true)) {
             return $attendanceRowStatus;
         }
-        if ($isOnLeave) return 'leave';
-        if ($hasMovement) return 'on_duty';
-        if ($attendanceRowStatus === 'on_duty') return 'on_duty';
-        if ($attendanceRowStatus === 'leave') return 'leave';
-        if ($attendanceRowStatus === 'holiday') return 'holiday';
-        if ($isHoliday) return 'holiday';
+        if ($isOnLeave) {
+            return 'leave';
+        }
+        if ($hasMovement) {
+            return 'on_duty';
+        }
+        if ($attendanceRowStatus === 'on_duty') {
+            return 'on_duty';
+        }
+        if ($attendanceRowStatus === 'leave') {
+            return 'leave';
+        }
+        if ($attendanceRowStatus === 'holiday') {
+            return 'holiday';
+        }
+        if ($isHoliday) {
+            return 'holiday';
+        }
 
         return 'absent';
     }
 }
-

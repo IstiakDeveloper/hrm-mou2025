@@ -120,6 +120,8 @@ interface Attendance {
     check_in_formatted: string | null;
     check_out_formatted: string | null;
     status: string;
+    shift_type?: 'day' | 'night' | null;
+    checkout_next_day?: boolean;
     device_id: number | null;
     location_coordinates: string | null;
     remarks: string | null;
@@ -365,6 +367,24 @@ export default function AttendanceIndex({
                 <span>{status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}</span>
             </Badge>
         );
+    };
+
+    const getShiftBadge = (shift?: string | null) => {
+        if (shift === 'day') {
+            return (
+                <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
+                    Day
+                </Badge>
+            );
+        }
+        if (shift === 'night') {
+            return (
+                <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
+                    Night
+                </Badge>
+            );
+        }
+        return null;
     };
 
     const getRemarksIcon = (remarks: string) => {
@@ -613,7 +633,8 @@ export default function AttendanceIndex({
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="shrink-0">
+                                            <div className="shrink-0 flex items-center gap-1">
+                                                {getShiftBadge(attendance.shift_type)}
                                                 {getStatusBadge(attendance.status)}
                                             </div>
                                         </div>
@@ -636,6 +657,7 @@ export default function AttendanceIndex({
                                                     <span className="text-amber-700 font-semibold flex items-center mt-0.5 text-xs">
                                                         <Clock className="inline mr-1 h-3 w-3 text-amber-600 shrink-0" />
                                                         {attendance.check_out_formatted}
+                                                        {attendance.checkout_next_day ? <span className="ml-1 text-[10px] text-slate-500">next day</span> : null}
                                                     </span>
                                                 ) : (
                                                     <span className="text-slate-400 italic text-[11px]">Not checked out</span>
@@ -746,6 +768,7 @@ export default function AttendanceIndex({
                                                         <div className="text-orange-700 font-medium text-xs">
                                                             <Clock className="inline mr-1 h-3.5 w-3.5 text-orange-500" />
                                                             {attendance.check_out_formatted}
+                                                            {attendance.checkout_next_day ? <span className="ml-1 text-[10px] font-normal text-slate-500">next day</span> : null}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -757,8 +780,9 @@ export default function AttendanceIndex({
                                             </TableCell>
 
                                             <TableCell>
-                                                <div className="scale-90 origin-left">
+                                                <div className="flex items-center gap-1.5 flex-wrap scale-90 origin-left">
                                                     {getStatusBadge(attendance.status)}
+                                                    {getShiftBadge(attendance.shift_type)}
                                                 </div>
                                             </TableCell>
 

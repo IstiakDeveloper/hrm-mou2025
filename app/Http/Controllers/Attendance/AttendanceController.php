@@ -9,6 +9,7 @@ use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\GuardShiftSetting;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\Movement;
@@ -17,6 +18,7 @@ use App\Services\OrganogramAccessService;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use App\Support\MonthlyAttendanceCalculator;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -24,8 +26,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
-use App\Support\ProjectPdf;
 
 class AttendanceController extends Controller
 {
@@ -243,7 +243,14 @@ class AttendanceController extends Controller
                 $attendanceRowStatus
             );
 
-            if ($hasValidAttendance && in_array($attendanceRowStatus, ['late', 'half_day'], true)) {
+            $guardStatus = GuardShiftSetting::punchedShiftStatus(
+                $attendance?->shift_type,
+                $hasValidAttendance,
+                $attendanceRowStatus
+            );
+            if ($guardStatus !== null) {
+                $status = $guardStatus;
+            } elseif ($hasValidAttendance && in_array($attendanceRowStatus, ['late', 'half_day'], true)) {
                 $status = $attendanceRowStatus;
             }
 
@@ -275,6 +282,8 @@ class AttendanceController extends Controller
                 'check_in_formatted' => $attendance?->check_in ? Carbon::parse($attendance->check_in)->format('h:i A') : null,
                 'check_out_formatted' => $attendance?->check_out ? Carbon::parse($attendance->check_out)->format('h:i A') : null,
                 'status' => $status,
+                'shift_type' => $attendance?->shift_type,
+                'checkout_next_day' => (bool) ($attendance?->checkout_next_day ?? false),
                 'device_id' => $attendance?->device_id,
                 'location_coordinates' => $attendance?->location_coordinates,
                 'remarks' => $attendance?->remarks,
@@ -630,6 +639,8 @@ class AttendanceController extends Controller
                         'check_in' => $a->check_in ? Carbon::parse($a->check_in)->format('H:i:s') : null,
                         'check_out' => $a->check_out ? Carbon::parse($a->check_out)->format('H:i:s') : null,
                         'status' => $a->status,
+                        'shift_type' => $a->shift_type,
+                        'checkout_next_day' => (bool) $a->checkout_next_day,
                         'remarks' => $a->remarks,
                         'auto_remarks' => $a->auto_remarks ?? null,
                     ];
@@ -968,13 +979,15 @@ class AttendanceController extends Controller
                     try {
                         $ci = Carbon::parse($att->check_in);
                         $validCheckIns[] = $ci->hour * 3600 + $ci->minute * 60 + $ci->second;
-                    } catch (\Throwable $e) {}
+                    } catch (\Throwable $e) {
+                    }
                 }
                 if ($att->check_out) {
                     try {
                         $co = Carbon::parse($att->check_out);
                         $validCheckOuts[] = $co->hour * 3600 + $co->minute * 60 + $co->second;
-                    } catch (\Throwable $e) {}
+                    } catch (\Throwable $e) {
+                    }
                 }
             }
 
@@ -1102,7 +1115,7 @@ class AttendanceController extends Controller
                     ->first();
 
                 if (! $attendance) {
-                    $attendance = new Attendance();
+                    $attendance = new Attendance;
                     $attendance->employee_id = $empId;
                     $attendance->date = $date;
                 }
@@ -1415,6 +1428,7 @@ class AttendanceController extends Controller
             $applicable = is_array($branchesRaw) ? $branchesRaw : (is_string($branchesRaw) ? (json_decode($branchesRaw, true) ?: []) : []);
             if (empty($applicable)) {
                 $holidayApplicable['*'][$ymd] = true;
+
                 continue;
             }
             foreach ($applicable as $bid) {

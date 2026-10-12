@@ -20,17 +20,33 @@ class MovementPenaltySyncService
         $today = BangladeshDate::now()->startOfDay();
 
         $overdueMovements = Movement::where('status', 'active')
-            ->where('from_datetime', '<', $today)
+            ->where(function ($query) use ($today) {
+                $query->where(function ($single) use ($today) {
+                    $single->where(function ($q) {
+                        $q->where('is_multi_day', false)->orWhereNull('is_multi_day');
+                    })->where('from_datetime', '<', $today);
+                })->orWhere(function ($multi) use ($today) {
+                    $multi->where('is_multi_day', true)
+                        ->where('to_datetime', '<', $today);
+                });
+            })
             ->get();
 
         $count = 0;
 
         foreach ($overdueMovements as $movement) {
-            $fromDatetime = $movement->from_datetime instanceof Carbon
-                ? $movement->from_datetime
-                : Carbon::parse($movement->from_datetime);
+            if ($movement->is_multi_day && $movement->to_datetime) {
+                $targetDatetime = $movement->to_datetime instanceof Carbon
+                    ? $movement->to_datetime
+                    : Carbon::parse($movement->to_datetime);
+                $startDate = $targetDatetime->copy()->startOfDay();
+            } else {
+                $fromDatetime = $movement->from_datetime instanceof Carbon
+                    ? $movement->from_datetime
+                    : Carbon::parse($movement->from_datetime);
+                $startDate = $fromDatetime->copy()->startOfDay();
+            }
 
-            $startDate = $fromDatetime->copy()->startOfDay();
             $totalOverdueDays = max(1, (int) $startDate->diffInDays($today));
 
             $approvedOverdueDays = (int) MovementPenalty::where('movement_id', $movement->id)

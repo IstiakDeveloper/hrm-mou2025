@@ -37,10 +37,25 @@ import {
   BarChart2,
   AlertCircle,
   User,
-  Sparkles
+  Sparkles,
+  Shield,
+  CheckCheck,
+  XCircle,
+  HardDrive
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { isSuperAdmin } from '@/lib/permissions';
 import { format } from 'date-fns';
 import { PageSurface } from '@/components/page-surface';
@@ -48,6 +63,8 @@ import { PageSurface } from '@/components/page-surface';
 interface Branch {
   id: number;
   name: string;
+  is_head_office?: boolean;
+  allow_multi_day_movement?: boolean;
 }
 
 interface AttendanceSetting {
@@ -59,21 +76,120 @@ interface AttendanceSetting {
   half_day_hours: number;
   weekend_days: number[] | string; // Can be either array or JSON string
   enable_bulk_attendance?: boolean;
+  allow_multi_day_movement?: boolean;
   branch: Branch;
+}
+
+interface DevicePushRow {
+  id: number;
+  name: string;
+  branch_name?: string | null;
+  adms_enabled: boolean;
+  adms_link: string;
+  known_users: number;
+  pending_commands: number;
+  missing_users: number | null;
 }
 
 interface AttendanceSettingsIndexProps {
   settings: AttendanceSetting[];
   branches: Branch[];
   isBulkAttendanceEnabled?: boolean;
+  guardShift: GuardShiftForm;
+  designations: GuardDesignation[];
+  attlogKeepDays?: number;
+  devicePushes?: DevicePushRow[];
 }
 
-export default function AttendanceSettingsIndex({ settings, branches, isBulkAttendanceEnabled = true }: AttendanceSettingsIndexProps) {
+interface GuardDesignation {
+  id: number;
+  name: string;
+}
+
+interface GuardShiftForm {
+  is_enabled: boolean;
+  work_on_weekend: boolean;
+  grace_minutes: number;
+  day_start: string;
+  day_end: string;
+  night_start: string;
+  night_end: string;
+  designation_ids: number[];
+  uses_name_match?: boolean;
+}
+
+export default function AttendanceSettingsIndex({
+  settings,
+  branches,
+  isBulkAttendanceEnabled = true,
+  guardShift,
+  designations = [],
+  attlogKeepDays = 15,
+  devicePushes = [],
+}: AttendanceSettingsIndexProps) {
   const { auth } = usePage().props as any;
   const isSuperAdminUser = isSuperAdmin(auth);
 
   const [bulkEnabled, setBulkEnabled] = useState(isBulkAttendanceEnabled);
   const [isUpdatingToggle, setIsUpdatingToggle] = useState(false);
+
+  // Multi-Day Movement Branch Permissions State
+  const [branchesList, setBranchesList] = useState<Branch[]>(branches);
+  const [branchFilter, setBranchFilter] = useState('');
+  const [updatingBranchId, setUpdatingBranchId] = useState<number | null>(null);
+  const [multiDayModalOpen, setMultiDayModalOpen] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+
+  const enabledBranchesCount = branchesList.filter(
+    (b) => Boolean(b.allow_multi_day_movement ?? b.is_head_office)
+  ).length;
+
+  const handleToggleMultiDay = async (branchId: number, currentEnabled: boolean) => {
+    const newEnabled = !currentEnabled;
+    setUpdatingBranchId(branchId);
+    try {
+      await axios.post(route('attendance.settings.toggle-multi-day-movement'), {
+        branch_id: branchId,
+        enabled: newEnabled,
+      });
+      setBranchesList((prev) =>
+        prev.map((b) => (b.id === branchId ? { ...b, allow_multi_day_movement: newEnabled } : b))
+      );
+    } catch (e) {
+      console.error('Failed to toggle multi-day movement:', e);
+    } finally {
+      setUpdatingBranchId(null);
+    }
+  };
+
+  const handleToggleAllMultiDay = async (enabled: boolean) => {
+    setIsBulkUpdating(true);
+    try {
+      await axios.post(route('attendance.settings.toggle-multi-day-movement'), {
+        all: true,
+        enabled,
+      });
+      setBranchesList((prev) =>
+        prev.map((b) => ({
+          ...b,
+          allow_multi_day_movement: enabled,
+        }))
+      );
+    } catch (e) {
+      console.error('Failed to bulk toggle multi-day movement:', e);
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+  const [guardForm, setGuardForm] = useState<GuardShiftForm>(guardShift);
+  const [guardModalOpen, setGuardModalOpen] = useState(false);
+  const [isSavingGuard, setIsSavingGuard] = useState(false);
+  const [designationQuery, setDesignationQuery] = useState('');
+  const [deviceModalOpen, setDeviceModalOpen] = useState(false);
+  const [logKeepDays, setLogKeepDays] = useState(attlogKeepDays);
+  const [savingLogDays, setSavingLogDays] = useState(false);
+  const [allowEmptyDevice, setAllowEmptyDevice] = useState(false);
+  const [pushingId, setPushingId] = useState<number | null>(null);
 
   const handleToggleBulk = async (checked: boolean) => {
     setBulkEnabled(checked);
@@ -90,6 +206,89 @@ export default function AttendanceSettingsIndex({ settings, branches, isBulkAtte
       setIsUpdatingToggle(false);
     }
   };
+
+  const saveGuardShift = () => {
+    setIsSavingGuard(true);
+    router.put(route('attendance.settings.guard-shift'), {
+      is_enabled: guardForm.is_enabled,
+      work_on_weekend: guardForm.work_on_weekend,
+      grace_minutes: Number(guardForm.grace_minutes),
+      day_start: guardForm.day_start,
+      day_end: guardForm.day_end,
+      night_start: guardForm.night_start,
+      night_end: guardForm.night_end,
+      designation_ids: guardForm.designation_ids,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => setGuardModalOpen(false),
+      onFinish: () => setIsSavingGuard(false),
+    });
+  };
+
+  const openGuardModal = () => {
+    setGuardForm({
+      ...guardShift,
+      designation_ids: [...(guardShift?.designation_ids ?? [])],
+    });
+    setDesignationQuery('');
+    setGuardModalOpen(true);
+  };
+
+  const toggleGuardDesignation = (id: number, checked: boolean) => {
+    setGuardForm((current) => ({
+      ...current,
+      uses_name_match: false,
+      designation_ids: checked
+        ? Array.from(new Set([...current.designation_ids, id]))
+        : current.designation_ids.filter((existing) => existing !== id),
+    }));
+  };
+
+  const filteredDesignations = designations.filter((designation) =>
+    designation.name.toLowerCase().includes(designationQuery.trim().toLowerCase())
+  );
+
+  const guardDesignationNames = designations
+    .filter((designation) => guardShift.designation_ids.includes(designation.id))
+    .map((designation) => designation.name);
+  const guardDesignationLabel = guardDesignationNames.length === 0
+    ? 'Security Guard title'
+    : guardDesignationNames.length <= 2
+      ? guardDesignationNames.join(', ')
+      : `${guardDesignationNames.slice(0, 2).join(', ')} +${guardDesignationNames.length - 2}`;
+
+  const openDeviceModal = () => {
+    setLogKeepDays(attlogKeepDays);
+    setAllowEmptyDevice(false);
+    setDeviceModalOpen(true);
+  };
+
+  const saveLogKeepDays = () => {
+    const days = Number(logKeepDays);
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      return;
+    }
+
+    setSavingLogDays(true);
+    router.put(route('attendance.settings.device-log-keep'), {
+      attlog_keep_days: days,
+    }, {
+      preserveScroll: true,
+      onFinish: () => setSavingLogDays(false),
+    });
+  };
+
+  const pushMissingUsers = (device: DevicePushRow) => {
+    setPushingId(device.id);
+    router.post(route('attendance.settings.devices.push-missing', device.id), {
+      allow_empty: allowEmptyDevice,
+    }, {
+      preserveScroll: true,
+      onFinish: () => setPushingId(null),
+    });
+  };
+
+  const pendingDeviceCommands = devicePushes.reduce((sum, device) => sum + device.pending_commands, 0);
 
   const handleDelete = (id: number) => {
     if (confirm('Are you sure you want to delete these attendance settings? This action cannot be undone.')) {
@@ -219,6 +418,541 @@ export default function AttendanceSettingsIndex({ settings, branches, isBulkAtte
             </CardContent>
           </Card>
         )}
+
+        {/* Desktop 2-Grid: Guard Shift & Multi-Day Movement Configuration Tables */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Card 1: Security Guard Shift */}
+          <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col justify-between">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-slate-800">Security Guard Shift</CardTitle>
+                  <CardDescription className="text-xs text-slate-500">Day & night rotating shift windows</CardDescription>
+                </div>
+                <Badge variant="outline" className={guardShift.is_enabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]' : 'bg-slate-50 text-slate-600 border-slate-200 text-[10px]'}>
+                  {guardShift.is_enabled ? 'Enabled' : 'Disabled'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 flex-1">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider pl-4">Shift</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Day</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Night</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Grace</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider text-right pr-4">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                      <TableCell className="pl-4 py-3">
+                        <div className="flex items-center">
+                          <Shield className="mr-2 h-4 w-4 text-emerald-500 shrink-0" />
+                          <div>
+                            <div className="font-semibold text-xs text-slate-800">Guard Shift</div>
+                            <div className="text-[10px] text-slate-500 truncate max-w-[90px]">{guardDesignationLabel}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <span className="font-medium text-emerald-700">{formatTime(guardShift.day_start)}</span>
+                        <span className="text-slate-400 mx-1">-</span>
+                        <span className="font-medium text-red-600">{formatTime(guardShift.day_end)}</span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <span className="font-medium text-indigo-700">{formatTime(guardShift.night_start)}</span>
+                        <span className="text-slate-400 mx-1">-</span>
+                        <span className="font-medium text-indigo-700">{formatTime(guardShift.night_end)}</span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-[10px]">
+                          {guardShift.grace_minutes}m
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={openGuardModal}
+                          className="h-7 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 font-medium px-2.5"
+                        >
+                          <Edit className="mr-1 h-3.5 w-3.5" />
+                          Update
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Multi-Day Movement Permissions */}
+          <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col justify-between">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-slate-800">Multi-Day Movement Permissions</CardTitle>
+                  <CardDescription className="text-xs text-slate-500">Allowed branches for multi-day movements</CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                  {enabledBranchesCount} / {branchesList.length} Allowed
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 flex-1">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider pl-4">Feature</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Coverage</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Head Office</TableHead>
+                      <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider text-right pr-4">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                      <TableCell className="pl-4 py-3">
+                        <div className="flex items-center">
+                          <CalendarDays className="mr-2 h-4 w-4 text-emerald-500 shrink-0" />
+                          <div>
+                            <div className="font-semibold text-xs text-slate-800">Multi-Day Movement</div>
+                            <div className="text-[10px] text-slate-500">Continuous on-duty</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                          <strong>{enabledBranchesCount}</strong> of {branchesList.length} branches
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                          Default: Active
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setBranchFilter('');
+                            setMultiDayModalOpen(true);
+                          }}
+                          className="h-7 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 font-medium px-2.5"
+                        >
+                          <Edit className="mr-1 h-3.5 w-3.5" />
+                          Manage
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white lg:col-span-2">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-slate-800">Device users and punch logs</CardTitle>
+                  <CardDescription className="text-xs text-slate-500">Missing people and old punch logs</CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-[10px]">
+                  {pendingDeviceCommands > 0 ? `Waiting ${pendingDeviceCommands}` : `${attlogKeepDays} days`}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                      <TableHead className="h-10 pl-4 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Device</TableHead>
+                      <TableHead className="h-10 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Logs</TableHead>
+                      <TableHead className="h-10 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Machines</TableHead>
+                      <TableHead className="h-10 pr-4 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-700">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow className="border-b border-slate-100 hover:bg-slate-50">
+                      <TableCell className="py-3 pl-4">
+                        <div className="flex items-center">
+                          <HardDrive className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
+                          <div className="text-xs font-semibold text-slate-800">Device sync</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-slate-700">{attlogKeepDays} days</TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {devicePushes.length === 1 ? devicePushes[0].name : `${devicePushes.length} devices`}
+                      </TableCell>
+                      <TableCell className="pr-4 text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={openDeviceModal}
+                          className="h-7 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                        >
+                          <Edit className="mr-1 h-3.5 w-3.5" />
+                          Update
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Dialog open={deviceModalOpen} onOpenChange={setDeviceModalOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Device users and punch logs</DialogTitle>
+              <DialogDescription>
+                Only an ID and name are added for people who are not on the machine. Punch logs older than the days below are removed. Names, fingerprints, and faces stay.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
+              <div>
+                <div className="text-xs font-semibold text-slate-800">Keep punch logs</div>
+                <p className="text-[11px] text-slate-500">Older logs drop on the device. Users stay.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="attlogKeepDays"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={logKeepDays}
+                  onChange={(event) => setLogKeepDays(Number(event.target.value))}
+                  className="h-8 w-20 text-xs"
+                  aria-label="Days of punch logs to keep on the device"
+                />
+                <span className="text-xs text-slate-500">days</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={saveLogKeepDays}
+                  disabled={savingLogDays}
+                  className="h-8 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
+              <Checkbox
+                id="allowEmptyDevice"
+                checked={allowEmptyDevice}
+                onCheckedChange={(checked) => setAllowEmptyDevice(checked === true)}
+              />
+              <Label htmlFor="allowEmptyDevice" className="text-xs leading-5 text-slate-600">
+                Device has no users yet. Leave this off when people are already enrolled.
+              </Label>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80">
+                    <TableHead className="h-9 pl-3 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Device</TableHead>
+                    <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">On device</TableHead>
+                    <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Missing</TableHead>
+                    <TableHead className="h-9 pr-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-700">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {devicePushes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-6 text-center text-xs text-slate-400">
+                        No attendance devices yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : devicePushes.map((device) => (
+                    <TableRow key={device.id}>
+                      <TableCell className="py-2.5 pl-3">
+                        <div className="text-xs font-semibold text-slate-800">{device.name}</div>
+                        <div className="text-[10px] text-slate-500">{device.branch_name || 'No branch'}</div>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {device.known_users > 0 ? device.known_users : 'Not listed yet'}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {device.missing_users === null ? 'Ask the device' : device.missing_users}
+                        {device.pending_commands > 0 && (
+                          <span className="ml-2 text-[10px] text-amber-700">Waiting {device.pending_commands}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="pr-3 text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={!device.adms_enabled || pushingId === device.id}
+                          onClick={() => pushMissingUsers(device)}
+                          className="h-7 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                        >
+                          Push missing
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                onClick={() => setDeviceModalOpen(false)}
+                className="h-8 bg-emerald-600 px-4 text-xs text-white hover:bg-emerald-700"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={guardModalOpen} onOpenChange={setGuardModalOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Update security guard shift</DialogTitle>
+              <DialogDescription>
+                Day is morning to evening. Night starts in the evening and ends the next morning. The shift is chosen from the punch time.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5">
+                <span className="text-xs font-semibold text-slate-700">Guard shift</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">{guardForm.is_enabled ? 'On' : 'Off'}</span>
+                  <Switch
+                    checked={guardForm.is_enabled}
+                    onCheckedChange={(checked) => setGuardForm((current) => ({ ...current, is_enabled: checked }))}
+                    aria-label="Enable security guard shifts"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-slate-700">Day shift</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="guard-day-start" className="text-xs text-slate-500">Start</Label>
+                      <Input id="guard-day-start" type="time" value={guardForm.day_start} onChange={(event) => setGuardForm((current) => ({ ...current, day_start: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="guard-day-end" className="text-xs text-slate-500">End</Label>
+                      <Input id="guard-day-end" type="time" value={guardForm.day_end} onChange={(event) => setGuardForm((current) => ({ ...current, day_end: event.target.value }))} />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-slate-700">Night shift</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="guard-night-start" className="text-xs text-slate-500">Start</Label>
+                      <Input id="guard-night-start" type="time" value={guardForm.night_start} onChange={(event) => setGuardForm((current) => ({ ...current, night_start: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="guard-night-end" className="text-xs text-slate-500">End next morning</Label>
+                      <Input id="guard-night-end" type="time" value={guardForm.night_end} onChange={(event) => setGuardForm((current) => ({ ...current, night_end: event.target.value }))} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="guard-grace" className="text-xs text-slate-500">Grace (minutes earlier or later)</Label>
+                  <Input
+                    id="guard-grace"
+                    type="number"
+                    min={0}
+                    max={180}
+                    value={guardForm.grace_minutes}
+                    onChange={(event) => setGuardForm((current) => ({ ...current, grace_minutes: Number(event.target.value) }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Count weekend punches</p>
+                    <p className="text-[11px] text-slate-500">Friday and Saturday punches stay.</p>
+                  </div>
+                  <Switch
+                    checked={guardForm.work_on_weekend}
+                    onCheckedChange={(checked) => setGuardForm((current) => ({ ...current, work_on_weekend: checked }))}
+                    aria-label="Count security guard weekend punches"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-xs text-slate-500">Designations</Label>
+                  {guardForm.uses_name_match && (
+                    <span className="text-[11px] text-slate-500">Matched from the title Security Guard until you save.</span>
+                  )}
+                </div>
+                <Input
+                  value={designationQuery}
+                  onChange={(event) => setDesignationQuery(event.target.value)}
+                  placeholder="Search designation"
+                />
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+                  {filteredDesignations.length > 0 ? filteredDesignations.map((designation) => (
+                    <label key={designation.id} className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 cursor-pointer">
+                      <Checkbox
+                        checked={guardForm.designation_ids.includes(designation.id)}
+                        onCheckedChange={(checked) => toggleGuardDesignation(designation.id, checked === true)}
+                      />
+                      <span>{designation.name}</span>
+                    </label>
+                  )) : (
+                    <p className="px-3 py-4 text-xs text-slate-500">No designations found.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setGuardModalOpen(false)} disabled={isSavingGuard}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={saveGuardShift} disabled={isSavingGuard} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                {isSavingGuard ? 'Saving...' : 'Update'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Multi-Day Movement Permissions Modal */}
+        <Dialog open={multiDayModalOpen} onOpenChange={setMultiDayModalOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="p-5 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200/80">
+                  <CalendarDays className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-slate-900">
+                    Multi-Day Movement Permissions (মাল্টি-ডে মুভমেন্ট অনুমতি)
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                    Select which branches can create multi-day movements. Head Office is enabled by default.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            {/* Modal Controls: Search & Select All / Deselect All */}
+            <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Input
+                  placeholder="Search branch name..."
+                  value={branchFilter}
+                  onChange={(e) => setBranchFilter(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 text-xs py-1">
+                  {enabledBranchesCount} / {branchesList.length} Enabled
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleAllMultiDay(true)}
+                  disabled={isBulkUpdating}
+                  className="h-8 text-xs bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border-emerald-200 font-medium"
+                >
+                  <CheckCheck className="mr-1 h-3.5 w-3.5" />
+                  Select All
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleAllMultiDay(false)}
+                  disabled={isBulkUpdating}
+                  className="h-8 text-xs bg-white text-rose-700 hover:bg-rose-50 hover:text-rose-800 border-rose-200 font-medium"
+                >
+                  <XCircle className="mr-1 h-3.5 w-3.5" />
+                  Deselect All
+                </Button>
+              </div>
+            </div>
+
+            {/* Modal Branch List Grid */}
+            <div className="p-5 overflow-y-auto max-h-[50vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {branchesList
+                  .filter((b) => b.name.toLowerCase().includes(branchFilter.trim().toLowerCase()))
+                  .map((branch) => {
+                    const isEnabled = Boolean(branch.allow_multi_day_movement ?? branch.is_head_office);
+                    const isHO = Boolean(branch.is_head_office);
+                    return (
+                      <div
+                        key={branch.id}
+                        className={`flex items-center justify-between p-3 rounded-xl border text-xs transition-colors ${
+                          isEnabled
+                            ? 'bg-emerald-50/40 border-emerald-200/80'
+                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex flex-col truncate pr-2">
+                          <span className="font-semibold text-slate-800 truncate" title={branch.name}>
+                            {branch.name}
+                          </span>
+                          {isHO ? (
+                            <span className="text-[10px] text-emerald-700 font-medium">Head Office (Default)</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Branch</span>
+                          )}
+                        </div>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => handleToggleMultiDay(branch.id, isEnabled)}
+                          disabled={updatingBranchId === branch.id || isBulkUpdating}
+                          aria-label={`Toggle multi-day movement for ${branch.name}`}
+                        />
+                      </div>
+                    );
+                  })}
+              </div>
+              {branchesList.filter((b) => b.name.toLowerCase().includes(branchFilter.trim().toLowerCase())).length === 0 && (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  No branches found matching "{branchFilter}"
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50/50">
+              <Button
+                type="button"
+                onClick={() => setMultiDayModalOpen(false)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-medium px-4"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Settings Table */}
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">

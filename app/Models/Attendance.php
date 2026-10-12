@@ -5,11 +5,6 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\AttendanceSetting;
-use App\Models\Employee;
-use App\Models\Holiday;
-use App\Models\LeaveApplication;
-use App\Models\Movement;
 
 class Attendance extends Model
 {
@@ -24,10 +19,12 @@ class Attendance extends Model
         'check_in',
         'check_out',
         'status',
+        'shift_type',
+        'checkout_next_day',
         'device_id',
         'location_coordinates',
         'remarks',
-        'movement_id'
+        'movement_id',
 
     ];
 
@@ -35,6 +32,7 @@ class Attendance extends Model
         'date' => 'date',
         'check_in' => 'datetime',
         'check_out' => 'datetime',
+        'checkout_next_day' => 'boolean',
         'location_coordinates' => 'array',
     ];
 
@@ -74,7 +72,13 @@ class Attendance extends Model
     public function getWorkHoursAttribute()
     {
         if ($this->check_in && $this->check_out) {
-            return $this->check_in->diffInHours($this->check_out);
+            $in = Carbon::parse($this->check_in);
+            $out = Carbon::parse($this->check_out);
+            if ($this->checkout_next_day || $out->format('His') < $in->format('His')) {
+                $out = $out->copy()->addDay();
+            }
+
+            return $in->diffInHours($out);
         }
 
         return 0;
@@ -96,7 +100,6 @@ class Attendance extends Model
         return $this->status === 'on_duty';
     }
 
-
     /**
      * Determine the status of an employee for a specific calendar date.
      *
@@ -117,7 +120,7 @@ class Attendance extends Model
             ->whereDate('date', $carbonDate->format('Y-m-d'))
             ->first();
 
-        $hasValidAttendance = (bool) ($attendance && !empty($attendance->check_in));
+        $hasValidAttendance = (bool) ($attendance && ! empty($attendance->check_in));
         $attendanceRowStatus = $attendance?->status;
 
         $isOnLeave = LeaveApplication::query()
@@ -149,6 +152,15 @@ class Attendance extends Model
                 })
             )
             ->exists();
+
+        $guardStatus = GuardShiftSetting::punchedShiftStatus(
+            $attendance?->shift_type,
+            $hasValidAttendance,
+            is_string($attendanceRowStatus) ? $attendanceRowStatus : null
+        );
+        if ($guardStatus !== null) {
+            return $guardStatus;
+        }
 
         // Weekend is total: no movement/attendance marks on configured weekend days
         if (in_array((int) $carbonDate->dayOfWeek, $weekendDays, true)) {
@@ -185,7 +197,11 @@ class Attendance extends Model
      */
     public function applyPunchStatus(?AttendanceSetting $settings = null): void
     {
-        if ($this->date && AttendanceSetting::isWeekendForEmployee($this->date, $this->employee_id ? (int) $this->employee_id : null)) {
+        $keepGuardWeekend = in_array($this->shift_type, ['day', 'night'], true)
+            && GuardShiftSetting::current()->is_enabled
+            && GuardShiftSetting::current()->work_on_weekend;
+
+        if (! $keepGuardWeekend && $this->date && AttendanceSetting::isWeekendForEmployee($this->date, $this->employee_id ? (int) $this->employee_id : null)) {
             $this->status = 'weekend';
 
             return;
@@ -209,6 +225,10 @@ class Attendance extends Model
      */
     public function computeStatusFromPunch(?AttendanceSetting $settings = null): string
     {
+        if (in_array($this->shift_type, ['day', 'night'], true)) {
+            return $this->computeGuardShiftStatus();
+        }
+
         $settings ??= AttendanceSetting::forEmployee($this->employee_id);
 
         if (! $this->check_in && ! $this->check_out) {
@@ -242,6 +262,56 @@ class Attendance extends Model
 
             $hoursWorked = $checkInDateTime->floatDiffInHours($checkOutDateTime);
             if ($hoursWorked < ($settings->half_day_hours ?? 4) && $status !== 'late') {
+                $status = 'half_day';
+            }
+        }
+
+        return $status;
+    }
+
+    /**
+     * Day 09:00–19:00 or night 19:00–09:00 next morning, with the configured grace.
+     */
+    private function computeGuardShiftStatus(): string
+    {
+        $settings = GuardShiftSetting::current();
+
+        if (! $this->check_in && ! $this->check_out) {
+            return 'absent';
+        }
+
+        if (! $this->check_in && $this->check_out) {
+            return 'half_day';
+        }
+
+        $attendanceDate = Carbon::parse($this->date)->startOfDay();
+        $isNight = $this->shift_type === 'night';
+        $grace = (int) ($settings->grace_minutes ?? 60);
+
+        $checkInDateTime = $this->parsePunchDateTime($this->check_in, $attendanceDate);
+        $workStart = $this->buildWorkDateTime($attendanceDate, $isNight ? $settings->night_start : $settings->day_start);
+        $workEnd = $this->buildWorkDateTime($attendanceDate, $isNight ? $settings->night_end : $settings->day_end);
+        if ($isNight || $workEnd->lte($workStart)) {
+            $workEnd->addDay();
+        }
+
+        $lateThreshold = $workStart->copy()->addMinutes($grace);
+        $earlyThreshold = $workEnd->copy()->subMinutes($grace);
+        $status = $checkInDateTime->gt($lateThreshold) ? 'late' : 'present';
+
+        if ($this->check_out) {
+            $checkOutDateTime = $this->parsePunchDateTime($this->check_out, $attendanceDate);
+            if ($this->checkout_next_day || $checkOutDateTime->lt($checkInDateTime)) {
+                $checkOutDateTime->addDay();
+            }
+
+            if ($checkOutDateTime->lt($earlyThreshold) && $status !== 'late') {
+                $status = 'half_day';
+            }
+
+            $hoursWorked = abs($checkInDateTime->diffInMinutes($checkOutDateTime)) / 60;
+            $halfDayHours = (float) (AttendanceSetting::global()->half_day_hours ?? 4);
+            if ($hoursWorked < $halfDayHours && $status !== 'late') {
                 $status = 'half_day';
             }
         }

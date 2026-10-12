@@ -18,13 +18,33 @@ class AttendanceSetting extends Model
         'half_day_hours',
         'weekend_days',
         'enable_bulk_attendance',
+        'allow_multi_day_movement',
     ];
 
     protected $casts = [
         // Use string for time fields instead of datetime
         'weekend_days' => 'array',
         'enable_bulk_attendance' => 'boolean',
+        'allow_multi_day_movement' => 'boolean',
     ];
+
+    /**
+     * Check if multi-day movement is enabled for a given branch.
+     * Defaults to true for Head Office, false for other branches unless explicitly enabled.
+     */
+    public static function isMultiDayAllowedForBranch(?int $branchId): bool
+    {
+        if (! $branchId) {
+            return false;
+        }
+
+        $branch = Branch::find($branchId);
+        if (! $branch) {
+            return false;
+        }
+
+        return (bool) ($branch->allow_multi_day_movement ?? $branch->is_head_office);
+    }
 
     /**
      * Check if bulk attendance feature is enabled system-wide.
