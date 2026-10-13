@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import Layout from '@/layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { 
@@ -115,10 +116,9 @@ export default function PromotionEvaluationIndex({
         router.get('/promotion-evaluations', {}, { replace: true });
     };
 
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const handleDelete = (id: number) => {
-        if (confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই মূল্যায়নটি মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।' : 'Are you sure you want to delete this promotion evaluation? This cannot be undone.')) {
-            router.delete(`/promotion-evaluations/${id}`);
-        }
+        setDeleteUrl(`/promotion-evaluations/${id}`);
     };
 
     const getStatusBadge = (evaluationStatus: string) => {
@@ -740,6 +740,12 @@ export default function PromotionEvaluationIndex({
                 lang={lang}
                 evaluation={selectedEvaluationForApproval}
                 onClose={() => setSelectedEvaluationForApproval(null)}
+            />
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
             />
             </PageSurface>
         </Layout>

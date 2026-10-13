@@ -85,12 +85,22 @@ function money(value: unknown) {
     return amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function tickBox(checked: boolean) {
+    return (
+        <span className="mx-[1px] inline-block h-[11px] w-[11px] border border-black text-center align-[-1px] text-[9px] font-bold leading-[9px]">
+            {checked ? '✓' : '\u00a0'}
+        </span>
+    );
+}
+
 function yesNo(value: boolean | null | undefined) {
     return (
-        <span>
-            <span className={value === true ? 'font-bold underline' : ''}>Yes</span>
-            {' / '}
-            <span className={value === false ? 'font-bold underline' : ''}>No</span>
+        <span className="whitespace-nowrap">
+            {tickBox(value === true)}
+            <span className={value === true ? 'font-bold' : ''}>Yes</span>
+            <span className="inline-block w-1.5" />
+            {tickBox(value === false)}
+            <span className={value === false ? 'font-bold' : ''}>No</span>
         </span>
     );
 }

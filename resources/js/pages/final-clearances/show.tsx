@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import Layout from '@/layouts/AdminLayout';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ArrowLeft, HandCoins, Printer, Trash2 } from 'lucide-react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { AlertTriangle, ArrowLeft, HandCoins, Printer, Trash2 } from 'lucide-react';
+import ClearanceDeleteDialog from './components/ClearanceDeleteDialog';
 import React from 'react';
 import ClearanceFormDocument, { type ClearanceRecord } from './components/ClearanceFormDocument';
 import ClearanceWorkflowStepper from './components/ClearanceWorkflowStepper';
@@ -42,7 +43,27 @@ function yesNo(name: string, value: boolean | null | undefined, set: (value: boo
     );
 }
 
-export default function FinalClearanceShow({ clearance, canAct }: { clearance: Clearance; canAct: boolean }) {
+const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+
+function blockWithoutSignature(userHasSignature: boolean) {
+    if (userHasSignature) return false;
+    alert(SIGNATURE_REQUIRED);
+    window.location.href = '/settings/profile';
+    return true;
+}
+
+export default function FinalClearanceShow({
+    clearance,
+    canAct,
+    userHasSignature = false,
+    isSuperAdmin = false,
+}: {
+    clearance: Clearance;
+    canAct: boolean;
+    userHasSignature?: boolean;
+    isSuperAdmin?: boolean;
+}) {
+    const [deleteOpen, setDeleteOpen] = React.useState(false);
     const field = useForm({
         id_card_returned: clearance.id_card_returned,
         sim_returned: clearance.sim_returned,
@@ -127,15 +148,29 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                             </p>
                         </div>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-10 border-slate-300 px-4 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50"
-                        onClick={() => window.open(`/final-clearances/${clearance.id}/print`, '_blank')}
-                    >
-                        <Printer className="h-4 w-4 text-slate-600" />
-                        Print / PDF
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {isSuperAdmin && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-10 border-rose-300 bg-rose-50 px-4 text-xs font-bold text-rose-700 shadow-xs hover:bg-rose-100"
+                                onClick={() => setDeleteOpen(true)}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                            </Button>
+                        )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-10 border-slate-300 px-4 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50"
+                            onClick={() => window.open(`/final-clearances/${clearance.id}/print`, '_blank')}
+                        >
+                            <Printer className="h-4 w-4 text-slate-600" />
+                            Print / PDF
+                        </Button>
+                    </div>
                 </div>
 
                 {clearance.rejected_reason && (
@@ -145,6 +180,23 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                 )}
 
                 <ClearanceWorkflowStepper status={clearance.status} signatures={clearance.signatures} />
+
+                {canAct && !userHasSignature && (
+                    <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-xs sm:flex-row sm:items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-200/80 text-amber-800">
+                                <AlertTriangle className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold">ডিজিটাল স্বাক্ষর প্রয়োজন (Digital Signature Required)</p>
+                                <p className="mt-0.5 text-[11px] text-amber-800">{SIGNATURE_REQUIRED}</p>
+                            </div>
+                        </div>
+                        <Button type="button" variant="outline" className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100" onClick={() => { window.location.href = '/settings/profile'; }}>
+                            Upload signature
+                        </Button>
+                    </div>
+                )}
 
                 {canAct && clearance.status === 'draft' && (
                     <Card className="border-slate-200 bg-white shadow-xs">
@@ -156,6 +208,7 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                 className="grid gap-3 md:grid-cols-2"
                                 onSubmit={(event) => {
                                     event.preventDefault();
+                                    if (blockWithoutSignature(userHasSignature)) return;
                                     field.post(`/final-clearances/${clearance.id}/submit`);
                                 }}
                             >
@@ -185,12 +238,8 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                     <Textarea className="mt-1 font-normal" rows={3} value={field.data.preparer_comments} onChange={(e) => field.setData('preparer_comments', e.target.value)} />
                                 </label>
                                 <div className="flex flex-wrap gap-2 md:col-span-2">
-                                    <Button type="button" variant="outline" disabled={field.processing} onClick={() => field.put(`/final-clearances/${clearance.id}`)}>Save draft</Button>
+                                    <Button type="button" variant="outline" disabled={field.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) field.put(`/final-clearances/${clearance.id}`); }}>Save draft</Button>
                                     <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={field.processing}>Submit to HR</Button>
-                                    <Button type="button" variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" onClick={() => router.delete(`/final-clearances/${clearance.id}`)}>
-                                        <Trash2 className="h-4 w-4" />
-                                        Delete draft
-                                    </Button>
                                 </div>
                             </form>
                         </CardContent>
@@ -207,6 +256,7 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                 className="grid gap-3 md:grid-cols-2"
                                 onSubmit={(event) => {
                                     event.preventDefault();
+                                    if (blockWithoutSignature(userHasSignature)) return;
                                     hr.post(`/final-clearances/${clearance.id}/forward`);
                                 }}
                             >
@@ -234,9 +284,9 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                     <Textarea className="mt-1 font-normal" rows={2} value={hr.data.comments} onChange={(e) => hr.setData('comments', e.target.value)} />
                                 </label>
                                 <div className="flex flex-wrap gap-2 md:col-span-2">
-                                    <Button type="button" variant="outline" disabled={hr.processing} onClick={() => hr.put(`/final-clearances/${clearance.id}`)}>Save</Button>
+                                    <Button type="button" variant="outline" disabled={hr.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) hr.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
                                     <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={hr.processing}>Submit to Accounts</Button>
-                                    <Button type="button" variant="outline" onClick={() => decision.post(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
+                                    <Button type="button" variant="outline" onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/send-back`); }}>Send back</Button>
                                 </div>
                                 <label className="text-xs font-semibold text-slate-700 md:col-span-2">Send-back comment
                                     <Textarea className="mt-1 font-normal" rows={2} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
@@ -257,6 +307,7 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                 className="grid gap-3"
                                 onSubmit={(event) => {
                                     event.preventDefault();
+                                    if (blockWithoutSignature(userHasSignature)) return;
                                     accounts.post(`/final-clearances/${clearance.id}/forward`);
                                 }}
                             >
@@ -274,9 +325,9 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                     <Textarea className="mt-1 font-normal" rows={3} value={accounts.data.accounts_comments} onChange={(e) => accounts.setData('accounts_comments', e.target.value)} />
                                 </label>
                                 <div className="flex flex-wrap gap-2">
-                                    <Button type="button" variant="outline" disabled={accounts.processing} onClick={() => accounts.put(`/final-clearances/${clearance.id}`)}>Save</Button>
+                                    <Button type="button" variant="outline" disabled={accounts.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) accounts.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
                                     <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={accounts.processing}>Submit to Director Finance</Button>
-                                    <Button type="button" variant="outline" onClick={() => decision.post(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
+                                    <Button type="button" variant="outline" onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/send-back`); }}>Send back</Button>
                                 </div>
                                 <label className="text-xs font-semibold text-slate-700">Send-back comment
                                     <Textarea className="mt-1 font-normal" rows={2} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
@@ -299,11 +350,11 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                                     {decision.errors.comments && <p className="mt-1 text-xs text-rose-600">{decision.errors.comments}</p>}
                                 </label>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={decision.processing} onClick={() => decision.post(`/final-clearances/${clearance.id}/approve`)}>
+                                    <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={decision.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/approve`); }}>
                                         {clearance.status === 'submitted_to_ed' ? 'Approve and close' : 'Approve'}
                                     </Button>
-                                    <Button type="button" variant="outline" disabled={decision.processing} onClick={() => decision.post(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
-                                    <Button type="button" variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" disabled={decision.processing} onClick={() => decision.post(`/final-clearances/${clearance.id}/reject`)}>Reject</Button>
+                                    <Button type="button" variant="outline" disabled={decision.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/send-back`); }}>Send back</Button>
+                                    <Button type="button" variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" disabled={decision.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/reject`); }}>Reject</Button>
                                 </div>
                             </form>
                         </CardContent>
@@ -314,6 +365,14 @@ export default function FinalClearanceShow({ clearance, canAct }: { clearance: C
                     <ClearanceFormDocument clearance={clearance} />
                 </div>
             </div>
+            {isSuperAdmin && (
+                <ClearanceDeleteDialog
+                    open={deleteOpen}
+                    onOpenChange={setDeleteOpen}
+                    clearanceId={clearance.id}
+                    employeeName={clearance.employee_name}
+                />
+            )}
         </Layout>
     );
 }

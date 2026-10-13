@@ -105,6 +105,8 @@ class EvaluationTemplateController extends Controller
             abort(403, 'শুধুমাত্র সুপার অ্যাডমিন সেকশন মুছে ফেলতে পারবেন।');
         }
 
+        \App\Support\ConfirmedPassword::validate($request);
+
         $section->delete();
         AppraisalTemplateCache::flush();
 
@@ -163,6 +165,8 @@ class EvaluationTemplateController extends Controller
         if (!$this->canUserManage($request)) {
             abort(403, 'শুধুমাত্র সুপার অ্যাডমিন মূল্যায়নের মানদণ্ড মুছে ফেলতে পারবেন।');
         }
+
+        \App\Support\ConfirmedPassword::validate($request);
 
         $criterion->delete();
         AppraisalTemplateCache::flush();

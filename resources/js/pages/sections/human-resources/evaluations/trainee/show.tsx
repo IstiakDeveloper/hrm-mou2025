@@ -20,6 +20,7 @@ import {
     XCircle
 } from 'lucide-react';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import TraineeOfficialFormDocument from './components/TraineeOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 import { TRAINEE_FORM_CONFIGS, calculateTraineeGrade } from './trainee-config';
@@ -120,10 +121,9 @@ export default function TraineeEvaluationShow({
         });
     };
 
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const handleDelete = () => {
-        if (confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই মূল্যায়নটি মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।' : 'Are you sure you want to delete this evaluation?')) {
-            router.delete(`/trainee-evaluations/${evaluation.id}`);
-        }
+        setDeleteUrl(`/trainee-evaluations/${evaluation.id}`);
     };
 
     const getStatusBadge = (evaluationStatus: string) => {
@@ -317,6 +317,12 @@ export default function TraineeEvaluationShow({
                     <TraineeOfficialFormDocument evaluation={evaluation} lang={lang} />
                 </div>
             </PageSurface>
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
+            />
         </Layout>
     );
 }

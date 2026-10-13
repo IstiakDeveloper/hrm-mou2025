@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import Layout from '@/layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { 
@@ -120,10 +121,9 @@ export default function ConfirmationEvaluationIndex({
         router.get('/confirmation-evaluations', {}, { replace: true });
     };
 
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const handleDelete = (id: number) => {
-        if (confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই স্থায়ীকরণ মূল্যায়নটি মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।' : 'Are you sure you want to delete this confirmation evaluation? This cannot be undone.')) {
-            router.delete(`/confirmation-evaluations/${id}`);
-        }
+        setDeleteUrl(`/confirmation-evaluations/${id}`);
     };
 
     const getFormTypeBadge = (type: string) => {
@@ -772,6 +772,12 @@ export default function ConfirmationEvaluationIndex({
                 lang={lang}
                 evaluation={selectedEvaluationForApproval}
                 onClose={() => setSelectedEvaluationForApproval(null)}
+            />
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
             />
             </div>
         </Layout>

@@ -4,7 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Layout from '@/layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { Building2, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, HandCoins, Plus, Printer, RotateCcw, Search, Users, XCircle } from 'lucide-react';
+import { Building2, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, HandCoins, Plus, Printer, RotateCcw, Search, Trash2, Users, XCircle } from 'lucide-react';
+import ClearanceDeleteDialog from './components/ClearanceDeleteDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import React, { useState } from 'react';
 
@@ -78,20 +79,34 @@ function money(value: unknown) {
     return amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+
+function blockWithoutSignature(userHasSignature: boolean) {
+    if (userHasSignature) return false;
+    alert(SIGNATURE_REQUIRED);
+    window.location.href = '/settings/profile';
+    return true;
+}
+
 export default function FinalClearanceIndex({
     clearances,
     filters,
     metrics = { total: 0, pending: 0, approved: 0, rejected: 0 },
     canCreate,
+    userHasSignature = false,
+    isSuperAdmin = false,
 }: {
     clearances: Paginator;
     filters: { status?: string; search?: string; per_page?: string };
     metrics?: { total: number; pending: number; approved: number; rejected: number };
     canCreate: boolean;
+    userHasSignature?: boolean;
+    isSuperAdmin?: boolean;
 }) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || '15');
+    const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
 
     const apply = (next?: { search?: string; status?: string; per_page?: string }) => {
         const query: Record<string, string> = {};
@@ -137,7 +152,13 @@ export default function FinalClearanceIndex({
                         </div>
                     </div>
                     {canCreate ? (
-                        <Link href="/final-clearances/create" className="shrink-0">
+                        <Link
+                            href="/final-clearances/create"
+                            className="shrink-0"
+                            onClick={(event) => {
+                                if (blockWithoutSignature(userHasSignature)) event.preventDefault();
+                            }}
+                        >
                             <Button className="h-8.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700">
                                 <Plus className="h-3.5 w-3.5" />
                                 New clearance
@@ -280,6 +301,11 @@ export default function FinalClearanceIndex({
                                             <Button variant="outline" size="sm" className="h-7 w-7 border-slate-200 p-0 text-slate-700 hover:bg-slate-50" title="Print" onClick={() => window.open(`/final-clearances/${row.id}/print`, '_blank')}>
                                                 <Printer className="h-3.5 w-3.5" />
                                             </Button>
+                                            {isSuperAdmin && (
+                                                <Button variant="outline" size="sm" className="h-7 w-7 border-rose-200 p-0 text-rose-700 hover:bg-rose-50" title="Delete" onClick={() => setDeleteTarget(row)}>
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -337,6 +363,12 @@ export default function FinalClearanceIndex({
                     </div>
                 </div>
             </div>
+            <ClearanceDeleteDialog
+                open={deleteTarget !== null}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                clearanceId={deleteTarget?.id ?? null}
+                employeeName={deleteTarget?.employee_name}
+            />
         </Layout>
     );
 }

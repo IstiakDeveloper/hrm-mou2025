@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Layout from '@/layouts/AdminLayout';
 import { Head, useForm, router, Link } from '@inertiajs/react';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import { PageSurface } from '@/components/page-surface';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -211,12 +212,13 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
         });
     };
 
+    const [deleteTarget, setDeleteTarget] = useState<{ url: string; description: string } | null>(null);
+
     const handleDeleteCriterion = (criterionId: number) => {
-        if (confirm('আপনি কি নিশ্চিত যে এই মানদণ্ডটি মুছে ফেলতে চান?')) {
-            router.delete(`/promotion-evaluations/templates/criteria/${criterionId}`, {
-                preserveScroll: true,
-            });
-        }
+        setDeleteTarget({
+            url: `/promotion-evaluations/templates/criteria/${criterionId}`,
+            description: 'এই মানদণ্ডটি মুছে ফেলতে আপনার পাসওয়ার্ড দিন।',
+        });
     };
 
     const openEditTemplate = (tmpl: Template) => {
@@ -286,11 +288,10 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
     };
 
     const handleDeleteSection = (sectionId: number) => {
-        if (confirm('আপনি কি নিশ্চিত যে এই সেকশন এবং এর অন্তর্গত সকল মানদণ্ড মুছে ফেলতে চান?')) {
-            router.delete(`/promotion-evaluations/templates/sections/${sectionId}`, {
-                preserveScroll: true,
-            });
-        }
+        setDeleteTarget({
+            url: `/promotion-evaluations/templates/sections/${sectionId}`,
+            description: 'এই সেকশন এবং এর অন্তর্গত সকল মানদণ্ড মুছে ফেলতে আপনার পাসওয়ার্ড দিন।',
+        });
     };
 
     return (
@@ -1047,6 +1048,13 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                     </DialogContent>
                 </Dialog>
             </PageSurface>
+            <AppraisalDeleteDialog
+                open={deleteTarget !== null}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                url={deleteTarget?.url ?? null}
+                description={deleteTarget?.description}
+                preserveScroll
+            />
         </Layout>
     );
 }

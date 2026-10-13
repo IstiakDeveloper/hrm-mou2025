@@ -67,11 +67,15 @@ class FinalClearanceController extends Controller
                 ];
             });
 
+        $user->loadMissing('employee');
+
         return Inertia::render('final-clearances/index', [
             'clearances' => $rows,
             'filters' => ['status' => $status, 'search' => $search, 'per_page' => (string) $perPage],
             'metrics' => $metrics,
             'canCreate' => $this->clearances->canOpenCreate($user),
+            'userHasSignature' => $user->hasSignature(),
+            'isSuperAdmin' => $user->isSuperAdmin(),
         ]);
     }
 
@@ -113,15 +117,24 @@ class FinalClearanceController extends Controller
 
     public function create(Request $request)
     {
-        $this->authorizeView($request->user());
+        $user = $request->user();
+        $this->authorizeView($user);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
-        return Inertia::render('final-clearances/create');
+        return Inertia::render('final-clearances/create', [
+            'userHasSignature' => true,
+        ]);
     }
 
     public function store(Request $request)
     {
         $user = $request->user();
         $this->authorizeView($user);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         $validated = $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
@@ -139,10 +152,13 @@ class FinalClearanceController extends Controller
         $this->authorizeRecord($user, $finalClearance);
 
         $finalClearance->load(['signatures.user.employee', 'initiator:id,name']);
+        $user->loadMissing('employee');
 
         return Inertia::render('final-clearances/show', [
             'clearance' => $this->payload($finalClearance),
             'canAct' => $this->clearances->canAct($user, $finalClearance),
+            'userHasSignature' => $user->hasSignature(),
+            'isSuperAdmin' => $user->isSuperAdmin(),
         ]);
     }
 
@@ -161,6 +177,9 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->assertCanAct($user, $finalClearance);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         if ($finalClearance->status === FinalClearance::STATUS_DRAFT) {
             $data = $request->validate([
@@ -201,6 +220,9 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->assertCanAct($user, $finalClearance);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         if ($finalClearance->status !== FinalClearance::STATUS_DRAFT) {
             abort(403);
@@ -228,6 +250,9 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->assertCanAct($user, $finalClearance);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         if ($finalClearance->status === FinalClearance::STATUS_HR) {
             $data = $request->validate([
@@ -268,6 +293,9 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->assertCanAct($user, $finalClearance);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         $data = $request->validate([
             'comments' => ['required', 'string', 'max:2000'],
@@ -297,6 +325,9 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->assertCanAct($user, $finalClearance);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         $data = $request->validate([
             'comments' => ['nullable', 'string', 'max:2000'],
@@ -323,6 +354,9 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->assertCanAct($user, $finalClearance);
+        if ($redirect = $this->requireSignature($user)) {
+            return $redirect;
+        }
 
         if (! in_array($finalClearance->status, [FinalClearance::STATUS_DIRECTOR_FA, FinalClearance::STATUS_ED], true)) {
             abort(403);
@@ -346,16 +380,20 @@ class FinalClearanceController extends Controller
         $user = $request->user();
         $this->authorizeRecord($user, $finalClearance);
 
-        $canDelete = $finalClearance->status === FinalClearance::STATUS_DRAFT
-            && ((int) $finalClearance->initiator_id === (int) $user->id || $user->isSuperAdmin());
-
-        if (! $canDelete) {
+        if (! $user->isSuperAdmin()) {
             abort(403);
         }
 
+        $request->validate([
+            'password' => ['required', 'string', 'current_password'],
+        ], [
+            'password.required' => 'মুছে ফেলতে আপনার পাসওয়ার্ড দিন।',
+            'password.current_password' => 'পাসওয়ার্ড সঠিক নয়।',
+        ]);
+
         $finalClearance->delete();
 
-        return redirect()->route('final-clearances.index')->with('success', 'Draft deleted.');
+        return redirect()->route('final-clearances.index')->with('success', 'Final clearance deleted.');
     }
 
     private function moneyRules(): array
@@ -420,6 +458,19 @@ class FinalClearanceController extends Controller
         })->values();
 
         return $data;
+    }
+
+    private function requireSignature($user): ?\Illuminate\Http\RedirectResponse
+    {
+        $user->loadMissing('employee');
+        if ($user->hasSignature()) {
+            return null;
+        }
+
+        return redirect()->route('settings.profile.edit')->with(
+            'error',
+            'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।'
+        );
     }
 
     private function authorizeView($user): void

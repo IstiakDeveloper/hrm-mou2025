@@ -19,6 +19,7 @@ import {
     AlertTriangle
 } from 'lucide-react';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import ProbationIncrementOfficialFormDocument from './components/ProbationIncrementOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 
@@ -118,10 +119,9 @@ export default function ProbationIncrementEvaluationShow({
         });
     };
 
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const handleDelete = () => {
-        if (confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই মূল্যায়নটি মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।' : 'Are you sure you want to delete this evaluation?')) {
-            router.delete(`/probation-increment-evaluations/${evaluation.id}`);
-        }
+        setDeleteUrl(`/probation-increment-evaluations/${evaluation.id}`);
     };
 
     const getStatusBadge = (evaluationStatus: string) => {
@@ -338,6 +338,12 @@ export default function ProbationIncrementEvaluationShow({
                     <ProbationIncrementOfficialFormDocument evaluation={evaluation} lang={lang} />
                 </div>
             </PageSurface>
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
+            />
         </Layout>
     );
 }

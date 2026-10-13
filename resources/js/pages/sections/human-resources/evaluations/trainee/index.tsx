@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import Layout from '@/layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { 
@@ -114,10 +115,9 @@ export default function TraineeEvaluationIndex({
         });
     };
 
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const handleDelete = (id: number) => {
-        if (confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই মূল্যায়নটি মুছে ফেলতে চান?' : 'Are you sure you want to delete this evaluation?')) {
-            router.delete(`/trainee-evaluations/${id}`);
-        }
+        setDeleteUrl(`/trainee-evaluations/${id}`);
     };
 
     const toBn = (num: number | string) => {
@@ -647,6 +647,12 @@ export default function TraineeEvaluationIndex({
                 lang={lang}
                 evaluation={selectedEvaluationForApproval}
                 onClose={() => setSelectedEvaluationForApproval(null)}
+            />
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
             />
 
         </Layout>

@@ -677,6 +677,8 @@ class ProbationIncrementEvaluationController extends Controller
             abort(403, 'আপনার এটি মুছে ফেলার অনুমতি নেই।');
         }
 
+        \App\Support\ConfirmedPassword::validate($request);
+
         $evaluation->delete();
 
         return redirect()->route('probation-increment-evaluations.index')

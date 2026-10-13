@@ -547,6 +547,8 @@ class PromotionEvaluationController extends Controller
             return redirect()->back()->with('error', 'You cannot delete this evaluation once it has been submitted.');
         }
 
+        \App\Support\ConfirmedPassword::validate($request);
+
         $evaluation->scores()->delete();
         $evaluation->signatures()->delete();
         $evaluation->delete();

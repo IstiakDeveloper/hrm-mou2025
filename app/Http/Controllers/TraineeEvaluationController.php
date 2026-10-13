@@ -556,8 +556,10 @@ class TraineeEvaluationController extends Controller
         ]);
     }
 
-    public function destroy(TraineeEvaluation $evaluation)
+    public function destroy(Request $request, TraineeEvaluation $evaluation)
     {
+        \App\Support\ConfirmedPassword::validate($request);
+
         $evaluation->delete();
 
         return redirect()->route('trainee-evaluations.index')

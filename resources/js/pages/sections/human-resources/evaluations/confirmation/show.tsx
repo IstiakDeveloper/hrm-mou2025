@@ -19,6 +19,7 @@ import {
     AlertTriangle
 } from 'lucide-react';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import ConfirmationOfficialFormDocument from './components/ConfirmationOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 
@@ -124,10 +125,9 @@ export default function ConfirmationEvaluationShow({
         });
     };
 
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const handleDelete = () => {
-        if (confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই স্থায়ীকরণ মূল্যায়নটি মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।' : 'Are you sure you want to delete this confirmation evaluation?')) {
-            router.delete(`/confirmation-evaluations/${evaluation.id}`);
-        }
+        setDeleteUrl(`/confirmation-evaluations/${evaluation.id}`);
     };
 
     const getStatusBadge = (evaluationStatus: string) => {
@@ -344,6 +344,12 @@ export default function ConfirmationEvaluationShow({
                     <ConfirmationOfficialFormDocument evaluation={evaluation} lang={lang} />
                 </div>
             </PageSurface>
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
+            />
         </Layout>
     );
 }

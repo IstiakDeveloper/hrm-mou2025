@@ -7,7 +7,9 @@ import { Head, Link, router } from '@inertiajs/react';
 import { ArrowLeft, ChevronRight, HandCoins, User } from 'lucide-react';
 import React, { useState } from 'react';
 
-export default function FinalClearanceCreate() {
+const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+
+export default function FinalClearanceCreate({ userHasSignature = false }: { userHasSignature?: boolean }) {
     const [employeeId, setEmployeeId] = useState<number | null>(null);
     const [picked, setPicked] = useState<AppraisalEmployee | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -80,6 +82,11 @@ export default function FinalClearanceCreate() {
                                     disabled={submitting || !employeeId}
                                     onClick={() => {
                                         if (!employeeId) return;
+                                        if (!userHasSignature) {
+                                            alert(SIGNATURE_REQUIRED);
+                                            window.location.href = '/settings/profile';
+                                            return;
+                                        }
                                         setSubmitting(true);
                                         router.post('/final-clearances', { employee_id: employeeId }, {
                                             onFinish: () => setSubmitting(false),
