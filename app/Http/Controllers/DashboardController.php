@@ -35,6 +35,7 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\ActiveSessionService;
+use App\Support\ActivityLogPresenter;
 use App\Services\EmployeeGratuityService;
 use App\Services\EmployeeLoanDashboardService;
 use App\Services\EmployeeLoanService;
@@ -341,21 +342,31 @@ class DashboardController extends Controller
         }
 
         $activityCount = \Spatie\Activitylog\Models\Activity::query()
+            ->whereIn('event', ['updated', 'deleted'])
             ->whereDate('created_at', '>=', Carbon::now()->subDays(30))
             ->count();
 
         $recentActivities = \Spatie\Activitylog\Models\Activity::query()
-            ->with('causer:id,name')
+            ->with([
+                'causer' => function ($q) {
+                    $q->with('employee:id,name_en,name_bn,employee_id');
+                },
+                'subject',
+            ])
+            ->whereIn('event', ['updated', 'deleted'])
             ->latest('id')
             ->take(6)
             ->get()
-            ->map(fn ($act) => [
-                'id' => $act->id,
-                'description' => $act->description,
-                'log_name' => $act->log_name,
-                'causer_name' => $act->causer?->name ?? 'System',
-                'created_at' => $act->created_at?->diffForHumans(),
-            ])
+            ->map(function ($act) {
+                $row = ActivityLogPresenter::present($act);
+
+                return [
+                    'id' => $row['id'],
+                    'description' => $row['summary'],
+                    'causer_name' => $row['actor_name'],
+                    'created_at' => $row['created_at_human'],
+                ];
+            })
             ->values()
             ->all();
 

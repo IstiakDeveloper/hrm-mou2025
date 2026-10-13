@@ -31,10 +31,6 @@ final class ZktecoEmployeeResolver
             return $employee;
         }
 
-        if (! preg_match('/^\d+$/', $devicePin)) {
-            return null;
-        }
-
         if (isset($this->deviceIdIndex[$devicePin])) {
             return $this->deviceIdIndex[$devicePin];
         }

@@ -29,6 +29,29 @@ final class EmployeePinLookup
             $out[] = str_pad($significant, 5, '0', STR_PAD_LEFT);
         }
 
+        if (preg_match('/^([A-Za-z]+)[-_]?0*(\d+)$/', $pinRaw, $m)) {
+            $prefix = strtoupper($m[1]);
+            $num = ltrim($m[2], '0');
+            $num = $num === '' ? '0' : $num;
+
+            $out[] = $prefix.$num;
+            $out[] = $prefix.'-'.$num;
+            $out[] = $prefix.'_'.$num;
+            $out[] = $prefix.'-'.str_pad($num, 2, '0', STR_PAD_LEFT);
+            $out[] = $prefix.str_pad($num, 2, '0', STR_PAD_LEFT);
+            $out[] = $prefix.'-'.str_pad($num, 3, '0', STR_PAD_LEFT);
+
+            if ($prefix === 'S') {
+                $out[] = 'SG'.$num;
+                $out[] = 'SG-'.$num;
+                $out[] = 'SG-'.str_pad($num, 2, '0', STR_PAD_LEFT);
+            } elseif ($prefix === 'SG') {
+                $out[] = 'S'.$num;
+                $out[] = 'S-'.$num;
+                $out[] = 'S-'.str_pad($num, 2, '0', STR_PAD_LEFT);
+            }
+        }
+
         return array_values(array_unique(array_filter($out, fn (string $v): bool => $v !== '')));
     }
 

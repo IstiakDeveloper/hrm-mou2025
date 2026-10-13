@@ -51,34 +51,7 @@ class AppServiceProvider extends ServiceProvider
             return str_replace(':attribute', $attribute, 'The :attribute must contain English characters only. Bangla, Arabic, or other non-English characters are not allowed.');
         });
 
-        // Activity log for Authentication Events
-        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, function ($event) {
-            if ($event->user) {
-                activity('auth')
-                    ->causedBy($event->user)
-                    ->withProperties([
-                        'ip' => request()->ip(),
-                        'user_agent' => request()->userAgent(),
-                    ])
-                    ->event('login')
-                    ->log('User logged in to system');
-            }
-        });
-
-        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Logout::class, function ($event) {
-            if ($event->user) {
-                activity('auth')
-                    ->causedBy($event->user)
-                    ->withProperties([
-                        'ip' => request()->ip(),
-                        'user_agent' => request()->userAgent(),
-                    ])
-                    ->event('logout')
-                    ->log('User logged out from system');
-            }
-        });
-
-        // Global Automatic Activity Tracking for ANY model in the project
+        // Audit updates and deletes on HR records. Creates, login, and logout are not recorded.
         \Illuminate\Support\Facades\Event::listen('eloquent.updating: *', function (string $event, array $data) {
             if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
                 \App\Services\SystemActivityTracker::onUpdating($data[0]);
@@ -88,12 +61,6 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Event::listen('eloquent.updated: *', function (string $event, array $data) {
             if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
                 \App\Services\SystemActivityTracker::log('updated', $data[0]);
-            }
-        });
-
-        \Illuminate\Support\Facades\Event::listen('eloquent.created: *', function (string $event, array $data) {
-            if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
-                \App\Services\SystemActivityTracker::log('created', $data[0]);
             }
         });
 

@@ -289,3 +289,29 @@ test('office staff keep the normal same-day office rules', function () {
         ->and(clockOf($row->check_in))->toBe('09:10')
         ->and(clockOf($row->check_out))->toBe('17:00');
 });
+
+test('a guard with text pin SG-1 matches punches sent as SG1 without hyphens', function () {
+    $guard1 = makeShiftEmployee('SG-1', 'Shabuj', $this->guardDesignation->id, $this->branch->id, $this->department->id);
+    $guard2 = makeShiftEmployee('SG-2', 'Raihan', $this->guardDesignation->id, $this->branch->id, $this->department->id);
+
+    // Punch with SG1 and SG2 (no hyphen, as pushed to biometric device)
+    $ingest = app(ZktecoAttendanceIngestService::class);
+    $saved1 = $ingest->ingestPunch($this->device, 'SG1', '2026-10-12 09:15:00');
+    $saved2 = $ingest->ingestPunch($this->device, 'SG2', '2026-10-12 19:10:00');
+
+    expect($saved1)->toBeTrue()
+        ->and($saved2)->toBeTrue();
+
+    $row1 = attendanceOn($guard1, '2026-10-12');
+    $row2 = attendanceOn($guard2, '2026-10-12');
+
+    expect($row1)->not->toBeNull()
+        ->and($row1->shift_type)->toBe('day')
+        ->and($row1->status)->toBe('present')
+        ->and(clockOf($row1->check_in))->toBe('09:15')
+        ->and($row2)->not->toBeNull()
+        ->and($row2->shift_type)->toBe('night')
+        ->and($row2->status)->toBe('present')
+        ->and(clockOf($row2->check_in))->toBe('19:10');
+});
+

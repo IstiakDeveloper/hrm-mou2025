@@ -2,26 +2,51 @@
 
 namespace App\Traits;
 
+use App\Support\ActivityLogPresenter;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 trait TracksActivity
 {
     use LogsActivity;
 
-    /**
-     * Default options for Spatie Activitylog.
-     */
+    /** @var list<string> */
+    protected static array $recordEvents = ['updated', 'deleted'];
+
     public function getActivitylogOptions(): LogOptions
     {
+        if (! ActivityLogPresenter::allows(static::class)) {
+            return LogOptions::defaults()
+                ->logOnly([])
+                ->dontSubmitEmptyLogs();
+        }
+
         return LogOptions::defaults()
-            ->logAll()
-            ->logExcept(['password', 'remember_token'])
+            ->logFillable()
+            ->logExcept([
+                'password',
+                'remember_token',
+                'signature',
+                'two_factor_secret',
+                'two_factor_recovery_codes',
+                'login_pin',
+                'created_at',
+                'updated_at',
+                'deleted_at',
+                'email_verified_at',
+                'download_count',
+            ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
-            ->setDescriptionForEvent(function (string $eventName): string {
-                $modelName = class_basename(static::class);
-                return "{$modelName} has been {$eventName}";
-            });
+            ->dontLogIfAttributesChangedOnly(['updated_at', 'created_at', 'download_count'])
+            ->setDescriptionForEvent(fn (string $eventName): string => $eventName === 'deleted' ? 'Deleted' : 'Updated');
+    }
+
+    public function tapActivity(Activity $activity, string $eventName): void
+    {
+        $properties = ActivityLogPresenter::enrich($this, $activity->properties?->toArray() ?? [], $eventName);
+        $activity->properties = collect($properties);
+        $activity->description = ActivityLogPresenter::description($eventName, $properties);
     }
 }

@@ -272,7 +272,7 @@ export default function AdministrationDashboard({
                             <span className="text-xs text-slate-400 font-medium">events</span>
                         </div>
                         <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-                            <span>Spatie ActivityLog</span>
+                            <span>Updates and deletes</span>
                             <Link href={`/admin/activity-logs${section}`} className="font-semibold text-blue-700 hover:underline">
                                 View Logs →
                             </Link>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\ActivityLogPresenter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -28,21 +29,24 @@ class ActivityLogController extends Controller
             'from_date' => 'nullable|date',
             'to_date' => 'nullable|date',
             'causer_id' => 'nullable|integer',
-            'event' => 'nullable|string|max:50',
+            'event' => 'nullable|in:updated,deleted',
             'subject_type' => 'nullable|string|max:100',
             'search' => 'nullable|string|max:100',
             'per_page' => 'nullable|integer|min:10|max:100',
         ]);
 
-        // Default to last 30 days
         $fromDate = $validated['from_date'] ?? Carbon::now()->subDays(30)->toDateString();
         $toDate = $validated['to_date'] ?? Carbon::now()->toDateString();
         $perPage = (int) ($validated['per_page'] ?? 25);
 
         $query = Activity::query()
-            ->with(['causer' => function ($q) {
-                $q->select('id', 'name', 'email', 'username');
-            }])
+            ->with([
+                'causer' => function ($q) {
+                    $q->with('employee:id,name_en,name_bn,employee_id');
+                },
+                'subject',
+            ])
+            ->whereIn('event', ['updated', 'deleted'])
             ->whereDate('created_at', '>=', $fromDate)
             ->whereDate('created_at', '<=', $toDate)
             ->latest('id');
@@ -58,7 +62,7 @@ class ActivityLogController extends Controller
         if (! empty($validated['subject_type'])) {
             $subjectClass = $validated['subject_type'];
             if (! str_contains($subjectClass, '\\')) {
-                $subjectClass = 'App\\Models\\' . $subjectClass;
+                $subjectClass = 'App\\Models\\'.$subjectClass;
             }
             $query->where('subject_type', $subjectClass);
         }
@@ -67,79 +71,66 @@ class ActivityLogController extends Controller
             $term = trim($validated['search']);
             $query->where(function ($q) use ($term) {
                 $q->where('description', 'like', "%{$term}%")
-                    ->orWhere('properties', 'like', "%{$term}%")
+                    ->orWhere('properties->actor_name', 'like', "%{$term}%")
+                    ->orWhere('properties->subject_label', 'like', "%{$term}%")
                     ->orWhereHasMorph('causer', [User::class], function ($uq) use ($term) {
                         $uq->where('name', 'like', "%{$term}%")
-                            ->orWhere('email', 'like', "%{$term}%");
+                            ->orWhereHas('employee', function ($eq) use ($term) {
+                                $eq->where('name_en', 'like', "%{$term}%")
+                                    ->orWhere('name_bn', 'like', "%{$term}%")
+                                    ->orWhere('employee_id', 'like', "%{$term}%");
+                            });
                     });
             });
         }
 
         $activities = $query->paginate($perPage)->withQueryString();
+        $activities->through(fn (Activity $act) => ActivityLogPresenter::present($act));
 
-        $activities->through(function (Activity $act) {
-            $subjectName = $act->subject_type ? class_basename($act->subject_type) : null;
-            return [
-                'id' => $act->id,
-                'log_name' => $act->log_name,
-                'description' => $act->description,
-                'subject_type' => $act->subject_type,
-                'subject_name' => $subjectName,
-                'subject_id' => $act->subject_id,
-                'causer_id' => $act->causer_id,
-                'causer' => $act->causer ? [
-                    'id' => $act->causer->id,
-                    'name' => $act->causer->name,
-                    'email' => $act->causer->email,
-                    'username' => $act->causer->username ?? null,
-                ] : null,
-                'event' => $act->event,
-                'properties' => $act->properties,
-                'created_at' => $act->created_at?->toIso8601String(),
-                'created_at_human' => $act->created_at?->diffForHumans(),
-                'created_at_formatted' => $act->created_at?->format('d M, Y h:i A'),
-            ];
-        });
+        $audited = Activity::query()->whereIn('event', ['updated', 'deleted']);
 
-        // Filter options for dropdowns
         $causers = User::query()
-            ->whereIn('id', Activity::query()->whereNotNull('causer_id')->distinct()->pluck('causer_id'))
+            ->with('employee:id,name_en,name_bn,employee_id')
+            ->whereIn('id', (clone $audited)->whereNotNull('causer_id')->distinct()->pluck('causer_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'email']);
+            ->get()
+            ->map(fn (User $causer) => [
+                'id' => $causer->id,
+                'name' => ActivityLogPresenter::actorName($causer),
+            ])
+            ->values();
 
-        $modules = Activity::query()
+        $modules = (clone $audited)
             ->whereNotNull('subject_type')
             ->distinct()
             ->pluck('subject_type')
             ->map(fn ($type) => [
                 'value' => class_basename($type),
-                'label' => class_basename($type),
+                'label' => ActivityLogPresenter::typeLabel((string) $type),
             ])
             ->unique('value')
+            ->sortBy('label')
             ->values();
 
-        $events = Activity::query()
-            ->whereNotNull('event')
-            ->distinct()
-            ->pluck('event')
-            ->values();
+        $range = Activity::query()
+            ->whereIn('event', ['updated', 'deleted'])
+            ->whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate);
 
         $stats = [
-            'total_in_range' => $activities->total(),
-            'total_all_time' => Activity::count(),
-            'today_count' => Activity::whereDate('created_at', Carbon::today())->count(),
+            'updates' => (clone $range)->where('event', 'updated')->count(),
+            'deletes' => (clone $range)->where('event', 'deleted')->count(),
         ];
 
         return Inertia::render('admin/activity-logs/index', [
             'activities' => $activities,
             'causers' => $causers,
             'modules' => $modules,
-            'events' => $events,
             'stats' => $stats,
             'filters' => [
                 'from_date' => $fromDate,
                 'to_date' => $toDate,
-                'causer_id' => $validated['causer_id'] ?? '',
+                'causer_id' => isset($validated['causer_id']) ? (string) $validated['causer_id'] : '',
                 'event' => $validated['event'] ?? '',
                 'subject_type' => $validated['subject_type'] ?? '',
                 'search' => $validated['search'] ?? '',

@@ -2,125 +2,109 @@
 
 namespace App\Services;
 
+use App\Support\ActivityLogPresenter;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 class SystemActivityTracker
 {
+    /** @var array<int, array{attributes: array<string, mixed>, old: array<string, mixed>}> */
     private static array $pendingChanges = [];
-
-    private static array $sensitiveAttributes = [
-        'password',
-        'remember_token',
-        'two_factor_secret',
-        'two_factor_recovery_codes',
-    ];
-
-    private static array $ignoredModels = [
-        'Activity',
-        'Notification',
-        'PushSubscription',
-        'DatabaseNotification',
-    ];
 
     public static function onUpdating(Model $model): void
     {
-        if (self::shouldIgnore($model)) {
+        if (! self::shouldTrack($model)) {
             return;
         }
 
-        $dirty = $model->getDirty();
-        unset($dirty['updated_at'], $dirty['created_at']);
-
-        if (empty($dirty)) {
+        $dirty = array_diff_key($model->getDirty(), array_flip(self::ignoredAttributeKeys()));
+        if ($dirty === []) {
             return;
         }
 
-        $dirtyClean = array_diff_key($dirty, array_flip(self::$sensitiveAttributes));
-        $oldClean = array_diff_key(array_intersect_key($model->getOriginal(), $dirty), array_flip(self::$sensitiveAttributes));
-
+        $original = $model->getOriginal();
         self::$pendingChanges[spl_object_id($model)] = [
-            'attributes' => $dirtyClean,
-            'old' => $oldClean,
+            'attributes' => $dirty,
+            'old' => array_intersect_key($original, $dirty),
         ];
     }
 
     public static function log(string $event, ?Model $model): void
     {
-        if (! $model instanceof Model || self::shouldIgnore($model)) {
+        if (! $model instanceof Model || ! in_array($event, ['updated', 'deleted'], true)) {
             return;
         }
 
-        $properties = [
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-        ];
+        $objId = spl_object_id($model);
+        $cached = self::$pendingChanges[$objId] ?? null;
+        unset(self::$pendingChanges[$objId]);
 
+        if (! self::shouldTrack($model)) {
+            return;
+        }
+
+        $raw = [];
         if ($event === 'updated') {
-            $objId = spl_object_id($model);
-            $cached = self::$pendingChanges[$objId] ?? [];
-            unset(self::$pendingChanges[$objId]);
+            $raw = [
+                'attributes' => $cached['attributes'] ?? [],
+                'old' => $cached['old'] ?? [],
+            ];
+            if ($raw['attributes'] === [] && $raw['old'] === []) {
+                return;
+            }
+        }
 
-            $attributes = $cached['attributes'] ?? [];
-            $old = $cached['old'] ?? [];
-
-            // If nothing meaningful changed, do not submit empty log
-            if (empty($attributes) && empty($old)) {
+        try {
+            $properties = ActivityLogPresenter::enrich($model, $raw, $event);
+            if ($event === 'updated' && ($properties['changed_fields'] ?? []) === []) {
                 return;
             }
 
-            $properties['attributes'] = $attributes;
-            $properties['old'] = $old;
-        } elseif ($event === 'created') {
-            $attributes = array_diff_key($model->getAttributes(), array_flip(self::$sensitiveAttributes));
-            unset($attributes['created_at'], $attributes['updated_at']);
-            $properties['attributes'] = $attributes;
-        } elseif ($event === 'deleted') {
-            $old = array_diff_key($model->getAttributes(), array_flip(self::$sensitiveAttributes));
-            unset($old['created_at'], $old['updated_at']);
-            $properties['old'] = $old;
-        }
-
-        $modelName = class_basename($model);
-        $key = $model->getKey();
-        $description = "{$modelName}" . ($key ? " #{$key}" : '') . " has been {$event}";
-
-        try {
-            $act = activity()
+            $logger = activity()
                 ->performedOn($model)
                 ->event($event)
                 ->withProperties($properties);
 
-            $causer = auth()->user();
-            if ($causer) {
-                $act->causedBy($causer);
+            $causer = Auth::user();
+            if ($causer instanceof Model) {
+                $logger->causedBy($causer);
             }
 
-            $act->log($description);
+            $logger->log(ActivityLogPresenter::description($event, $properties));
         } catch (\Throwable $e) {
-            // Never break user action if logging encounters any error
-            Log::warning("SystemActivityTracker error: " . $e->getMessage());
+            Log::warning('SystemActivityTracker error: '.$e->getMessage());
         }
     }
 
-    public static function shouldIgnore(Model $model): bool
+    public static function shouldTrack(Model $model): bool
     {
-        if ($model instanceof Activity) {
-            return true;
+        if (! ActivityLogPresenter::allows($model)) {
+            return false;
         }
 
-        $className = class_basename($model);
-        if (in_array($className, self::$ignoredModels)) {
-            return true;
-        }
+        return ! in_array(LogsActivity::class, class_uses_recursive($model), true);
+    }
 
-        // If model already uses Spatie's LogsActivity trait, let Spatie handle it
-        if (in_array(LogsActivity::class, class_uses_recursive($model))) {
-            return true;
-        }
-
-        return false;
+    /**
+     * @return list<string>
+     */
+    private static function ignoredAttributeKeys(): array
+    {
+        return [
+            'id',
+            'password',
+            'remember_token',
+            'signature',
+            'two_factor_secret',
+            'two_factor_recovery_codes',
+            'login_pin',
+            'created_at',
+            'updated_at',
+            'deleted_at',
+            'email_verified_at',
+            'download_count',
+        ];
     }
 }
