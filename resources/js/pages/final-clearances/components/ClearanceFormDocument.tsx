@@ -131,9 +131,29 @@ function SignTitle({ title, sig }: { title: string; sig?: Signature }) {
     );
 }
 
+function CommentWithSignature({ title, comment, sig }: { title: string; comment?: string | null; sig?: Signature }) {
+    return (
+        <>
+            <div className={label}>{title}</div>
+            <div className="min-h-[16px] whitespace-pre-wrap">{text(comment)}</div>
+            {sig ? (
+                <div className="mt-1 flex flex-col items-end leading-none">
+                    {sig.signature ? (
+                        <img src={`/storage/${sig.signature}`} alt="" className="h-8 max-w-[110px] object-contain" />
+                    ) : null}
+                    {sig.user_name ? <div className="text-[8px] font-semibold">{sig.user_name}</div> : null}
+                    {sig.signed_at ? <div className="text-[8px]">{dateText(sig.signed_at)}</div> : null}
+                </div>
+            ) : null}
+        </>
+    );
+}
+
 export default function ClearanceFormDocument({ clearance }: { clearance: ClearanceRecord }) {
     const net = Number(clearance.net_payable ?? 0);
     const words = Number.isFinite(net) ? takaInWords(net) : '';
+    const preparerSig = latestSignature(clearance.signatures, 'field', ['submitted']);
+    const accountsSig = latestSignature(clearance.signatures, 'accounts', ['forwarded']);
     const hrSig = latestSignature(clearance.signatures, 'hr', ['forwarded']);
     const directorSig = latestSignature(clearance.signatures, 'director_fa', ['approved']);
     const edSig = latestSignature(clearance.signatures, 'ed', ['approved']);
@@ -242,9 +262,8 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
                                 <td className={td}>{text(clearance.total_borrower)}</td>
                             </tr>
                             <tr>
-                                <td className={`${td} h-8 align-top`} colSpan={8}>
-                                    <div className={label}>Preparer's Comments:</div>
-                                    <div className="min-h-[16px] whitespace-pre-wrap">{text(clearance.preparer_comments)}</div>
+                                <td className={`${td} align-top`} colSpan={8}>
+                                    <CommentWithSignature title="Preparer's Comments:" comment={clearance.preparer_comments} sig={preparerSig} />
                                 </td>
                             </tr>
                         </tbody>
@@ -354,9 +373,8 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
                                 </td>
                             </tr>
                             <tr>
-                                <td className={`${td} h-10 align-top`} colSpan={5}>
-                                    <div className={label}>Accounts Department Comments:</div>
-                                    <div className="whitespace-pre-wrap">{text(clearance.accounts_comments)}</div>
+                                <td className={`${td} align-top`} colSpan={5}>
+                                    <CommentWithSignature title="Accounts Department Comments:" comment={clearance.accounts_comments} sig={accountsSig} />
                                 </td>
                             </tr>
                         </tbody>
