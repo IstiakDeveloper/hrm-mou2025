@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { Head, useForm, Link } from '@inertiajs/react';
+import { initiatorGaps } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { Button } from '@/components/ui/button';
@@ -283,8 +285,20 @@ export default function TraineeEvaluationCreate({
         }));
     };
 
+    const [attempted, setAttempted] = useState(false);
+    const liveGaps = useMemo(
+        () => (attempted ? initiatorGaps('trainee', data, lang, formType) : []),
+        [attempted, data, lang, formType],
+    );
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const gaps = initiatorGaps('trainee', data, lang, formType);
+        setAttempted(true);
+        if (gaps.length > 0) {
+            scrollToMissingFields();
+            return;
+        }
         post('/trainee-evaluations');
     };
 
@@ -414,6 +428,10 @@ export default function TraineeEvaluationCreate({
                 ) : (
                     /* FORM ENTRY MODE */
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <MissingFieldsAlert
+                            gaps={liveGaps.length > 0 ? liveGaps : Object.entries(errors).map(([key, message]) => ({ key, message: String(message) }))}
+                            lang={lang}
+                        />
                         
                         {/* 1. Category Switch & Candidate Details Card (Compact Grid Layout) */}
                         <Card className="border-slate-200 shadow-2xs overflow-hidden">
@@ -490,7 +508,7 @@ export default function TraineeEvaluationCreate({
                                             {lang === 'bn' ? 'মূল্যায়ন মাস:*' : 'Evaluation Month:*'}
                                         </Label>
                                         <MonthPickerSelect 
-                                            value={data.evaluation_month}
+                                            data-req="evaluation_month" value={data.evaluation_month}
                                             onChange={val => setData('evaluation_month', val)}
                                             lang={lang}
                                             className="h-8.5 w-full bg-white font-medium text-xs border-slate-300"
@@ -505,7 +523,7 @@ export default function TraineeEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="text"
-                                            value={data.candidate_name}
+                                            data-req="candidate_name" value={data.candidate_name}
                                             onChange={e => setData('candidate_name', e.target.value)}
                                             className="h-8.5 text-xs bg-white font-semibold text-slate-900 border-slate-300"
                                             placeholder="প্রশিক্ষণার্থীর নাম"
@@ -521,7 +539,7 @@ export default function TraineeEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="text"
-                                            value={data.designation_name}
+                                            data-req="designation_name" value={data.designation_name}
                                             onChange={e => setData('designation_name', e.target.value)}
                                             className="h-8.5 text-xs bg-white font-medium border-slate-300"
                                             placeholder="উদা: প্রশিক্ষণার্থী হিসাবরক্ষক"
@@ -537,7 +555,7 @@ export default function TraineeEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="text"
-                                            value={data.pin}
+                                            data-req="pin" value={data.pin}
                                             onChange={e => setData('pin', e.target.value)}
                                             className="h-8.5 text-xs bg-white font-mono font-medium border-slate-300"
                                             placeholder="উদা: 10452"
@@ -553,7 +571,7 @@ export default function TraineeEvaluationCreate({
                                             <input 
                                                 type="text"
                                                 list="branch-list-create"
-                                                value={data.branch_name}
+                                                data-req="branch_name" value={data.branch_name}
                                                 onChange={e => handleBranchChange(e.target.value)}
                                                 className="w-full h-8.5 text-xs bg-white border border-slate-300 rounded-md px-3 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
                                                 placeholder="শাখার নাম লিখুন বা সিলেক্ট করুন"
@@ -577,7 +595,7 @@ export default function TraineeEvaluationCreate({
                                         </div>
                                         <Input 
                                             type="text"
-                                            value={data.regional_office_name}
+                                            data-req="regional_office_name" value={data.regional_office_name}
                                             onChange={e => setData('regional_office_name', e.target.value)}
                                             className="h-8.5 text-xs bg-slate-50 border-slate-300 font-medium text-slate-800"
                                             placeholder="শাখা নির্বাচন করলে আসবে"
@@ -595,7 +613,7 @@ export default function TraineeEvaluationCreate({
                                         </div>
                                         <Input 
                                             type="text"
-                                            value={data.zone_name}
+                                            data-req="zone_name" value={data.zone_name}
                                             onChange={e => setData('zone_name', e.target.value)}
                                             className="h-8.5 text-xs bg-slate-50 border-slate-300 font-medium text-slate-800"
                                             placeholder="শাখা নির্বাচন করলে আসবে"
@@ -610,7 +628,7 @@ export default function TraineeEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="date"
-                                            value={data.training_joining_date}
+                                            data-req="training_joining_date" value={data.training_joining_date}
                                             onChange={e => setData('training_joining_date', e.target.value)}
                                             className="h-8.5 text-xs bg-white font-medium border-slate-300"
                                         />
@@ -623,7 +641,7 @@ export default function TraineeEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="date"
-                                            value={data.training_completion_date}
+                                            data-req="training_completion_date" value={data.training_completion_date}
                                             onChange={e => setData('training_completion_date', e.target.value)}
                                             className="h-8.5 text-xs bg-white font-medium border-slate-300"
                                         />
@@ -691,6 +709,7 @@ export default function TraineeEvaluationCreate({
                                                                 step="any"
                                                                 min="0"
                                                                 max={rubric.maxScore}
+                                                                data-req={`score:${rubric.key}`}
                                                                 value={currentScore}
                                                                 onChange={(e) => handleScoreChange(rubric.key, e.target.value)}
                                                                 className="h-7 text-xs text-center font-bold text-emerald-800 bg-white w-24 mx-auto border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
@@ -730,7 +749,7 @@ export default function TraineeEvaluationCreate({
                                         {lang === 'bn' ? 'অন্যান্য মন্তব্য (যদি থাকে):' : 'Other Remarks (If Any):'}
                                     </Label>
                                     <Textarea 
-                                        value={data.other_remarks}
+                                        data-req="other_remarks" value={data.other_remarks}
                                         onChange={e => setData('other_remarks', e.target.value)}
                                         className="text-xs bg-white min-h-[46px] border-slate-300"
                                         placeholder="প্রশিক্ষণার্থীর কাজের বিষয়ে বিশেষ কোনো পর্যবেক্ষণ বা মন্তব্য থাকলে লিখুন..."
@@ -878,7 +897,7 @@ export default function TraineeEvaluationCreate({
                                             <Input 
                                                 type="number"
                                                 min="1"
-                                                value={data.extension_days}
+                                                data-req="extension_days" value={data.extension_days}
                                                 onChange={e => setData('extension_days', e.target.value)}
                                                 className="h-7 w-20 text-xs text-center font-bold bg-white border-amber-300"
                                                 placeholder="দিন"
@@ -917,7 +936,7 @@ export default function TraineeEvaluationCreate({
                                         {lang === 'bn' ? '১ম তত্ত্বাবধায়কের মন্তব্য / সুপারিশের বিবরণ:' : 'Supervisor Remarks:'}
                                     </Label>
                                     <Textarea 
-                                        value={data.supervisor_remarks}
+                                        data-req="supervisor_remarks" value={data.supervisor_remarks}
                                         onChange={e => setData('supervisor_remarks', e.target.value)}
                                         className="text-xs bg-white min-h-[50px] border-slate-300"
                                         placeholder="সুপারিশ বা সার্বিক মূল্যায়নের কারণ ও বিস্তারিত মন্তব্য লিখুন..."

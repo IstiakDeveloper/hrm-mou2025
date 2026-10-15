@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm, Head, Link } from '@inertiajs/react';
+import { gapMap, initiatorGaps, scoreGapKeys, withEnteredScores } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -72,7 +74,7 @@ export default function ProbationIncrementEvaluationEdit({
         return dStr;
     };
 
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, put, processing, errors, transform } = useForm({
         joining_date: formatForInput(evaluation.joining_date) || '',
         probation_3m_completion_date: formatForInput(evaluation.probation_3m_completion_date) || '',
         education_at_joining: evaluation.education_at_joining || evaluation.employee?.educational_qualification || '',
@@ -121,6 +123,7 @@ export default function ProbationIncrementEvaluationEdit({
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+    const [attempted, setAttempted] = useState(false);
     const formType = evaluation.form_type || 'officer_abm';
     const dynamicStructure = useMemo(() => {
         const codeMap: Record<string, string> = {
@@ -178,29 +181,35 @@ export default function ProbationIncrementEvaluationEdit({
         return { text: '০', color: 'text-slate-600 bg-slate-50 border-slate-200' };
     };
 
-    const validateForm = () => {
-        const errs: Record<string, string> = {};
-        if (!data.closing_month) {
-            errs.closing_month = lang === 'bn' ? 'ক্লোজিং মাস নির্বাচন আবশ্যক।' : 'Closing month is required.';
-        }
+    const liveGaps = useMemo(
+        () => (attempted ? initiatorGaps('probation', { ...data, employee_id: evaluation.employee_id }, lang, formType) : []),
+        [attempted, data, lang, formType, evaluation.employee_id],
+    );
 
-        const scoreExceeds = (data.scores || []).some((s: any) => Number(s.obtained_score) > Number(s.max_score));
-        if (scoreExceeds) {
-            errs.scores = lang === 'bn' ? 'কোনো মানদণ্ডের নম্বর তার সর্বোচ্চ নম্বরের চেয়ে বেশি হতে পারবে না।' : 'A criterion score exceeds maximum limit.';
+    useEffect(() => {
+        if (!attempted) {
+            return;
         }
-
-        setClientErrors(errs);
-        return Object.keys(errs).length === 0;
-    };
+        setClientErrors(gapMap(liveGaps));
+    }, [attempted, liveGaps]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validateForm()) {
+        const gaps = initiatorGaps('probation', { ...data, employee_id: evaluation.employee_id }, lang, formType);
+        setAttempted(true);
+        setClientErrors(gapMap(gaps));
+        if (gaps.length > 0) {
             setViewMode('edit');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            scrollToMissingFields();
             return;
         }
 
+        transform((payload) => ({
+            ...payload,
+            employee_id: evaluation.employee_id,
+            recommendation_status: payload.supervisor_recommendation,
+            scores: withEnteredScores(payload.scores),
+        }));
         put(`/probation-increment-evaluations/${evaluation.id}`, {
             onError: () => {
                 setViewMode('edit');
@@ -395,6 +404,10 @@ export default function ProbationIncrementEvaluationEdit({
                 ) : (
                     /* VIEW MODE: EDIT FORM */
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        <MissingFieldsAlert
+                            gaps={liveGaps.length > 0 ? liveGaps : Object.entries(errors).map(([key, message]) => ({ key, message: String(message) }))}
+                            lang={lang}
+                        />
                         {/* Profile Dates & Education */}
                         <Card className="border-slate-200 shadow-xs">
                             <CardHeader className="bg-slate-50/70 border-b border-slate-100 py-3.5">
@@ -408,7 +421,7 @@ export default function ProbationIncrementEvaluationEdit({
                                     <Label className="text-xs font-semibold text-slate-700">যোগদানের তারিখ:</Label>
                                     <Input 
                                         type="date"
-                                        value={data.joining_date}
+                                        data-req="joining_date" value={data.joining_date}
                                         onChange={e => setData('joining_date', e.target.value)}
                                         className="h-9 text-xs bg-white"
                                     />
@@ -417,7 +430,7 @@ export default function ProbationIncrementEvaluationEdit({
                                     <Label className="text-xs font-semibold text-slate-700">০৩ মাস পূর্তির তারিখ:</Label>
                                     <Input 
                                         type="date"
-                                        value={data.probation_3m_completion_date}
+                                        data-req="probation_3m_completion_date" value={data.probation_3m_completion_date}
                                         onChange={e => setData('probation_3m_completion_date', e.target.value)}
                                         className="h-9 text-xs bg-white font-semibold text-emerald-900"
                                     />
@@ -426,7 +439,7 @@ export default function ProbationIncrementEvaluationEdit({
                                     <Label className="text-xs font-semibold text-slate-700">শিক্ষাগত যোগ্যতা (যোগদানকালীন):</Label>
                                     <Input 
                                         type="text"
-                                        value={data.education_at_joining}
+                                        data-req="education_at_joining" value={data.education_at_joining}
                                         onChange={e => setData('education_at_joining', e.target.value)}
                                         className="h-9 text-xs bg-white"
                                     />
@@ -435,7 +448,7 @@ export default function ProbationIncrementEvaluationEdit({
                                     <Label className="text-xs font-semibold text-slate-700">শিক্ষাগত যোগ্যতা (বর্তমান):</Label>
                                     <Input 
                                         type="text"
-                                        value={data.education_current}
+                                        data-req="education_current" value={data.education_current}
                                         onChange={e => setData('education_current', e.target.value)}
                                         className="h-9 text-xs bg-white"
                                     />
@@ -461,7 +474,7 @@ export default function ProbationIncrementEvaluationEdit({
                                         {lang === 'bn' ? 'ক্লোজিং মাসের নাম:' : 'Closing Month:'} <span className="text-red-500">*</span>
                                     </Label>
                                     <MonthPickerSelect 
-                                        value={data.closing_month}
+                                        data-req="closing_month" value={data.closing_month}
                                         onChange={val => setData('closing_month', val)}
                                         lang={lang}
                                         className="h-8 min-w-[150px]"
@@ -475,7 +488,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Label className="text-xs font-semibold text-slate-700">শাখার সদস্য (জন)</Label>
                                             <Input 
                                                 type="number"
-                                                value={data.closing_members_count}
+                                                data-req="closing_members_count" value={data.closing_members_count}
                                                 onChange={e => setData('closing_members_count', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -484,7 +497,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Label className="text-xs font-semibold text-slate-700">শাখার ঋণী (জন)</Label>
                                             <Input 
                                                 type="number"
-                                                value={data.closing_borrowers_count}
+                                                data-req="closing_borrowers_count" value={data.closing_borrowers_count}
                                                 onChange={e => setData('closing_borrowers_count', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -493,7 +506,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Label className="text-xs font-semibold text-slate-700">শাখার ঋণ স্থিতি (টাকা)</Label>
                                             <Input 
                                                 type="number"
-                                                value={data.closing_loan_balance}
+                                                data-req="closing_loan_balance" value={data.closing_loan_balance}
                                                 onChange={e => setData('closing_loan_balance', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -502,7 +515,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Label className="text-xs font-semibold text-slate-700">শাখার সঞ্চয় স্থিতি (সকল কম্পোনেন্ট মোট টাকা)</Label>
                                             <Input 
                                                 type="number"
-                                                value={data.closing_savings_balance}
+                                                data-req="closing_savings_balance" value={data.closing_savings_balance}
                                                 onChange={e => setData('closing_savings_balance', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -511,7 +524,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Label className="text-xs font-semibold text-slate-700">শাখার বকেয়া (জন)</Label>
                                             <Input 
                                                 type="number"
-                                                value={data.closing_overdue_borrowers}
+                                                data-req="closing_overdue_borrowers" value={data.closing_overdue_borrowers}
                                                 onChange={e => setData('closing_overdue_borrowers', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -520,7 +533,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Label className="text-xs font-semibold text-slate-700">শাখার বকেয়া (টাকা)</Label>
                                             <Input 
                                                 type="number"
-                                                value={data.closing_overdue_amount}
+                                                data-req="closing_overdue_amount" value={data.closing_overdue_amount}
                                                 onChange={e => setData('closing_overdue_amount', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -530,7 +543,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Input 
                                                 type="number"
                                                 step="any"
-                                                value={data.closing_otr_pct}
+                                                data-req="closing_otr_pct" value={data.closing_otr_pct}
                                                 onChange={e => setData('closing_otr_pct', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -540,7 +553,7 @@ export default function ProbationIncrementEvaluationEdit({
                                             <Input 
                                                 type="number"
                                                 step="any"
-                                                value={data.closing_par_pct}
+                                                data-req="closing_par_pct" value={data.closing_par_pct}
                                                 onChange={e => setData('closing_par_pct', e.target.value)}
                                                 className="h-9 text-xs bg-white text-center font-bold"
                                             />
@@ -586,7 +599,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.joining_members_count}
+                                                            data-req="joining_members_count" value={data.joining_members_count}
                                                             onChange={e => setData('joining_members_count', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -594,7 +607,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.closing_members_count}
+                                                            data-req="closing_members_count" value={data.closing_members_count}
                                                             onChange={e => setData('closing_members_count', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -610,7 +623,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.joining_borrowers_count}
+                                                            data-req="joining_borrowers_count" value={data.joining_borrowers_count}
                                                             onChange={e => setData('joining_borrowers_count', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -618,7 +631,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.closing_borrowers_count}
+                                                            data-req="closing_borrowers_count" value={data.closing_borrowers_count}
                                                             onChange={e => setData('closing_borrowers_count', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -634,7 +647,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.joining_loan_balance}
+                                                            data-req="joining_loan_balance" value={data.joining_loan_balance}
                                                             onChange={e => setData('joining_loan_balance', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -642,7 +655,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.closing_loan_balance}
+                                                            data-req="closing_loan_balance" value={data.closing_loan_balance}
                                                             onChange={e => setData('closing_loan_balance', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -658,7 +671,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.joining_savings_balance}
+                                                            data-req="joining_savings_balance" value={data.joining_savings_balance}
                                                             onChange={e => setData('joining_savings_balance', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -666,7 +679,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.closing_savings_balance}
+                                                            data-req="closing_savings_balance" value={data.closing_savings_balance}
                                                             onChange={e => setData('closing_savings_balance', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -682,7 +695,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.joining_overdue_borrowers}
+                                                            data-req="joining_overdue_borrowers" value={data.joining_overdue_borrowers}
                                                             onChange={e => setData('joining_overdue_borrowers', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -690,7 +703,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.closing_overdue_borrowers}
+                                                            data-req="closing_overdue_borrowers" value={data.closing_overdue_borrowers}
                                                             onChange={e => setData('closing_overdue_borrowers', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -706,7 +719,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.joining_overdue_amount}
+                                                            data-req="joining_overdue_amount" value={data.joining_overdue_amount}
                                                             onChange={e => setData('joining_overdue_amount', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -714,7 +727,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                     <td className="p-2">
                                                         <Input 
                                                             type="number"
-                                                            value={data.closing_overdue_amount}
+                                                            data-req="closing_overdue_amount" value={data.closing_overdue_amount}
                                                             onChange={e => setData('closing_overdue_amount', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -731,7 +744,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                         <Input 
                                                             type="number"
                                                             step="any"
-                                                            value={data.joining_otr_pct}
+                                                            data-req="joining_otr_pct" value={data.joining_otr_pct}
                                                             onChange={e => setData('joining_otr_pct', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -740,7 +753,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                         <Input 
                                                             type="number"
                                                             step="any"
-                                                            value={data.closing_otr_pct}
+                                                            data-req="closing_otr_pct" value={data.closing_otr_pct}
                                                             onChange={e => setData('closing_otr_pct', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -757,7 +770,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                         <Input 
                                                             type="number"
                                                             step="any"
-                                                            value={data.joining_par_pct}
+                                                            data-req="joining_par_pct" value={data.joining_par_pct}
                                                             onChange={e => setData('joining_par_pct', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -766,7 +779,7 @@ export default function ProbationIncrementEvaluationEdit({
                                                         <Input 
                                                             type="number"
                                                             step="any"
-                                                            value={data.closing_par_pct}
+                                                            data-req="closing_par_pct" value={data.closing_par_pct}
                                                             onChange={e => setData('closing_par_pct', e.target.value)}
                                                             className="h-8 text-xs text-center bg-white"
                                                         />
@@ -826,6 +839,7 @@ export default function ProbationIncrementEvaluationEdit({
                                 {formType === 'accountant' ? (
                                     <FormBIncrement 
                                         scores={data.scores} 
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         setScores={(sc: any) => setData('scores', sc)}
                                         lang={lang}
                                         structure={dynamicStructure}
@@ -833,12 +847,14 @@ export default function ProbationIncrementEvaluationEdit({
                                 ) : formType === 'bm_and_above' ? (
                                     <FormCIncrement 
                                         scores={data.scores} 
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         setScores={(sc: any) => setData('scores', sc)}
                                         lang={lang}
                                         structure={dynamicStructure}
                                     />
                                 ) : (
-                                    <FormAIncrement 
+                                    <FormAIncrement
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         scores={data.scores} 
                                         setScores={(sc: any) => setData('scores', sc)}
                                         lang={lang}
@@ -928,7 +944,7 @@ export default function ProbationIncrementEvaluationEdit({
                                         <Label className="text-xs font-semibold text-slate-700">উক্ত কর্মচারীর প্রধান শক্তি/দক্ষতা (Strength)</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.strengths}
+                                            data-req="strengths" value={data.strengths}
                                             onChange={e => setData('strengths', e.target.value)}
                                             className="bg-white border-slate-300 text-xs"
                                         />
@@ -937,7 +953,7 @@ export default function ProbationIncrementEvaluationEdit({
                                         <Label className="text-xs font-semibold text-slate-700">দুর্বলতা/উন্নয়নের ক্ষেত্রসমূহ (Weakness/Area to Develop)</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.weaknesses}
+                                            data-req="weaknesses" value={data.weaknesses}
                                             onChange={e => setData('weaknesses', e.target.value)}
                                             className="bg-white border-slate-300 text-xs"
                                         />
@@ -946,7 +962,7 @@ export default function ProbationIncrementEvaluationEdit({
                                         <Label className="text-xs font-semibold text-slate-700">প্রশিক্ষণের প্রয়োজন কি না</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.training_need}
+                                            data-req="training_need" value={data.training_need}
                                             onChange={e => setData('training_need', e.target.value)}
                                             className="bg-white border-slate-300 text-xs"
                                         />
@@ -955,7 +971,7 @@ export default function ProbationIncrementEvaluationEdit({
                                         <Label className="text-xs font-semibold text-slate-700">অন্যান্য মন্তব্য (যদি থাকে)</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.other_remarks}
+                                            data-req="other_remarks" value={data.other_remarks}
                                             onChange={e => setData('other_remarks', e.target.value)}
                                             className="bg-white border-slate-300 text-xs"
                                         />

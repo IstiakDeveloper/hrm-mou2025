@@ -12,6 +12,7 @@ use App\Services\Appraisal\AppraisalListQuery;
 use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\OrganogramAccessService;
 use App\Services\TraineeWorkflowService;
+use App\Support\AppraisalRequiredFields;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -196,6 +197,8 @@ class TraineeEvaluationController extends Controller
     {
         $user = $request->user();
 
+        AppraisalRequiredFields::assertInitiator($request, 'trainee', $request->input('form_type'));
+
         $validated = $request->validate([
             'employee_id' => 'nullable|exists:employees,id',
             'form_type' => 'required|in:officer_abm,accountant,bm_and_above',
@@ -363,6 +366,8 @@ class TraineeEvaluationController extends Controller
 
     public function update(Request $request, TraineeEvaluation $evaluation)
     {
+        AppraisalRequiredFields::assertInitiator($request, 'trainee', $evaluation->form_type);
+
         $validated = $request->validate([
             'candidate_name' => 'required|string|max:255',
             'designation_name' => 'required|string|max:255',
@@ -459,17 +464,32 @@ class TraineeEvaluationController extends Controller
 
     public function forward(Request $request, TraineeEvaluation $evaluation)
     {
+        if ($evaluation->status === 'draft') {
+            AppraisalRequiredFields::assertStored('trainee', $evaluation);
+        } else {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'reviewer');
+        }
+
         $request->validate([
-            'comments' => 'required|string|max:1000',
+            'comments' => $evaluation->status === 'draft' ? 'nullable|string|max:1000' : 'required|string|max:1000',
             'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
+            'supervisor_recommendation' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
             'extension_days' => 'nullable|integer',
         ]);
+
+        $comments = $evaluation->status === 'draft'
+            ? (trim((string) $request->input('comments', '')) !== ''
+                ? trim((string) $request->input('comments'))
+                : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+            : trim((string) $request->input('comments'));
+
+        $recommendation = $request->input('recommendation_type') ?? $request->input('supervisor_recommendation');
 
         $this->workflowService->forward(
             $evaluation,
             $request->user(),
-            $request->comments,
-            $request->recommendation_type,
+            $comments,
+            $recommendation,
             $request->extension_days ? (int) $request->extension_days : null
         );
 
@@ -493,14 +513,16 @@ class TraineeEvaluationController extends Controller
 
     public function hrVerify(Request $request, TraineeEvaluation $evaluation)
     {
+        AppraisalRequiredFields::assertActor($request, 'trainee', 'hr');
+
         $request->validate([
-            'comments' => 'nullable|string|max:1000',
+            'comments' => 'required|string|max:1000',
         ]);
 
         $this->workflowService->forward(
             $evaluation,
             $request->user(),
-            $request->comments ?? 'ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।'
+            trim((string) $request->input('comments'))
         );
 
         return back()->with('success', 'এইচআর যাচাই সম্পন্ন হয়েছে এবং ইডি মহোদয়ের অনুমোদনের জন্য অগ্রবর্তী করা হয়েছে।');
@@ -508,15 +530,17 @@ class TraineeEvaluationController extends Controller
 
     public function edApprove(Request $request, TraineeEvaluation $evaluation)
     {
+        AppraisalRequiredFields::assertActor($request, 'trainee', 'ed');
+
         $request->validate([
-            'comments' => 'nullable|string|max:1000',
+            'comments' => 'required|string|max:1000',
             'is_approved' => 'required|boolean',
         ]);
 
         $this->workflowService->edApprove(
             $evaluation,
             $request->user(),
-            $request->comments ?? ($request->is_approved ? 'অনুমোদন প্রদান করা হলো।' : 'নামঞ্জুর করা হলো।'),
+            trim((string) $request->input('comments')),
             (bool) $request->is_approved
         );
 
@@ -525,15 +549,35 @@ class TraineeEvaluationController extends Controller
 
     public function quickApprove(Request $request, TraineeEvaluation $evaluation)
     {
+        if ($evaluation->status === 'draft') {
+            AppraisalRequiredFields::assertStored('trainee', $evaluation);
+        } elseif ($evaluation->status === 'submitted_to_hr') {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'hr');
+        } elseif ($evaluation->status === 'submitted_to_ed') {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'ed');
+        } else {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'reviewer');
+        }
+
         $request->validate([
-            'comments' => 'nullable|string|max:1000',
+            'comments' => $evaluation->status === 'draft' ? 'nullable|string|max:1000' : 'required|string|max:1000',
         ]);
 
-        $this->workflowService->forward(
-            $evaluation,
-            $request->user(),
-            $request->comments ?? 'পর্যালোচনাপূর্বক অনুমোদন ও পরবর্তী স্তরে অগ্রবর্তী করা হলো।'
-        );
+        $comments = $evaluation->status === 'draft'
+            ? (trim((string) $request->input('comments', '')) !== '' ? trim((string) $request->input('comments')) : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+            : trim((string) $request->input('comments'));
+
+        if ($evaluation->status === 'submitted_to_ed') {
+            $this->workflowService->edApprove($evaluation, $request->user(), $comments, $request->boolean('is_approved', true));
+        } else {
+            $this->workflowService->forward(
+                $evaluation,
+                $request->user(),
+                $comments,
+                $request->input('recommendation_type') ?? $request->input('supervisor_recommendation'),
+                $request->filled('extension_days') ? (int) $request->input('extension_days') : null
+            );
+        }
 
         return back()->with('success', 'মূল্যায়ন সফলভাবে অনুমোদন ও অগ্রবর্তী করা হয়েছে।');
     }

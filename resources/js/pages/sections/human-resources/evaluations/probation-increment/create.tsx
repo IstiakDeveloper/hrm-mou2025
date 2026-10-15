@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm, Head, Link, usePage } from '@inertiajs/react';
+import { gapMap, initiatorGaps, scoreGapKeys, withEnteredScores } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import { type SharedData } from '@/types';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -68,7 +70,7 @@ export default function ProbationIncrementEvaluationCreate({
         }
     };
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         employee_id: '',
         form_type: 'officer_abm' as 'officer_abm' | 'accountant' | 'bm_and_above',
         joining_date: '',
@@ -111,6 +113,7 @@ export default function ProbationIncrementEvaluationCreate({
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+    const [attempted, setAttempted] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
     // Auto-detect form type based on designation
@@ -252,32 +255,34 @@ export default function ProbationIncrementEvaluationCreate({
         return { text: '০', color: 'text-slate-600 bg-slate-50 border-slate-200' };
     };
 
-    const validateForm = () => {
-        const errs: Record<string, string> = {};
-        if (!data.employee_id) {
-            errs.employee_id = lang === 'bn' ? 'অনুগ্রহ করে একজন কর্মী নির্বাচন করুন।' : 'Please select an employee.';
-        }
-        if (!data.closing_month) {
-            errs.closing_month = lang === 'bn' ? 'ক্লোজিং মাস নির্বাচন আবশ্যক।' : 'Closing month is required.';
-        }
+    const liveGaps = useMemo(
+        () => (attempted ? initiatorGaps('probation', data, lang, formType) : []),
+        [attempted, data, lang, formType],
+    );
 
-        const scoreExceeds = (data.scores || []).some((s: any) => Number(s.obtained_score) > Number(s.max_score));
-        if (scoreExceeds) {
-            errs.scores = lang === 'bn' ? 'কোনো মানদণ্ডের নম্বর তার সর্বোচ্চ নম্বরের চেয়ে বেশি হতে পারবে না।' : 'A criterion score exceeds maximum score limit.';
+    useEffect(() => {
+        if (!attempted) {
+            return;
         }
-
-        setClientErrors(errs);
-        return Object.keys(errs).length === 0;
-    };
+        setClientErrors(gapMap(liveGaps));
+    }, [attempted, liveGaps]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validateForm()) {
+        const gaps = initiatorGaps('probation', data, lang, formType);
+        setAttempted(true);
+        setClientErrors(gapMap(gaps));
+        if (gaps.length > 0) {
             setViewMode('edit');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            scrollToMissingFields();
             return;
         }
 
+        transform((payload) => ({
+            ...payload,
+            recommendation_status: payload.supervisor_recommendation,
+            scores: withEnteredScores(payload.scores),
+        }));
         post('/probation-increment-evaluations', {
             onError: () => {
                 setViewMode('edit');
@@ -511,6 +516,10 @@ export default function ProbationIncrementEvaluationCreate({
                 ) : (
                     /* VIEW MODE: EDIT FORM */
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <MissingFieldsAlert
+                            gaps={liveGaps.length > 0 ? liveGaps : Object.entries(errors).map(([key, message]) => ({ key, message: String(message) }))}
+                            lang={lang}
+                        />
                         
                         {/* 1. Unified Candidate Profile & Information Card (Compact Grid) */}
                         <Card className="border-slate-200 shadow-2xs overflow-hidden">
@@ -570,7 +579,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="date"
-                                            value={data.joining_date}
+                                            data-req="joining_date" value={data.joining_date}
                                             onChange={e => setData('joining_date', e.target.value)}
                                             className="h-8.5 text-xs bg-white border-slate-300 font-medium"
                                         />
@@ -581,7 +590,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="date"
-                                            value={data.probation_3m_completion_date}
+                                            data-req="probation_3m_completion_date" value={data.probation_3m_completion_date}
                                             onChange={e => setData('probation_3m_completion_date', e.target.value)}
                                             className="h-8.5 text-xs bg-white font-semibold text-emerald-900 border-slate-300"
                                         />
@@ -592,7 +601,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="text"
-                                            value={data.education_at_joining}
+                                            data-req="education_at_joining" value={data.education_at_joining}
                                             onChange={e => setData('education_at_joining', e.target.value)}
                                             className="h-8.5 text-xs bg-white border-slate-300"
                                             placeholder="উদা: বি.এ (অনার্স)"
@@ -604,7 +613,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         </Label>
                                         <Input 
                                             type="text"
-                                            value={data.education_current}
+                                            data-req="education_current" value={data.education_current}
                                             onChange={e => setData('education_current', e.target.value)}
                                             className="h-8.5 text-xs bg-white border-slate-300"
                                             placeholder="উদা: এম.এ"
@@ -638,7 +647,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         {lang === 'bn' ? 'ক্লোজিং মাসের নাম:*' : 'Closing Month:*'}
                                     </Label>
                                     <MonthPickerSelect 
-                                        value={data.closing_month}
+                                        data-req="closing_month" value={data.closing_month}
                                         onChange={val => setData('closing_month', val)}
                                         lang={lang}
                                         className="h-8 min-w-[140px] text-xs font-bold border-slate-300"
@@ -654,7 +663,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Label className="text-[11px] font-semibold text-slate-700">শাখার সদস্য (জন)</Label>
                                                 <Input 
                                                     type="number"
-                                                    value={data.closing_members_count}
+                                                    data-req="closing_members_count" value={data.closing_members_count}
                                                     onChange={e => setData('closing_members_count', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -664,7 +673,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Label className="text-[11px] font-semibold text-slate-700">শাখার ঋণী (জন)</Label>
                                                 <Input 
                                                     type="number"
-                                                    value={data.closing_borrowers_count}
+                                                    data-req="closing_borrowers_count" value={data.closing_borrowers_count}
                                                     onChange={e => setData('closing_borrowers_count', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -674,7 +683,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Label className="text-[11px] font-semibold text-slate-700">শাখার ঋণ স্থিতি (টাকা)</Label>
                                                 <Input 
                                                     type="number"
-                                                    value={data.closing_loan_balance}
+                                                    data-req="closing_loan_balance" value={data.closing_loan_balance}
                                                     onChange={e => setData('closing_loan_balance', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -684,7 +693,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Label className="text-[11px] font-semibold text-slate-700">শাখার সঞ্চয় স্থিতি (মোট টাকা)</Label>
                                                 <Input 
                                                     type="number"
-                                                    value={data.closing_savings_balance}
+                                                    data-req="closing_savings_balance" value={data.closing_savings_balance}
                                                     onChange={e => setData('closing_savings_balance', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -694,7 +703,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Label className="text-[11px] font-semibold text-slate-700">শাখার বকেয়া (জন)</Label>
                                                 <Input 
                                                     type="number"
-                                                    value={data.closing_overdue_borrowers}
+                                                    data-req="closing_overdue_borrowers" value={data.closing_overdue_borrowers}
                                                     onChange={e => setData('closing_overdue_borrowers', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -704,7 +713,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Label className="text-[11px] font-semibold text-slate-700">শাখার বকেয়া (টাকা)</Label>
                                                 <Input 
                                                     type="number"
-                                                    value={data.closing_overdue_amount}
+                                                    data-req="closing_overdue_amount" value={data.closing_overdue_amount}
                                                     onChange={e => setData('closing_overdue_amount', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -715,7 +724,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Input 
                                                     type="number"
                                                     step="any"
-                                                    value={data.closing_otr_pct}
+                                                    data-req="closing_otr_pct" value={data.closing_otr_pct}
                                                     onChange={e => setData('closing_otr_pct', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -726,7 +735,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                 <Input 
                                                     type="number"
                                                     step="any"
-                                                    value={data.closing_par_pct}
+                                                    data-req="closing_par_pct" value={data.closing_par_pct}
                                                     onChange={e => setData('closing_par_pct', e.target.value)}
                                                     className="h-8 text-xs bg-white text-center font-bold border-slate-300"
                                                     placeholder="0"
@@ -794,6 +803,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                                 <Input 
                                                                     type="number"
                                                                     step={row.isPct ? "any" : undefined}
+                                                                    data-req={row.joinKey}
                                                                     value={joinVal}
                                                                     onChange={e => setData(row.joinKey as any, e.target.value)}
                                                                     className="h-7 text-xs text-center bg-white font-medium border-slate-300 max-w-[160px] mx-auto"
@@ -804,6 +814,7 @@ export default function ProbationIncrementEvaluationCreate({
                                                                 <Input 
                                                                     type="number"
                                                                     step={row.isPct ? "any" : undefined}
+                                                                    data-req={row.closeKey}
                                                                     value={closeVal}
                                                                     onChange={e => setData(row.closeKey as any, e.target.value)}
                                                                     className="h-7 text-xs text-center bg-white font-medium border-slate-300 max-w-[160px] mx-auto"
@@ -853,6 +864,7 @@ export default function ProbationIncrementEvaluationCreate({
                                 {formType === 'accountant' ? (
                                     <FormBIncrement 
                                         scores={data.scores} 
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         setScores={(sc: any) => setData('scores', sc)}
                                         lang={lang}
                                         structure={dynamicStructure}
@@ -861,6 +873,7 @@ export default function ProbationIncrementEvaluationCreate({
                                     <FormCIncrement 
                                         scores={data.scores} 
                                         setScores={(sc: any) => setData('scores', sc)}
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         lang={lang}
                                         structure={dynamicStructure}
                                     />
@@ -868,6 +881,7 @@ export default function ProbationIncrementEvaluationCreate({
                                     <FormAIncrement 
                                         scores={data.scores} 
                                         setScores={(sc: any) => setData('scores', sc)}
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         lang={lang}
                                         structure={dynamicStructure}
                                     />
@@ -958,7 +972,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         <Label className="text-[11px] font-semibold text-slate-700">উক্ত কর্মচারীর প্রধান শক্তি/দক্ষতা (Strength):</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.strengths}
+                                            data-req="strengths" value={data.strengths}
                                             onChange={e => setData('strengths', e.target.value)}
                                             className="bg-white border-slate-300 text-xs min-h-[46px]"
                                             placeholder="কর্মচারীর উল্লেখযোগ্য শক্তি বা দক্ষতা..."
@@ -968,7 +982,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         <Label className="text-[11px] font-semibold text-slate-700">দুর্বলতা/উন্নয়নের ক্ষেত্রসমূহ (Weakness/Area to Develop):</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.weaknesses}
+                                            data-req="weaknesses" value={data.weaknesses}
                                             onChange={e => setData('weaknesses', e.target.value)}
                                             className="bg-white border-slate-300 text-xs min-h-[46px]"
                                             placeholder="যেসব ক্ষেত্রে উন্নতি প্রয়োজন..."
@@ -978,7 +992,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         <Label className="text-[11px] font-semibold text-slate-700">প্রশিক্ষণের প্রয়োজন কি না (Training Need):</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.training_need}
+                                            data-req="training_need" value={data.training_need}
                                             onChange={e => setData('training_need', e.target.value)}
                                             className="bg-white border-slate-300 text-xs min-h-[46px]"
                                             placeholder="কোন বিষয়ে প্রশিক্ষণের প্রয়োজন..."
@@ -988,7 +1002,7 @@ export default function ProbationIncrementEvaluationCreate({
                                         <Label className="text-[11px] font-semibold text-slate-700">অন্যান্য মন্তব্য (যদি থাকে):</Label>
                                         <Textarea
                                             rows={2}
-                                            value={data.other_remarks}
+                                            data-req="other_remarks" value={data.other_remarks}
                                             onChange={e => setData('other_remarks', e.target.value)}
                                             className="bg-white border-slate-300 text-xs min-h-[46px]"
                                             placeholder="বিশেষ কোনো পর্যবেক্ষণ বা সুপারিশ..."

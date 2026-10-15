@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { router } from '@inertiajs/react';
 import { AlertCircle, Award, CheckCircle2, RotateCcw, Send, XCircle } from 'lucide-react';
+import { reviewerGaps } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 
 export type AppraisalKind = 'promotion' | 'confirmation' | 'probation' | 'trainee';
 
@@ -21,9 +23,6 @@ const PATHS: Record<AppraisalKind, string> = {
     trainee: '/trainee-evaluations',
 };
 
-const HR_COMMENT = 'ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।';
-const FORWARD_COMMENT = 'সুপারিশ ও স্বাক্ষরসহ অনুমোদন ও পরবর্তী স্তরে অগ্রবর্তী করা হলো।';
-
 function employeeLabel(evaluation: any, lang: 'bn' | 'en') {
     const name = evaluation?.candidate_name
         || (lang === 'bn'
@@ -39,25 +38,32 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
     const [comments, setComments] = useState('');
     const [recommendation, setRecommendation] = useState('');
     const [months, setMonths] = useState('3');
-    const [hrFinancial, setHrFinancial] = useState(false);
-    const [hrDisciplinary, setHrDisciplinary] = useState(false);
-    const [hrAudit, setHrAudit] = useState(false);
-    const [hrLeave, setHrLeave] = useState(false);
-    const [hrAcr, setHrAcr] = useState(false);
+    const [hrFinancial, setHrFinancial] = useState<boolean | null>(null);
+    const [hrDisciplinary, setHrDisciplinary] = useState<boolean | null>(null);
+    const [hrAudit, setHrAudit] = useState<boolean | null>(null);
+    const [hrLeave, setHrLeave] = useState<boolean | null>(null);
+    const [hrAcr, setHrAcr] = useState<boolean | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [attempted, setAttempted] = useState(false);
 
     useEffect(() => {
         if (!evaluation) {
             return;
         }
+        const tri = (value: unknown): boolean | null => {
+            if (value === true || value === 1 || value === '1') return true;
+            if (value === false || value === 0 || value === '0') return false;
+            return null;
+        };
         setMode('approve');
         setSubmitting(false);
-        setHrFinancial(Boolean(evaluation.hr_financial_irregularity));
-        setHrDisciplinary(Boolean(evaluation.hr_disciplinary_action));
-        setHrAudit(Boolean(evaluation.hr_audit_objection));
-        setHrLeave(Boolean(evaluation.hr_leave_without_pay));
-        setHrAcr(Boolean(evaluation.hr_acr_satisfactory));
-        setComments(evaluation.status === 'submitted_to_hr' ? HR_COMMENT : FORWARD_COMMENT);
+        setAttempted(false);
+        setHrFinancial(tri(evaluation.hr_financial_irregularity));
+        setHrDisciplinary(tri(evaluation.hr_disciplinary_action));
+        setHrAudit(tri(evaluation.hr_audit_objection));
+        setHrLeave(tri(evaluation.hr_leave_without_pay));
+        setHrAcr(tri(evaluation.hr_acr_satisfactory));
+        setComments('');
 
         if (kind === 'promotion') {
             setRecommendation(evaluation.recommendation_status || 'recommended');
@@ -68,7 +74,8 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
         } else if (kind === 'probation') {
             setRecommendation(evaluation.supervisor_recommendation || 'recommend_increment');
         } else {
-            setRecommendation(evaluation.supervisor_recommendation || 'recommend_appointment');
+            setRecommendation(evaluation.recommendation_type || evaluation.supervisor_recommendation || 'recommend_appointment');
+            setMonths(String(evaluation.extension_days || ''));
         }
     }, [evaluation?.id, evaluation?.status, kind]);
 
@@ -102,9 +109,32 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
         });
     };
 
+    const approvalGaps = reviewerGaps({
+        kind,
+        lang,
+        status,
+        comments,
+        recommendation,
+        months,
+        hr: {
+            hr_financial_irregularity: hrFinancial,
+            hr_disciplinary_action: hrDisciplinary,
+            hr_audit_objection: hrAudit,
+            hr_leave_without_pay: hrLeave,
+            hr_acr_satisfactory: hrAcr,
+        },
+    });
+    const shownGaps = attempted && mode === 'approve' ? approvalGaps : [];
+
     const submitApproval = (approved: boolean) => {
+        setAttempted(true);
+        if (approvalGaps.length > 0) {
+            scrollToMissingFields();
+            return;
+        }
+        const trimmed = comments.trim();
         if (isHr) {
-            const payload: Record<string, unknown> = { comments: comments || HR_COMMENT };
+            const payload: Record<string, unknown> = { comments: trimmed };
             if (kind !== 'trainee') {
                 payload.hr_financial_irregularity = hrFinancial;
                 payload.hr_disciplinary_action = hrDisciplinary;
@@ -120,9 +150,7 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
 
         if (isEd) {
             post(`${base}/${evaluation.id}/ed-approve`, {
-                comments: comments || (approved
-                    ? 'নির্বাহী পরিচালক কর্তৃক চূড়ান্ত অনুমোদন প্রদান করা হলো।'
-                    : 'নির্বাহী পরিচালক কর্তৃক নামঞ্জুর করা হলো।'),
+                comments: trimmed,
                 is_approved: approved,
             });
             return;
@@ -130,7 +158,7 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
 
         if (kind === 'promotion') {
             post(`${base}/${evaluation.id}/forward`, {
-                comments: comments || FORWARD_COMMENT,
+                comments: trimmed,
                 recommendation_status: recommendation,
                 consider_after_months: recommendation === 'consider_later' ? (months || null) : null,
             });
@@ -139,15 +167,26 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
 
         if (kind === 'confirmation') {
             post(`${base}/${evaluation.id}/forward`, {
-                comments: comments || FORWARD_COMMENT,
+                comments: trimmed,
                 recommendation_status: recommendation,
                 extend_months: recommendation === 'extend_probation' ? parseInt(months, 10) : null,
             });
             return;
         }
 
+        if (kind === 'trainee') {
+            post(`${base}/${evaluation.id}/forward`, {
+                comments: trimmed,
+                recommendation_type: recommendation,
+                supervisor_recommendation: recommendation,
+                extension_days: recommendation === 'extend_probation' ? parseInt(months, 10) : null,
+            });
+            return;
+        }
+
         post(`${base}/${evaluation.id}/forward`, {
-            comments: comments || FORWARD_COMMENT,
+            comments: trimmed,
+            recommendation_status: recommendation,
             supervisor_recommendation: recommendation,
         });
     };
@@ -162,18 +201,18 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
 
     const hrItems = kind === 'probation'
         ? [
-            { label: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', value: hrFinancial, set: setHrFinancial },
-            { label: 'যেকোনো শাস্তিমূলক ব্যবস্থার আওতায় দেওয়া কোনো চিঠিপত্র', value: hrDisciplinary, set: setHrDisciplinary },
-            { label: 'সর্বশেষ অডিটে গুরুতর আপত্তি', value: hrAudit, set: setHrAudit },
-            { label: 'বিনা বেতনে ছুটি ভোগ', value: hrLeave, set: setHrLeave },
+            { key: 'hr_financial_irregularity', label: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', value: hrFinancial, set: setHrFinancial },
+            { key: 'hr_disciplinary_action', label: 'যেকোনো শাস্তিমূলক ব্যবস্থার আওতায় দেওয়া কোনো চিঠিপত্র', value: hrDisciplinary, set: setHrDisciplinary },
+            { key: 'hr_audit_objection', label: 'সর্বশেষ অডিটে গুরুতর আপত্তি', value: hrAudit, set: setHrAudit },
+            { key: 'hr_leave_without_pay', label: 'বিনা বেতনে ছুটি ভোগ', value: hrLeave, set: setHrLeave },
         ]
         : [
-            { label: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', value: hrFinancial, set: setHrFinancial },
-            { label: 'প্রমাণিত শৃঙ্খলামূলক কোনো ব্যবস্থা', value: hrDisciplinary, set: setHrDisciplinary },
-            { label: 'নিরীক্ষা আপত্তি', value: hrAudit, set: setHrAudit },
-            { label: 'বিনাবেতনে ছুটি', value: hrLeave, set: setHrLeave },
+            { key: 'hr_financial_irregularity', label: 'প্রমাণিত কোনো আর্থিক অনিয়ম/অর্থ আত্মসাৎ', value: hrFinancial, set: setHrFinancial },
+            { key: 'hr_disciplinary_action', label: 'প্রমাণিত শৃঙ্খলামূলক কোনো ব্যবস্থা', value: hrDisciplinary, set: setHrDisciplinary },
+            { key: 'hr_audit_objection', label: 'নিরীক্ষা আপত্তি', value: hrAudit, set: setHrAudit },
+            { key: 'hr_leave_without_pay', label: 'বিনাবেতনে ছুটি', value: hrLeave, set: setHrLeave },
             ...(kind === 'promotion'
-                ? [{ label: 'এসিআর সন্তোষজনক', value: hrAcr, set: setHrAcr }]
+                ? [{ key: 'hr_acr_satisfactory', label: 'এসিআর সন্তোষজনক', value: hrAcr, set: setHrAcr }]
                 : []),
         ];
 
@@ -231,6 +270,7 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
                 </DialogHeader>
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5">
+                    <MissingFieldsAlert gaps={shownGaps} lang={lang} />
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
                         <div className="font-bold text-slate-900">{person.name || '—'}</div>
                         <div className="mt-0.5 text-[11px] break-words text-slate-500">
@@ -255,7 +295,7 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
                                     </p>
                                     <div className="space-y-2">
                                         {hrItems.map((item) => (
-                                            <div key={item.label} className="flex flex-col gap-1.5 rounded-lg border border-purple-100 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <div key={item.key} data-req={item.key} className="flex flex-col gap-1.5 rounded-lg border border-purple-100 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
                                                 <span className="text-[11px] leading-snug text-slate-800 sm:text-xs">{item.label}</span>
                                                 <span className="flex shrink-0 gap-3 text-[11px]">
                                                     <label className="inline-flex items-center gap-1">
@@ -278,7 +318,7 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
                                     <label className="text-xs font-semibold text-slate-800">
                                         {lang === 'bn' ? 'সুপারিশ' : 'Recommendation'}
                                     </label>
-                                    <div className="grid grid-cols-1 gap-2">
+                                    <div data-req="recommendation" className="grid grid-cols-1 gap-2">
                                         {recommendationOptions.map((option) => (
                                             <button
                                                 key={option.value}
@@ -298,6 +338,7 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
                                         <label className="flex flex-col gap-1 text-xs font-semibold text-amber-800 sm:flex-row sm:items-center">
                                             {lang === 'bn' ? 'কত মাসের জন্য বৃদ্ধি' : 'Extension period'}
                                             <select
+                                                data-req="extend_months"
                                                 value={months}
                                                 onChange={(event) => setMonths(event.target.value)}
                                                 className="h-9 rounded-md border border-amber-300 bg-white px-2 text-xs"
@@ -307,10 +348,24 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
                                             </select>
                                         </label>
                                     )}
+                                    {kind === 'trainee' && recommendation === 'extend_probation' && (
+                                        <label className="flex flex-col gap-1 text-xs font-semibold text-amber-800 sm:flex-row sm:items-center">
+                                            {lang === 'bn' ? 'কত দিনের জন্য বৃদ্ধি' : 'Extension days'}
+                                            <input
+                                                data-req="extension_days"
+                                                type="number"
+                                                min={1}
+                                                value={months}
+                                                onChange={(event) => setMonths(event.target.value)}
+                                                className="h-9 w-full rounded-md border border-amber-300 px-2 text-xs sm:w-28"
+                                            />
+                                        </label>
+                                    )}
                                     {kind === 'promotion' && recommendation === 'consider_later' && (
                                         <label className="flex flex-col gap-1 text-xs font-semibold text-slate-700 sm:flex-row sm:items-center">
                                             {lang === 'bn' ? 'কত মাস পর বিবেচনা' : 'Consider after (months)'}
                                             <input
+                                                data-req="consider_after_months"
                                                 type="number"
                                                 min={1}
                                                 value={months}
@@ -327,10 +382,12 @@ export function AppraisalApprovalDialog({ kind, lang, evaluation, canSendBack, o
                                     {lang === 'bn' ? 'মন্তব্য' : 'Comments'}
                                 </span>
                                 <textarea
+                                    data-req="comments"
                                     value={comments}
                                     onChange={(event) => setComments(event.target.value)}
                                     rows={3}
                                     className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
+                                    placeholder={lang === 'bn' ? 'আপনার মন্তব্য লিখুন' : 'Write your comments'}
                                 />
                             </label>
                         </>

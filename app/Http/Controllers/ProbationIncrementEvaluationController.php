@@ -12,6 +12,7 @@ use App\Services\Appraisal\AppraisalEmployeeLookup;
 use App\Services\Appraisal\AppraisalListQuery;
 use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\ProbationIncrementWorkflowService;
+use App\Support\AppraisalRequiredFields;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -280,6 +281,7 @@ class ProbationIncrementEvaluationController extends Controller
         };
 
         $formType = $validated['form_type'];
+        AppraisalRequiredFields::assertInitiator($request, 'probation', $formType);
         $joiningDate = $parseDate($validated['joining_date'] ?? null) ?? $employee->joining_date?->format('Y-m-d');
         $probationDate = $parseDate($validated['probation_3m_completion_date'] ?? null) ?? ($joiningDate ? date('Y-m-d', strtotime($joiningDate . ' +3 months')) : null);
         $branchId = $employee->current_branch_id ?? $employee->branch_id;
@@ -589,6 +591,8 @@ class ProbationIncrementEvaluationController extends Controller
             }
         };
 
+        AppraisalRequiredFields::assertInitiator($request, 'probation', $evaluation->form_type);
+
         $recStatus = $validated['recommendation_status'] ?? $validated['supervisor_recommendation'] ?? $evaluation->recommendation_status;
         $remarks = $validated['other_remarks'] ?? $validated['initiator_remarks'] ?? $evaluation->other_remarks;
 
@@ -692,16 +696,29 @@ class ProbationIncrementEvaluationController extends Controller
             abort(403, 'আপনার এই মূল্যায়নে স্বাক্ষর বা ফরোয়ার্ড করার অনুমতি নেই।');
         }
 
+        if ($evaluation->status === 'draft') {
+            AppraisalRequiredFields::assertStored('probation', $evaluation);
+        } else {
+            AppraisalRequiredFields::assertActor($request, 'probation', 'reviewer');
+        }
+
         $validated = $request->validate([
-            'comments' => 'required|string|max:1000',
+            'comments' => $evaluation->status === 'draft' ? 'nullable|string|max:1000' : 'required|string|max:1000',
             'recommendation_status' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
+            'supervisor_recommendation' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
         ]);
+
+        $comments = $evaluation->status === 'draft'
+            ? (trim((string) ($validated['comments'] ?? '')) !== ''
+                ? trim((string) $validated['comments'])
+                : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+            : trim((string) $validated['comments']);
 
         $this->workflowService->forward(
             $evaluation,
             $user,
-            $validated['comments'],
-            $validated['recommendation_status'] ?? null
+            $comments,
+            $validated['recommendation_status'] ?? $validated['supervisor_recommendation'] ?? null
         );
 
         return back()->with('success', 'সফলভাবে স্বাক্ষর করে পরবর্তী স্তরে ফরোয়ার্ড করা হয়েছে।');
@@ -730,12 +747,14 @@ class ProbationIncrementEvaluationController extends Controller
             abort(403, 'আপনার এই পর্যায়ে যাচাই করার অনুমতি নেই।');
         }
 
+        AppraisalRequiredFields::assertActor($request, 'probation', 'hr');
+
         $validated = $request->validate([
             'comments' => 'required|string|max:1000',
-            'hr_financial_irregularity' => 'nullable|boolean',
-            'hr_disciplinary_action' => 'nullable|boolean',
-            'hr_audit_objection' => 'nullable|boolean',
-            'hr_leave_without_pay' => 'nullable|boolean',
+            'hr_financial_irregularity' => 'required|boolean',
+            'hr_disciplinary_action' => 'required|boolean',
+            'hr_audit_objection' => 'required|boolean',
+            'hr_leave_without_pay' => 'required|boolean',
         ]);
 
         $this->workflowService->hrVerify($evaluation, $user, $validated, $validated['comments']);
@@ -749,6 +768,8 @@ class ProbationIncrementEvaluationController extends Controller
         if (!$this->workflowService->canUserReview($user, $evaluation) || $evaluation->status !== 'submitted_to_ed') {
             abort(403, 'আপনার চূড়ান্ত অনুমোদনের অনুমতি নেই।');
         }
+
+        AppraisalRequiredFields::assertActor($request, 'probation', 'ed');
 
         $validated = $request->validate([
             'comments' => 'required|string|max:1000',
@@ -768,16 +789,27 @@ class ProbationIncrementEvaluationController extends Controller
         }
 
         if ($evaluation->status === 'submitted_to_hr') {
-            $this->workflowService->hrVerify($evaluation, $user, [
-                'hr_financial_irregularity' => false,
-                'hr_disciplinary_action' => false,
-                'hr_audit_objection' => false,
-                'hr_leave_without_pay' => false,
-            ], 'যাচাইকৃত ও ফরোয়ার্ডকৃত (Quick Approve)');
+            AppraisalRequiredFields::assertActor($request, 'probation', 'hr');
+            $this->workflowService->hrVerify($evaluation, $user, $request->only([
+                'hr_financial_irregularity',
+                'hr_disciplinary_action',
+                'hr_audit_objection',
+                'hr_leave_without_pay',
+            ]), trim((string) $request->input('comments')));
         } elseif ($evaluation->status === 'submitted_to_ed') {
-            $this->workflowService->edApprove($evaluation, $user, 'চূড়ান্ত অনুমোদন প্রদান করা হলো (Quick Approve)', true);
+            AppraisalRequiredFields::assertActor($request, 'probation', 'ed');
+            $this->workflowService->edApprove($evaluation, $user, trim((string) $request->input('comments')), $request->boolean('is_approved'));
+        } elseif ($evaluation->status === 'draft') {
+            AppraisalRequiredFields::assertStored('probation', $evaluation);
+            $this->workflowService->forward($evaluation, $user, trim((string) $request->input('comments', '')) ?: 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।');
         } else {
-            $this->workflowService->forward($evaluation, $user, 'সুপারিশ ও ফরোয়ার্ড করা হলো (Quick Approve)');
+            AppraisalRequiredFields::assertActor($request, 'probation', 'reviewer');
+            $this->workflowService->forward(
+                $evaluation,
+                $user,
+                trim((string) $request->input('comments')),
+                $request->input('recommendation_status') ?? $request->input('supervisor_recommendation')
+            );
         }
 
         return back()->with('success', 'দ্রুত অনুমোদন / ফরোয়ার্ড সম্পন্ন হয়েছে।');

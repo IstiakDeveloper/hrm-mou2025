@@ -48,6 +48,7 @@ export interface MonthPickerSelectProps {
     placeholder?: string;
     disabled?: boolean;
     id?: string;
+    'data-req'?: string;
 }
 
 export const MonthPickerSelect: React.FC<MonthPickerSelectProps> = ({
@@ -58,6 +59,7 @@ export const MonthPickerSelect: React.FC<MonthPickerSelectProps> = ({
     placeholder,
     disabled = false,
     id,
+    'data-req': dataReq,
 }) => {
     const currentYear = new Date().getFullYear();
 
@@ -93,8 +95,9 @@ export const MonthPickerSelect: React.FC<MonthPickerSelectProps> = ({
             onValueChange={onChange} 
             disabled={disabled}
         >
-            <SelectTrigger 
+            <SelectTrigger
                 id={id}
+                data-req={dataReq}
                 className={cn(
                     "h-8 text-xs font-semibold bg-white border-slate-300 min-w-[140px] focus:ring-1 focus:ring-blue-500",
                     className

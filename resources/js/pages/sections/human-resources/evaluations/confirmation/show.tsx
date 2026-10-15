@@ -19,6 +19,8 @@ import {
     AlertTriangle
 } from 'lucide-react';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
+import { savedInitiatorGaps, type FieldGap } from '@/lib/appraisal-required';
 import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import ConfirmationOfficialFormDocument from './components/ConfirmationOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
@@ -60,6 +62,7 @@ export default function ConfirmationEvaluationShow({
     });
 
     const [approvalOpen, setApprovalOpen] = useState(false);
+    const [draftGaps, setDraftGaps] = useState<FieldGap[]>([]);
 
     const openApproval = () => {
         if (!userHasSignature) {
@@ -113,6 +116,15 @@ export default function ConfirmationEvaluationShow({
             return;
         }
         
+        if (evaluation.status === 'draft' && route === 'forward') {
+            const gaps = savedInitiatorGaps('confirmation', evaluation, lang);
+            setDraftGaps(gaps);
+            if (gaps.length > 0) {
+                scrollToMissingFields();
+                return;
+            }
+        }
+
         const payload: any = {
             ...data,
             comments: data.comments || (evaluation.status === 'draft' ? 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।' : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
@@ -290,6 +302,7 @@ export default function ConfirmationEvaluationShow({
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-4 p-4 sm:p-5">
+                            <MissingFieldsAlert gaps={draftGaps} lang={lang} />
                             <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-800">
                                     {lang === 'bn' ? 'আপনার মন্তব্য বা সুপারিশ (যদি থাকে):' : 'Remarks / Comments:'}

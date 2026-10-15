@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm, Head, Link, usePage } from '@inertiajs/react';
+import { gapMap, initiatorGaps, scoreGapKeys, withEnteredScores } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import { type SharedData } from '@/types';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -56,7 +58,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
 
     const t = evalTranslations[lang];
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         employee_id: '',
         current_station_joining_date: '',
         service_length_current_post: '',
@@ -83,6 +85,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+    const [attempted, setAttempted] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
     // Auto-populate employee profile fields when an employee is selected
@@ -207,31 +210,33 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
         return t.pending;
     };
 
+    const liveGaps = useMemo(
+        () => (attempted ? initiatorGaps('promotion', data, lang, formType) : []),
+        [attempted, data, lang, formType],
+    );
+
+    useEffect(() => {
+        if (!attempted) {
+            return;
+        }
+        setClientErrors(gapMap(liveGaps));
+    }, [attempted, liveGaps]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const newErrors: Record<string, string> = {};
-
-        if (!data.employee_id) {
-            newErrors.employee_id = t.errEmployee;
-        }
-        if (!data.recommendation_status) {
-            newErrors.recommendation_status = t.errRecommendation;
-        }
-        if (data.recommendation_status === 'consider_later' && !data.consider_after_months) {
-            newErrors.consider_after_months = t.errConsiderMonths;
-        }
-        if (!data.scores || data.scores.length === 0) {
-            newErrors.scores = t.errScores;
-        }
-
-        if (Object.keys(newErrors).length > 0) {
-            setClientErrors(newErrors);
+        const gaps = initiatorGaps('promotion', data, lang, formType);
+        setAttempted(true);
+        setClientErrors(gapMap(gaps));
+        if (gaps.length > 0) {
             setViewMode('edit');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            scrollToMissingFields();
             return;
         }
 
-        setClientErrors({});
+        transform((payload) => ({
+            ...payload,
+            scores: withEnteredScores(payload.scores),
+        }));
         post('/promotion-evaluations', {
             onError: () => {
                 setViewMode('edit');
@@ -434,19 +439,10 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-6 pb-24">
                         {/* Top Error Alert Banner */}
-                        {Object.keys(mergedErrors).length > 0 && (
-                            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 flex items-start gap-3 shadow-sm animate-in fade-in">
-                                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-bold text-red-900">{t.reviewErrorsTitle}</h4>
-                                    <ul className="list-disc list-inside text-xs space-y-0.5 text-red-700">
-                                        {Object.entries(mergedErrors).map(([key, msg]) => (
-                                            <li key={key}>{msg as string}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </div>
-                        )}
+                        <MissingFieldsAlert
+                            gaps={liveGaps.length > 0 ? liveGaps : Object.entries(errors).map(([key, message]) => ({ key, message: String(message) }))}
+                            lang={lang}
+                        />
 
                         {/* Step 1: Employee Selection & 1st Section Details */}
                         <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -555,7 +551,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                     <Input 
                                                         type="text" 
                                                         placeholder={lang === 'bn' ? 'যেমন: এইচএসসি / ডিগ্রি / অনার্স' : 'e.g. HSC / BA / B.Sc'}
-                                                        value={data.education_at_joining} 
+                                                        data-req="education_at_joining" value={data.education_at_joining} 
                                                         onChange={e => setData('education_at_joining', e.target.value)} 
                                                         className="bg-white border-slate-300 text-xs h-9"
                                                     />
@@ -569,7 +565,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                     <Input 
                                                         type="text" 
                                                         placeholder={lang === 'bn' ? 'যেমন: মাস্টার্স / এমবিএ' : 'e.g. Masters / MBA'}
-                                                        value={data.education_current} 
+                                                        data-req="education_current" value={data.education_current} 
                                                         onChange={e => setData('education_current', e.target.value)} 
                                                         className="bg-white border-slate-300 text-xs h-9"
                                                     />
@@ -583,7 +579,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                     <Input 
                                                         type="text" 
                                                         placeholder="DD/MM/YYYY"
-                                                        value={data.current_station_joining_date} 
+                                                        data-req="current_station_joining_date" value={data.current_station_joining_date} 
                                                         onChange={e => {
                                                             const val = e.target.value;
                                                             const autoCalc = calculateServiceLengthFromDate(val, lang === 'bn');
@@ -605,7 +601,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                     <Input 
                                                         type="text" 
                                                         placeholder={lang === 'bn' ? 'যেমন: ২ বছর ৩ মাস' : 'e.g. 2 Years 3 Months'}
-                                                        value={data.service_length_current_post} 
+                                                        data-req="service_length_current_post" value={data.service_length_current_post} 
                                                         onChange={e => setData('service_length_current_post', e.target.value)} 
                                                         className="bg-white border-slate-300 text-xs h-9"
                                                     />
@@ -637,7 +633,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                     {opLabels.closingMonth} <span className="text-red-500">*</span>
                                                 </Label>
                                                 <MonthPickerSelect 
-                                                    value={data.closing_month} 
+                                                    data-req="closing_month" value={data.closing_month} 
                                                     onChange={val => {
                                                         setData('closing_month', val);
                                                         if (clientErrors.closing_month) {
@@ -663,7 +659,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Label className="text-slate-700 text-xs font-semibold">{opLabels.membersCount}</Label>
                                                 <Input 
                                                     type="number" 
-                                                    value={data.members_count} 
+                                                    data-req="members_count" value={data.members_count} 
                                                     onChange={e => setData('members_count', e.target.value)} 
                                                     placeholder="0" 
                                                     className="bg-white border-slate-300"
@@ -674,7 +670,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Label className="text-slate-700 text-xs font-semibold">{opLabels.borrowersCount}</Label>
                                                 <Input 
                                                     type="number" 
-                                                    value={data.borrowers_count} 
+                                                    data-req="borrowers_count" value={data.borrowers_count} 
                                                     onChange={e => setData('borrowers_count', e.target.value)} 
                                                     placeholder="0" 
                                                     className="bg-white border-slate-300"
@@ -686,7 +682,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Input 
                                                     type="number" 
                                                     step="0.01" 
-                                                    value={data.loan_balance} 
+                                                    data-req="loan_balance" value={data.loan_balance} 
                                                     onChange={e => setData('loan_balance', e.target.value)} 
                                                     placeholder="0.00" 
                                                     className="bg-white border-slate-300"
@@ -698,7 +694,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Input 
                                                     type="number" 
                                                     step="0.01" 
-                                                    value={data.savings_balance} 
+                                                    data-req="savings_balance" value={data.savings_balance} 
                                                     onChange={e => setData('savings_balance', e.target.value)} 
                                                     placeholder="0.00" 
                                                     className="bg-white border-slate-300"
@@ -709,7 +705,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Label className="text-slate-700 text-xs font-semibold">{opLabels.overdueBorrowers}</Label>
                                                 <Input 
                                                     type="number" 
-                                                    value={data.overdue_borrowers} 
+                                                    data-req="overdue_borrowers" value={data.overdue_borrowers} 
                                                     onChange={e => setData('overdue_borrowers', e.target.value)} 
                                                     placeholder="0" 
                                                     className="bg-white border-slate-300"
@@ -721,7 +717,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Input 
                                                     type="number" 
                                                     step="0.01" 
-                                                    value={data.overdue_amount} 
+                                                    data-req="overdue_amount" value={data.overdue_amount} 
                                                     onChange={e => setData('overdue_amount', e.target.value)} 
                                                     placeholder="0.00" 
                                                     className="bg-white border-slate-300"
@@ -733,7 +729,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Input 
                                                     type="number" 
                                                     step="0.01" 
-                                                    value={data.otr_pct} 
+                                                    data-req="otr_pct" value={data.otr_pct} 
                                                     onChange={e => setData('otr_pct', e.target.value)} 
                                                     placeholder="e.g. 99.5" 
                                                     className="bg-white border-slate-300"
@@ -745,7 +741,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Input 
                                                     type="number" 
                                                     step="0.01" 
-                                                    value={data.par_pct} 
+                                                    data-req="par_pct" value={data.par_pct} 
                                                     onChange={e => setData('par_pct', e.target.value)} 
                                                     placeholder="e.g. 1.2" 
                                                     className="bg-white border-slate-300"
@@ -809,6 +805,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                             <FormA 
                                                 scores={data.scores} 
                                                 structure={dynamicStructure}
+                                                invalidKeys={scoreGapKeys(liveGaps)}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -838,6 +835,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 scores={data.scores} 
                                                 structure={dynamicStructure}
                                                 hasCashier={data.has_cashier} 
+                                                invalidKeys={scoreGapKeys(liveGaps)}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -866,6 +864,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                             <FormC 
                                                 scores={data.scores} 
                                                 structure={dynamicStructure}
+                                                invalidKeys={scoreGapKeys(liveGaps)}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -908,7 +907,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                             <Label className="text-slate-700 text-xs font-semibold">{t.strengths}</Label>
                                             <Textarea 
                                                 placeholder={t.strengthsPlaceholder} 
-                                                value={data.strengths} 
+                                                data-req="strengths" value={data.strengths} 
                                                 onChange={e => setData('strengths', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={3} 
@@ -919,7 +918,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                             <Label className="text-slate-700 text-xs font-semibold">{t.weaknesses}</Label>
                                             <Textarea 
                                                 placeholder={t.weaknessesPlaceholder} 
-                                                value={data.weaknesses} 
+                                                data-req="weaknesses" value={data.weaknesses} 
                                                 onChange={e => setData('weaknesses', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={3} 
@@ -930,7 +929,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                             <Label className="text-slate-700 text-xs font-semibold">{t.trainingNeed}</Label>
                                             <Textarea 
                                                 placeholder={t.trainingNeedPlaceholder} 
-                                                value={data.training_need} 
+                                                data-req="training_need" value={data.training_need} 
                                                 onChange={e => setData('training_need', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={3} 
@@ -1035,7 +1034,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                                 <Input 
                                                     type="number" 
                                                     placeholder={t.considerAfterMonthsPlaceholder} 
-                                                    value={data.consider_after_months} 
+                                                    data-req="consider_after_months" value={data.consider_after_months} 
                                                     onChange={e => {
                                                         setData('consider_after_months', e.target.value);
                                                         if (clientErrors.consider_after_months) {

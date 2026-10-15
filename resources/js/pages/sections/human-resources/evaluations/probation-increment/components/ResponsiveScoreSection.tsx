@@ -27,6 +27,7 @@ interface ResponsiveScoreSectionProps {
         valStr: string
     ) => void;
     lang?: 'bn' | 'en';
+    invalidKeys?: string[];
 }
 
 export default function ResponsiveScoreSection({
@@ -34,6 +35,7 @@ export default function ResponsiveScoreSection({
     scoreMap,
     onScoreChange,
     lang = 'bn',
+    invalidKeys = [],
 }: ResponsiveScoreSectionProps) {
     const secName = lang === 'bn' ? section.section_name_bn : section.section_name_en;
 
@@ -95,6 +97,7 @@ export default function ResponsiveScoreSection({
 
                     const numScore = parseFloat(scoreValue) || 0;
                     const isExceeding = parseFloat(scoreValue) > maxScore;
+                    const isMissing = invalidKeys.includes(item.key);
 
                     const handleStep = (stepDelta: number) => {
                         const cur = parseFloat(scoreValue) || 0;
@@ -105,8 +108,11 @@ export default function ResponsiveScoreSection({
                     return (
                         <div 
                             key={item.key} 
+                            data-req={`score:${item.key}`}
                             className={`p-2.5 sm:p-3 rounded-xl border transition-all ${
-                                isExceeding
+                                isMissing
+                                    ? 'border-red-500 bg-red-50/70 ring-1 ring-red-400'
+                                    : isExceeding
                                     ? 'border-rose-400 bg-rose-50/40 dark:border-rose-800 dark:bg-rose-950/20'
                                     : numScore > 0
                                     ? 'border-emerald-300 bg-emerald-50/25 dark:border-emerald-900/50 dark:bg-emerald-950/10'

@@ -17,6 +17,8 @@ import {
     AlertTriangle
 } from 'lucide-react';
 import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
+import { savedInitiatorGaps, type FieldGap } from '@/lib/appraisal-required';
 import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
 import { evalTranslations } from './evaluation-config';
 import OfficialFormDocument from './components/OfficialFormDocument';
@@ -41,6 +43,7 @@ export default function PromotionEvaluationShow({
     });
     const t = evalTranslations[lang];
     const [approvalOpen, setApprovalOpen] = useState(false);
+    const [draftGaps, setDraftGaps] = useState<FieldGap[]>([]);
 
     const openApproval = () => {
         if (!userHasSignature) {
@@ -99,6 +102,15 @@ export default function PromotionEvaluationShow({
             return;
         }
         
+        if (evaluation.status === 'draft' && route === 'forward') {
+            const gaps = savedInitiatorGaps('promotion', evaluation, lang);
+            setDraftGaps(gaps);
+            if (gaps.length > 0) {
+                scrollToMissingFields();
+                return;
+            }
+        }
+
         const payload: any = {
             ...data,
             comments: data.comments || (evaluation.status === 'draft' ? 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।' : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
@@ -323,6 +335,9 @@ export default function PromotionEvaluationShow({
 
                 {evaluation.status === 'draft' && (
                     <Card className="border-amber-300 bg-amber-50/50 shadow-sm overflow-hidden">
+                        <div className="px-5 pt-4">
+                            <MissingFieldsAlert gaps={draftGaps} lang={lang} />
+                        </div>
                         <CardHeader className="bg-amber-100/60 border-b border-amber-200 py-3 px-5">
                             <CardTitle className="text-xs font-bold text-amber-900 flex items-center gap-2">
                                 <Clock className="h-4 w-4 text-amber-700" />

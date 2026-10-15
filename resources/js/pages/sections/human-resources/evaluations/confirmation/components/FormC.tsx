@@ -4,7 +4,7 @@ import ResponsiveScoreSection from './ResponsiveScoreSection';
 
 export { formCStructure };
 
-export default function FormC({ scores = [], setScores, onChange, lang = 'bn', structure }: any) {
+export default function FormC({ scores = [], setScores, onChange, lang = 'bn', structure, invalidKeys = [] }: any) {
     const activeStructure = structure || formCStructure;
     const scoreMap = useMemo(() => {
         const map: Record<string, any> = {};
@@ -76,6 +76,7 @@ export default function FormC({ scores = [], setScores, onChange, lang = 'bn', s
                     scoreMap={scoreMap}
                     onScoreChange={handleScoreChange}
                     lang={lang}
+                    invalidKeys={invalidKeys}
                 />
             ))}
         </div>

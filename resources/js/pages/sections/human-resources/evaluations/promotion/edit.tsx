@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useForm, Head, Link, router } from '@inertiajs/react';
+import { useForm, Head, Link } from '@inertiajs/react';
+import { gapMap, initiatorGaps, reviewerGaps, scoreGapKeys, withEnteredScores } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +63,7 @@ export default function PromotionEvaluationEdit({
 
     const t = evalTranslations[lang];
 
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, put, processing, errors, transform } = useForm({
         current_station_joining_date: evaluation.current_station_joining_date || '',
         service_length_current_post: evaluation.service_length_current_post || '',
         education_at_joining: evaluation.education_at_joining || '',
@@ -83,11 +85,12 @@ export default function PromotionEvaluationEdit({
         training_need: evaluation.training_need || '',
         recommendation_status: evaluation.recommendation_status || 'recommended',
         consider_after_months: evaluation.consider_after_months || '',
-        hr_financial_irregularity: Boolean(evaluation.hr_financial_irregularity),
-        hr_disciplinary_action: Boolean(evaluation.hr_disciplinary_action),
-        hr_audit_objection: Boolean(evaluation.hr_audit_objection),
-        hr_leave_without_pay: Boolean(evaluation.hr_leave_without_pay),
-        hr_acr_satisfactory: Boolean(evaluation.hr_acr_satisfactory),
+        hr_financial_irregularity: evaluation.hr_financial_irregularity === null || evaluation.hr_financial_irregularity === undefined ? null : Boolean(evaluation.hr_financial_irregularity),
+        hr_disciplinary_action: evaluation.hr_disciplinary_action === null || evaluation.hr_disciplinary_action === undefined ? null : Boolean(evaluation.hr_disciplinary_action),
+        hr_audit_objection: evaluation.hr_audit_objection === null || evaluation.hr_audit_objection === undefined ? null : Boolean(evaluation.hr_audit_objection),
+        hr_leave_without_pay: evaluation.hr_leave_without_pay === null || evaluation.hr_leave_without_pay === undefined ? null : Boolean(evaluation.hr_leave_without_pay),
+        hr_acr_satisfactory: evaluation.hr_acr_satisfactory === null || evaluation.hr_acr_satisfactory === undefined ? null : Boolean(evaluation.hr_acr_satisfactory),
+        comments: '',
         scores: (evaluation.scores || []).map((s: any) => ({
             ...s,
             touched: true,
@@ -97,6 +100,8 @@ export default function PromotionEvaluationEdit({
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+    const [attempted, setAttempted] = useState(false);
+    const [checkApprove, setCheckApprove] = useState(false);
 
     const selectedEmployee = evaluation.employee || {};
     const formType = evaluation.form_type;
@@ -133,38 +138,62 @@ export default function PromotionEvaluationEdit({
         return t.pending;
     };
 
+    const collectGaps = (approveOrSubmit: boolean) => {
+        const gaps = initiatorGaps('promotion', { ...data, employee_id: evaluation.employee_id }, lang, formType);
+        if (approveOrSubmit && isReviewerEdit) {
+            gaps.push(...reviewerGaps({
+                kind: 'promotion',
+                lang,
+                status: evaluation.status,
+                comments: data.comments,
+                recommendation: data.recommendation_status,
+                months: String(data.consider_after_months ?? ''),
+                hr: {
+                    hr_financial_irregularity: data.hr_financial_irregularity,
+                    hr_disciplinary_action: data.hr_disciplinary_action,
+                    hr_audit_objection: data.hr_audit_objection,
+                    hr_leave_without_pay: data.hr_leave_without_pay,
+                    hr_acr_satisfactory: data.hr_acr_satisfactory,
+                },
+            }));
+        }
+        return gaps;
+    };
+
+    const liveGaps = useMemo(
+        () => (attempted ? collectGaps(checkApprove) : []),
+        [attempted, checkApprove, data, lang, formType, evaluation.status, isReviewerEdit],
+    );
+
+    useEffect(() => {
+        if (!attempted) {
+            return;
+        }
+        setClientErrors(gapMap(liveGaps));
+    }, [attempted, liveGaps]);
+
     const handleSave = (approveOrSubmit: boolean = false) => {
-        const newErrors: Record<string, string> = {};
-
-        if (!data.recommendation_status) {
-            newErrors.recommendation_status = t.errRecommendation;
-        }
-        if (data.recommendation_status === 'consider_later' && !data.consider_after_months) {
-            newErrors.consider_after_months = t.errConsiderMonths;
-        }
-        if (!data.scores || data.scores.length === 0) {
-            newErrors.scores = t.errScores;
-        }
-
-        if (Object.keys(newErrors).length > 0) {
-            setClientErrors(newErrors);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        const approving = approveOrSubmit && isReviewerEdit;
+        setCheckApprove(approving);
+        const gaps = collectGaps(approving);
+        setAttempted(true);
+        setClientErrors(gapMap(gaps));
+        if (gaps.length > 0) {
+            scrollToMissingFields();
             return;
         }
 
-        if (isReviewerEdit) {
-            router.put(`/promotion-evaluations/${evaluation.id}`, {
-                ...data,
-                approve_now: approveOrSubmit,
-                submit_now: false,
-            });
-        } else {
-            router.put(`/promotion-evaluations/${evaluation.id}`, {
-                ...data,
-                submit_now: approveOrSubmit,
-                approve_now: false,
-            });
-        }
+        transform((payload) => ({
+            ...payload,
+            scores: withEnteredScores(payload.scores),
+            employee_id: evaluation.employee_id,
+            approve_now: isReviewerEdit ? approveOrSubmit : false,
+            submit_now: isReviewerEdit ? false : approveOrSubmit,
+            ...(isReviewerEdit ? { is_approved: true } : {}),
+        }));
+        put(`/promotion-evaluations/${evaluation.id}`, {
+            onError: () => scrollToMissingFields(),
+        });
     };
 
     const previewEvaluation = useMemo(() => {
@@ -331,6 +360,10 @@ export default function PromotionEvaluationEdit({
                 {/* View Mode: Form Edit Inputs */}
                 {viewMode === 'edit' && (
                     <form onSubmit={(e) => { e.preventDefault(); handleSave(false); }} className="space-y-6">
+                        <MissingFieldsAlert
+                            gaps={liveGaps.length > 0 ? liveGaps : Object.entries(errors).map(([key, message]) => ({ key, message: String(message) }))}
+                            lang={lang}
+                        />
                         {/* Sent Back Alert (If Returned to Creator) */}
                         {returnComment && (
                             <div className="p-4 rounded-xl border border-rose-300 bg-rose-50/90 text-rose-900 shadow-sm flex items-start gap-3.5">
@@ -369,6 +402,17 @@ export default function PromotionEvaluationEdit({
                                             ? 'আপনি বর্তমান পর্যায়ের অনুমোদক হিসেবে মূল্যায়নটির স্কোর বা তথ্য সংশোধন করছেন। সংশোধনের পর শুধু পরিবর্তন সংরক্ষণ করতে চাইলে "পরিবর্তন সংরক্ষণ করুন" বাটনে ক্লিক করুন অথবা এক ক্লিকেই অনুমোদন করতে "সংরক্ষণ ও অনুমোদন করুন" বাটনে ক্লিক করুন।' 
                                             : 'As the current reviewer, you can adjust scores or operational data. Click "Save Changes" to keep in review, or "Save & Approve" to immediately approve and forward.'}
                                     </p>
+                                    <label className="block space-y-1 pt-2">
+                                        <span className="text-xs font-semibold">{lang === 'bn' ? 'অনুমোদনের মন্তব্য' : 'Approval comments'}</span>
+                                        <Textarea
+                                            data-req="comments"
+                                            value={data.comments}
+                                            onChange={(event) => setData('comments', event.target.value)}
+                                            rows={2}
+                                            className="bg-white text-xs"
+                                            placeholder={lang === 'bn' ? 'অনুমোদনের মন্তব্য লিখুন' : 'Write your approval comment'}
+                                        />
+                                    </label>
                                 </div>
                             </div>
                         )}
@@ -416,7 +460,7 @@ export default function PromotionEvaluationEdit({
                                         </Label>
                                         <Input 
                                             type="text" 
-                                            value={data.current_station_joining_date} 
+                                            data-req="current_station_joining_date" value={data.current_station_joining_date} 
                                             onChange={e => {
                                                 const val = e.target.value;
                                                 const autoCalc = calculateServiceLengthFromDate(val, lang === 'bn');
@@ -437,7 +481,7 @@ export default function PromotionEvaluationEdit({
                                         </Label>
                                         <Input 
                                             type="text" 
-                                            value={data.service_length_current_post} 
+                                            data-req="service_length_current_post" value={data.service_length_current_post} 
                                             onChange={e => setData('service_length_current_post', e.target.value)} 
                                             placeholder={lang === 'bn' ? 'যেমন: ২ বছর ৪ মাস' : 'e.g. 2 Years 4 Months'} 
                                             className="bg-white border-slate-300 text-xs"
@@ -450,7 +494,7 @@ export default function PromotionEvaluationEdit({
                                         </Label>
                                         <Input 
                                             type="text" 
-                                            value={data.education_at_joining} 
+                                            data-req="education_at_joining" value={data.education_at_joining} 
                                             onChange={e => setData('education_at_joining', e.target.value)} 
                                             placeholder={lang === 'bn' ? 'যেমন: এইচএসসি' : 'e.g. HSC'} 
                                             className="bg-white border-slate-300 text-xs"
@@ -463,7 +507,7 @@ export default function PromotionEvaluationEdit({
                                         </Label>
                                         <Input 
                                             type="text" 
-                                            value={data.education_current} 
+                                            data-req="education_current" value={data.education_current} 
                                             onChange={e => setData('education_current', e.target.value)} 
                                             placeholder={lang === 'bn' ? 'যেমন: স্নাতক' : 'e.g. B.A / B.Sc'} 
                                             className="bg-white border-slate-300 text-xs"
@@ -491,7 +535,7 @@ export default function PromotionEvaluationEdit({
                                             {t.closingMonth} <span className="text-red-500">*</span>
                                         </Label>
                                         <MonthPickerSelect 
-                                            value={data.closing_month} 
+                                            data-req="closing_month" value={data.closing_month} 
                                             onChange={val => {
                                                 setData('closing_month', val);
                                                 if (clientErrors.closing_month) {
@@ -517,7 +561,7 @@ export default function PromotionEvaluationEdit({
                                         <Label className="text-slate-700 text-xs font-semibold">{opLabels.membersCount}</Label>
                                         <Input 
                                             type="number" 
-                                            value={data.members_count} 
+                                            data-req="members_count" value={data.members_count} 
                                             onChange={e => setData('members_count', e.target.value)} 
                                             placeholder="0" 
                                             className="bg-white border-slate-300"
@@ -528,7 +572,7 @@ export default function PromotionEvaluationEdit({
                                         <Label className="text-slate-700 text-xs font-semibold">{opLabels.borrowersCount}</Label>
                                         <Input 
                                             type="number" 
-                                            value={data.borrowers_count} 
+                                            data-req="borrowers_count" value={data.borrowers_count} 
                                             onChange={e => setData('borrowers_count', e.target.value)} 
                                             placeholder="0" 
                                             className="bg-white border-slate-300"
@@ -540,7 +584,7 @@ export default function PromotionEvaluationEdit({
                                         <Input 
                                             type="number" 
                                             step="0.01" 
-                                            value={data.loan_balance} 
+                                            data-req="loan_balance" value={data.loan_balance} 
                                             onChange={e => setData('loan_balance', e.target.value)} 
                                             placeholder="0.00" 
                                             className="bg-white border-slate-300"
@@ -552,7 +596,7 @@ export default function PromotionEvaluationEdit({
                                         <Input 
                                             type="number" 
                                             step="0.01" 
-                                            value={data.savings_balance} 
+                                            data-req="savings_balance" value={data.savings_balance} 
                                             onChange={e => setData('savings_balance', e.target.value)} 
                                             placeholder="0.00" 
                                             className="bg-white border-slate-300"
@@ -563,7 +607,7 @@ export default function PromotionEvaluationEdit({
                                         <Label className="text-slate-700 text-xs font-semibold">{opLabels.overdueBorrowers}</Label>
                                         <Input 
                                             type="number" 
-                                            value={data.overdue_borrowers} 
+                                            data-req="overdue_borrowers" value={data.overdue_borrowers} 
                                             onChange={e => setData('overdue_borrowers', e.target.value)} 
                                             placeholder="0" 
                                             className="bg-white border-slate-300"
@@ -575,7 +619,7 @@ export default function PromotionEvaluationEdit({
                                         <Input 
                                             type="number" 
                                             step="0.01" 
-                                            value={data.overdue_amount} 
+                                            data-req="overdue_amount" value={data.overdue_amount} 
                                             onChange={e => setData('overdue_amount', e.target.value)} 
                                             placeholder="0.00" 
                                             className="bg-white border-slate-300"
@@ -587,7 +631,7 @@ export default function PromotionEvaluationEdit({
                                         <Input 
                                             type="number" 
                                             step="0.01" 
-                                            value={data.otr_pct} 
+                                            data-req="otr_pct" value={data.otr_pct} 
                                             onChange={e => setData('otr_pct', e.target.value)} 
                                             placeholder="e.g. 99.5" 
                                             className="bg-white border-slate-300"
@@ -599,7 +643,7 @@ export default function PromotionEvaluationEdit({
                                         <Input 
                                             type="number" 
                                             step="0.01" 
-                                            value={data.par_pct} 
+                                            data-req="par_pct" value={data.par_pct} 
                                             onChange={e => setData('par_pct', e.target.value)} 
                                             placeholder="e.g. 1.2" 
                                             className="bg-white border-slate-300"
@@ -663,6 +707,7 @@ export default function PromotionEvaluationEdit({
                                     <FormA 
                                         scores={data.scores} 
                                         structure={dynamicStructure}
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         lang={lang}
                                         setScores={(newScores: any[]) => {
                                             setData('scores', newScores);
@@ -692,6 +737,7 @@ export default function PromotionEvaluationEdit({
                                         scores={data.scores} 
                                         structure={dynamicStructure}
                                         hasCashier={data.has_cashier} 
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         lang={lang}
                                         setScores={(newScores: any[]) => {
                                             setData('scores', newScores);
@@ -717,9 +763,10 @@ export default function PromotionEvaluationEdit({
                                 )}
 
                                 {(formType === 'bm_and_above' || formType === 'bm_above') && (
-                                    <FormC 
-                                        scores={data.scores} 
+                                    <FormC
+                                        scores={data.scores}
                                         structure={dynamicStructure}
+                                        invalidKeys={scoreGapKeys(liveGaps)}
                                         lang={lang}
                                         setScores={(newScores: any[]) => {
                                             setData('scores', newScores);
@@ -763,7 +810,7 @@ export default function PromotionEvaluationEdit({
                                         <Label className="text-slate-700 text-xs font-semibold">{t.strengths}</Label>
                                         <Textarea 
                                             placeholder={t.strengthsPlaceholder} 
-                                            value={data.strengths} 
+                                            data-req="strengths" value={data.strengths} 
                                             onChange={e => setData('strengths', e.target.value)} 
                                             rows={3} 
                                             className="bg-white border-slate-300 text-xs"
@@ -774,7 +821,7 @@ export default function PromotionEvaluationEdit({
                                         <Label className="text-slate-700 text-xs font-semibold">{t.weaknesses}</Label>
                                         <Textarea 
                                             placeholder={t.weaknessesPlaceholder} 
-                                            value={data.weaknesses} 
+                                            data-req="weaknesses" value={data.weaknesses} 
                                             onChange={e => setData('weaknesses', e.target.value)} 
                                             rows={3} 
                                             className="bg-white border-slate-300 text-xs"
@@ -786,7 +833,7 @@ export default function PromotionEvaluationEdit({
                                     <Label className="text-slate-700 text-xs font-semibold">{t.trainingNeed}</Label>
                                     <Input 
                                         placeholder={t.trainingNeedPlaceholder} 
-                                        value={data.training_need} 
+                                        data-req="training_need" value={data.training_need} 
                                         onChange={e => setData('training_need', e.target.value)} 
                                         className="bg-white border-slate-300 text-xs"
                                     />
@@ -862,7 +909,7 @@ export default function PromotionEvaluationEdit({
                                             </Label>
                                             <Input 
                                                 type="number" 
-                                                value={data.consider_after_months} 
+                                                data-req="consider_after_months" value={data.consider_after_months} 
                                                 onChange={e => setData('consider_after_months', e.target.value)} 
                                                 placeholder={t.considerAfterMonthsPlaceholder} 
                                                 className="bg-white border-amber-300"
@@ -906,7 +953,7 @@ export default function PromotionEvaluationEdit({
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-purple-100">
-                                                <tr className="hover:bg-purple-50/30">
+                                                <tr data-req="hr_financial_irregularity" className="hover:bg-purple-50/30">
                                                     <td className="p-2.5 text-slate-800">১. {t.hrFinancialIrregularity}</td>
                                                     <td className="p-2.5 text-center">
                                                         <input 
@@ -927,7 +974,7 @@ export default function PromotionEvaluationEdit({
                                                         />
                                                     </td>
                                                 </tr>
-                                                <tr className="hover:bg-purple-50/30">
+                                                <tr data-req="hr_disciplinary_action" className="hover:bg-purple-50/30">
                                                     <td className="p-2.5 text-slate-800">২. {t.hrDisciplinaryAction}</td>
                                                     <td className="p-2.5 text-center">
                                                         <input 
@@ -948,7 +995,7 @@ export default function PromotionEvaluationEdit({
                                                         />
                                                     </td>
                                                 </tr>
-                                                <tr className="hover:bg-purple-50/30">
+                                                <tr data-req="hr_audit_objection" className="hover:bg-purple-50/30">
                                                     <td className="p-2.5 text-slate-800">৩. {t.hrAuditObjection}</td>
                                                     <td className="p-2.5 text-center">
                                                         <input 
@@ -969,7 +1016,7 @@ export default function PromotionEvaluationEdit({
                                                         />
                                                     </td>
                                                 </tr>
-                                                <tr className="hover:bg-purple-50/30">
+                                                <tr data-req="hr_leave_without_pay" className="hover:bg-purple-50/30">
                                                     <td className="p-2.5 text-slate-800">৪. {t.hrLeaveWithoutPay}</td>
                                                     <td className="p-2.5 text-center">
                                                         <input 
@@ -990,7 +1037,7 @@ export default function PromotionEvaluationEdit({
                                                         />
                                                     </td>
                                                 </tr>
-                                                <tr className="hover:bg-purple-50/30">
+                                                <tr data-req="hr_acr_satisfactory" className="hover:bg-purple-50/30">
                                                     <td className="p-2.5 text-slate-800">৫. {t.hrAcrSatisfactory}</td>
                                                     <td className="p-2.5 text-center">
                                                         <input 

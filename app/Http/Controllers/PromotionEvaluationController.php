@@ -9,6 +9,7 @@ use App\Services\Appraisal\AppraisalEmployeeLookup;
 use App\Services\Appraisal\AppraisalListQuery;
 use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\PromotionEvaluationWorkflowService;
+use App\Support\AppraisalRequiredFields;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -212,6 +213,8 @@ class PromotionEvaluationController extends Controller
         }
 
         $formType = $this->workflowService->determineFormType($employee);
+
+        AppraisalRequiredFields::assertInitiator($request, 'promotion', $formType);
 
         $currentStationDate = null;
         if (!empty($validated['current_station_joining_date'])) {
@@ -418,6 +421,16 @@ class PromotionEvaluationController extends Controller
         $isSubmitting = !empty($validated['submit_now']);
         $isApproving = !empty($validated['approve_now']);
 
+        AppraisalRequiredFields::assertInitiator($request, 'promotion', $evaluation->form_type);
+        if ($isApproving) {
+            $actor = match ($evaluation->status) {
+                'submitted_to_hr' => 'hr',
+                'submitted_to_ed' => 'ed',
+                default => 'reviewer',
+            };
+            AppraisalRequiredFields::assertActor($request, 'promotion', $actor);
+        }
+
         if (($isSubmitting || $isApproving) && !$user->hasSignature()) {
             return redirect()->route('settings.profile.edit')->with('error', 'পদোন্নতি মূল্যায়ন জমা বা অনুমোদন করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।');
         }
@@ -592,40 +605,46 @@ class PromotionEvaluationController extends Controller
             }
         }
 
+        if ($evaluation->status === 'draft') {
+            AppraisalRequiredFields::assertStored('promotion', $evaluation);
+        } elseif ($evaluation->status === 'submitted_to_hr') {
+            AppraisalRequiredFields::assertActor($request, 'promotion', 'hr');
+        } elseif ($evaluation->status === 'submitted_to_ed') {
+            AppraisalRequiredFields::assertActor($request, 'promotion', 'ed');
+        } else {
+            AppraisalRequiredFields::assertActor($request, 'promotion', 'reviewer');
+        }
+
         if ($evaluation->status === 'submitted_to_hr') {
             $validated = $request->validate([
-                'hr_financial_irregularity' => 'nullable|boolean',
-                'hr_disciplinary_action' => 'nullable|boolean',
-                'hr_audit_objection' => 'nullable|boolean',
-                'hr_leave_without_pay' => 'nullable|boolean',
-                'hr_acr_satisfactory' => 'nullable|boolean',
-                'comments' => 'nullable|string',
+                'hr_financial_irregularity' => 'required|boolean',
+                'hr_disciplinary_action' => 'required|boolean',
+                'hr_audit_objection' => 'required|boolean',
+                'hr_leave_without_pay' => 'required|boolean',
+                'hr_acr_satisfactory' => 'required|boolean',
+                'comments' => 'required|string',
             ]);
-            $defaultComment = 'ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।';
-            $comments = !empty(trim((string)$request->input('comments', ''))) ? $request->input('comments') : $defaultComment;
-            $this->workflowService->hrVerify($evaluation, $user, $validated, $comments);
+            $this->workflowService->hrVerify($evaluation, $user, $validated, trim((string) $request->input('comments')));
             return redirect()->back()->with('success', 'মূল্যায়নটির ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করে নির্বাহী পরিচালক (ED) বরাবর অগ্রবর্তী করা হয়েছে।');
         }
 
         if ($evaluation->status === 'submitted_to_ed') {
-            $isApproved = $request->input('recommendation_status') !== 'rejected' && $request->boolean('is_approved', true);
-            $defaultComment = $isApproved ? 'নির্বাহী পরিচালক কর্তৃক চূড়ান্ত অনুমোদন প্রদান করা হলো।' : 'আবেদনটি নামঞ্জুর করা হলো।';
-            $comments = !empty(trim((string)$request->input('comments', ''))) ? $request->input('comments') : $defaultComment;
-            $this->workflowService->edApprove($evaluation, $user, $comments, $isApproved);
+            $isApproved = $request->boolean('is_approved');
+            $this->workflowService->edApprove($evaluation, $user, trim((string) $request->input('comments')), $isApproved);
             return redirect()->back()->with('success', $isApproved ? 'পদোন্নতি মূল্যায়নটি সফলভাবে চূড়ান্ত অনুমোদন দেওয়া হয়েছে।' : 'পদোন্নতি মূল্যায়নটি নামঞ্জুর করা হয়েছে।');
         }
 
         $request->validate([
-            'comments' => 'nullable|string',
-            'recommendation_status' => 'nullable|string',
+            'comments' => $evaluation->status === 'draft' ? 'nullable|string' : 'required|string',
+            'recommendation_status' => $evaluation->status === 'draft' ? 'nullable|string' : 'required|string',
             'consider_after_months' => 'nullable|integer',
         ]);
 
-        $defaultComment = $evaluation->status === 'draft' 
-            ? 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।' 
-            : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।';
-
-        $comments = !empty(trim((string)$request->input('comments', ''))) ? $request->input('comments') : $defaultComment;
+        $comments = $evaluation->status === 'draft'
+            ? (trim((string) $request->input('comments', '')) !== ''
+                ? trim((string) $request->input('comments'))
+                : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+            : trim((string) $request->input('comments'));
 
         $this->workflowService->forward(
             $evaluation, 
@@ -667,19 +686,18 @@ class PromotionEvaluationController extends Controller
             return redirect()->route('settings.profile.edit')->with('error', 'পদোন্নতি মূল্যায়ন যাচাই করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
         }
 
+        AppraisalRequiredFields::assertActor($request, 'promotion', 'hr');
+
         $validated = $request->validate([
-            'hr_financial_irregularity' => 'nullable|boolean',
-            'hr_disciplinary_action' => 'nullable|boolean',
-            'hr_audit_objection' => 'nullable|boolean',
-            'hr_leave_without_pay' => 'nullable|boolean',
-            'hr_acr_satisfactory' => 'nullable|boolean',
-            'comments' => 'nullable|string',
+            'hr_financial_irregularity' => 'required|boolean',
+            'hr_disciplinary_action' => 'required|boolean',
+            'hr_audit_objection' => 'required|boolean',
+            'hr_leave_without_pay' => 'required|boolean',
+            'hr_acr_satisfactory' => 'required|boolean',
+            'comments' => 'required|string',
         ]);
 
-        $defaultComment = 'ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করা হলো এবং চূড়ান্ত সিদ্ধান্তের জন্য নির্বাহী পরিচালক বরাবর অগ্রবর্তী করা হলো।';
-        $comments = !empty(trim((string)$request->input('comments', ''))) ? $request->input('comments') : $defaultComment;
-
-        $this->workflowService->hrVerify($evaluation, $user, $validated, $comments);
+        $this->workflowService->hrVerify($evaluation, $user, $validated, trim((string) $request->input('comments')));
 
         return redirect()->back()->with('success', 'মূল্যায়নটির ব্যক্তিগত ফাইল পর্যবেক্ষণপূর্বক এইচআর যাচাই সম্পন্ন করে নির্বাহী পরিচালক (ED) বরাবর অগ্রবর্তী করা হয়েছে।');
     }
@@ -700,15 +718,14 @@ class PromotionEvaluationController extends Controller
             return redirect()->back()->with('error', 'আপনার এই স্তরে মূল্যায়ন পর্যালোচনা বা অনুমোদন করার অনুমতি নেই।');
         }
 
+        AppraisalRequiredFields::assertActor($request, 'promotion', 'ed');
+
         $request->validate([
-            'comments' => 'nullable|string',
+            'comments' => 'required|string',
             'is_approved' => 'required|boolean',
         ]);
 
-        $defaultComment = $request->boolean('is_approved') ? 'নির্বাহী পরিচালক কর্তৃক চূড়ান্ত অনুমোদন প্রদান করা হলো।' : 'আবেদনটি নামঞ্জুর করা হলো।';
-        $comments = !empty(trim((string)$request->input('comments', ''))) ? $request->input('comments') : $defaultComment;
-
-        $this->workflowService->edApprove($evaluation, $user, $comments, $request->boolean('is_approved'));
+        $this->workflowService->edApprove($evaluation, $user, trim((string) $request->input('comments')), $request->boolean('is_approved'));
 
         return redirect()->back()->with('success', $request->boolean('is_approved') ? 'পদোন্নতি মূল্যায়নটি সফলভাবে চূড়ান্ত অনুমোদন দেওয়া হয়েছে।' : 'পদোন্নতি মূল্যায়নটি নামঞ্জুর করা হয়েছে।');
     }

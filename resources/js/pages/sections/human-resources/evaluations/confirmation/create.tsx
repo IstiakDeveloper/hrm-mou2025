@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm, Head, Link, usePage } from '@inertiajs/react';
+import { gapMap, initiatorGaps, scoreGapKeys, withEnteredScores } from '@/lib/appraisal-required';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import { type SharedData } from '@/types';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -87,7 +89,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
         }
     };
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         employee_id: '',
         form_type: 'officer_abm' as 'officer_abm' | 'accountant' | 'bm_and_above',
         joining_date: '',
@@ -132,6 +134,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
     });
 
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+    const [attempted, setAttempted] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
 
     // Auto-detect form type based on designation
@@ -260,36 +263,34 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
         return { text: '০', color: 'text-slate-600 bg-slate-50 border-slate-200' };
     };
 
-    const validateForm = () => {
-        const errs: Record<string, string> = {};
-        if (!data.employee_id) {
-            errs.employee_id = lang === 'bn' ? 'অনুগ্রহ করে একজন কর্মী নির্বাচন করুন।' : 'Please select an employee.';
-        }
-        if (!data.closing_month) {
-            errs.closing_month = lang === 'bn' ? 'ক্লোজিং মাস নির্বাচন আবশ্যক।' : 'Closing month is required.';
-        }
-        if (data.recommendation_status === 'extend_probation' && !data.extend_probation_months) {
-            errs.extend_probation_months = lang === 'bn' ? 'বর্ধিত মাসের সংখ্যা উল্লেখ করুন।' : 'Specify number of months.';
-        }
+    const liveGaps = useMemo(
+        () => (attempted ? initiatorGaps('confirmation', data, lang, formType) : []),
+        [attempted, data, lang, formType],
+    );
 
-        // Validate max scores
-        const scoreExceeds = (data.scores || []).some((s: any) => Number(s.obtained_score) > Number(s.max_score));
-        if (scoreExceeds) {
-            errs.scores = lang === 'bn' ? 'কোনো মানদণ্ডের নম্বর তার সর্বোচ্চ নম্বরের চেয়ে বেশি হতে পারবে না।' : 'A criterion score exceeds maximum score limit.';
+    useEffect(() => {
+        if (!attempted) {
+            return;
         }
-
-        setClientErrors(errs);
-        return Object.keys(errs).length === 0;
-    };
+        setClientErrors(gapMap(liveGaps));
+    }, [attempted, liveGaps]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validateForm()) {
+        const gaps = initiatorGaps('confirmation', data, lang, formType);
+        setAttempted(true);
+        setClientErrors(gapMap(gaps));
+        if (gaps.length > 0) {
             setViewMode('edit');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            scrollToMissingFields();
             return;
         }
 
+        transform((payload) => ({
+            ...payload,
+            extend_months: payload.extend_probation_months,
+            scores: withEnteredScores(payload.scores),
+        }));
         post('/confirmation-evaluations', {
             onError: () => {
                 setViewMode('edit');
@@ -549,19 +550,10 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-6 pb-24">
                         {/* Top Error Alert Banner */}
-                        {Object.keys(mergedErrors).length > 0 && (
-                            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 flex items-start gap-3 shadow-xs animate-in fade-in">
-                                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-bold text-red-900">{lang === 'bn' ? 'অনুগ্রহ করে ত্রুটিগুলো সংশোধন করুন:' : 'Please correct errors:'}</h4>
-                                    <ul className="list-disc list-inside text-xs space-y-0.5 text-red-700">
-                                        {Object.entries(mergedErrors).map(([key, msg]) => (
-                                            <li key={key}>{msg as string}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </div>
-                        )}
+                        <MissingFieldsAlert
+                            gaps={liveGaps.length > 0 ? liveGaps : Object.entries(errors).map(([key, message]) => ({ key, message: String(message) }))}
+                            lang={lang}
+                        />
 
                         {/* Step 1: Employee Selection & Basic Details */}
                         <Card className="border-slate-200 shadow-xs overflow-hidden">
@@ -686,7 +678,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                 </Label>
                                                 <Input 
                                                     type="date" 
-                                                    value={data.joining_date} 
+                                                    data-req="joining_date" value={data.joining_date} 
                                                     onChange={e => setData('joining_date', e.target.value)} 
                                                     className="bg-white border-slate-300 text-xs h-9"
                                                 />
@@ -698,7 +690,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                 </Label>
                                                 <Input 
                                                     type="date" 
-                                                    value={data.probation_end_date} 
+                                                    data-req="probation_end_date" value={data.probation_end_date} 
                                                     onChange={e => setData('probation_end_date', e.target.value)} 
                                                     className="bg-white border-slate-300 text-xs h-9"
                                                 />
@@ -711,7 +703,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                 <Input 
                                                     type="text" 
                                                     placeholder={lang === 'bn' ? 'যেমন: বি.এ / এম.এস.এস' : 'e.g. B.A / M.S.S'}
-                                                    value={data.education_at_joining} 
+                                                    data-req="education_at_joining" value={data.education_at_joining} 
                                                     onChange={e => setData('education_at_joining', e.target.value)} 
                                                     className="bg-white border-slate-300 text-xs h-9"
                                                 />
@@ -724,7 +716,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                 <Input 
                                                     type="text" 
                                                     placeholder={lang === 'bn' ? 'যেমন: এম.এ / এম.বি.এ' : 'e.g. M.A / M.B.A'}
-                                                    value={data.education_current} 
+                                                    data-req="education_current" value={data.education_current} 
                                                     onChange={e => setData('education_current', e.target.value)} 
                                                     className="bg-white border-slate-300 text-xs h-9"
                                                 />
@@ -752,7 +744,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                     {lang === 'bn' ? 'ক্লোজিং মাস:' : 'Closing Month:'} <span className="text-red-500">*</span>
                                                 </Label>
                                                 <MonthPickerSelect 
-                                                    value={data.closing_month} 
+                                                    data-req="closing_month" value={data.closing_month} 
                                                     onChange={val => {
                                                         setData('closing_month', val);
                                                         if (clientErrors.closing_month) {
@@ -808,7 +800,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 <Input 
                                                                     type="number" 
                                                                     placeholder="0"
-                                                                    value={data.joining_members_count} 
+                                                                    data-req="joining_members_count" value={data.joining_members_count} 
                                                                     onChange={e => setData('joining_members_count', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -818,7 +810,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                             <Input 
                                                                 type="number" 
                                                                 placeholder="0"
-                                                                value={data.closing_members_count} 
+                                                                data-req="closing_members_count" value={data.closing_members_count} 
                                                                 onChange={e => setData('closing_members_count', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -842,7 +834,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 <Input 
                                                                     type="number" 
                                                                     placeholder="0"
-                                                                    value={data.joining_borrowers_count} 
+                                                                    data-req="joining_borrowers_count" value={data.joining_borrowers_count} 
                                                                     onChange={e => setData('joining_borrowers_count', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -852,7 +844,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                             <Input 
                                                                 type="number" 
                                                                 placeholder="0"
-                                                                value={data.closing_borrowers_count} 
+                                                                data-req="closing_borrowers_count" value={data.closing_borrowers_count} 
                                                                 onChange={e => setData('closing_borrowers_count', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -877,7 +869,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                     type="number" 
                                                                     step="0.01"
                                                                     placeholder="0.00"
-                                                                    value={data.joining_loan_balance} 
+                                                                    data-req="joining_loan_balance" value={data.joining_loan_balance} 
                                                                     onChange={e => setData('joining_loan_balance', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -888,7 +880,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 type="number" 
                                                                 step="0.01"
                                                                 placeholder="0.00"
-                                                                value={data.closing_loan_balance} 
+                                                                data-req="closing_loan_balance" value={data.closing_loan_balance} 
                                                                 onChange={e => setData('closing_loan_balance', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -913,7 +905,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                     type="number" 
                                                                     step="0.01"
                                                                     placeholder="0.00"
-                                                                    value={data.joining_savings_balance} 
+                                                                    data-req="joining_savings_balance" value={data.joining_savings_balance} 
                                                                     onChange={e => setData('joining_savings_balance', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -924,7 +916,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 type="number" 
                                                                 step="0.01"
                                                                 placeholder="0.00"
-                                                                value={data.closing_savings_balance} 
+                                                                data-req="closing_savings_balance" value={data.closing_savings_balance} 
                                                                 onChange={e => setData('closing_savings_balance', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -948,7 +940,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 <Input 
                                                                     type="number" 
                                                                     placeholder="0"
-                                                                    value={data.joining_overdue_borrowers} 
+                                                                    data-req="joining_overdue_borrowers" value={data.joining_overdue_borrowers} 
                                                                     onChange={e => setData('joining_overdue_borrowers', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -958,7 +950,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                             <Input 
                                                                 type="number" 
                                                                 placeholder="0"
-                                                                value={data.closing_overdue_borrowers} 
+                                                                data-req="closing_overdue_borrowers" value={data.closing_overdue_borrowers} 
                                                                 onChange={e => setData('closing_overdue_borrowers', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -983,7 +975,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                     type="number" 
                                                                     step="0.01"
                                                                     placeholder="0.00"
-                                                                    value={data.joining_overdue_amount} 
+                                                                    data-req="joining_overdue_amount" value={data.joining_overdue_amount} 
                                                                     onChange={e => setData('joining_overdue_amount', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -994,7 +986,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 type="number" 
                                                                 step="0.01"
                                                                 placeholder="0.00"
-                                                                value={data.closing_overdue_amount} 
+                                                                data-req="closing_overdue_amount" value={data.closing_overdue_amount} 
                                                                 onChange={e => setData('closing_overdue_amount', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -1019,7 +1011,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                     type="number" 
                                                                     step="0.01"
                                                                     placeholder="e.g. 99.5"
-                                                                    value={data.joining_otr_pct} 
+                                                                    data-req="joining_otr_pct" value={data.joining_otr_pct} 
                                                                     onChange={e => setData('joining_otr_pct', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -1030,7 +1022,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 type="number" 
                                                                 step="0.01"
                                                                 placeholder="e.g. 99.8"
-                                                                value={data.closing_otr_pct} 
+                                                                data-req="closing_otr_pct" value={data.closing_otr_pct} 
                                                                 onChange={e => setData('closing_otr_pct', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -1055,7 +1047,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                     type="number" 
                                                                     step="0.01"
                                                                     placeholder="e.g. 1.2"
-                                                                    value={data.joining_par_pct} 
+                                                                    data-req="joining_par_pct" value={data.joining_par_pct} 
                                                                     onChange={e => setData('joining_par_pct', e.target.value)} 
                                                                     className="h-8 text-center text-xs bg-white border-slate-300"
                                                                 />
@@ -1066,7 +1058,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                                 type="number" 
                                                                 step="0.01"
                                                                 placeholder="e.g. 0.8"
-                                                                value={data.closing_par_pct} 
+                                                                data-req="closing_par_pct" value={data.closing_par_pct} 
                                                                 onChange={e => setData('closing_par_pct', e.target.value)} 
                                                                 className="h-8 text-center text-xs bg-white border-slate-300 font-bold"
                                                             />
@@ -1145,6 +1137,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             <FormA 
                                                 scores={data.scores} 
                                                 structure={dynamicStructure}
+                                                invalidKeys={scoreGapKeys(liveGaps)}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -1173,6 +1166,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             <FormB 
                                                 scores={data.scores} 
                                                 structure={dynamicStructure}
+                                                invalidKeys={scoreGapKeys(liveGaps)}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -1201,6 +1195,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             <FormC 
                                                 scores={data.scores} 
                                                 structure={dynamicStructure}
+                                                invalidKeys={scoreGapKeys(liveGaps)}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -1250,7 +1245,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             </Label>
                                             <Textarea 
                                                 placeholder={lang === 'bn' ? 'কাজের প্রতি আগ্রহ ও দায়িত্ববোধ সম্পর্কে লিখুন...' : 'Enter remarks on interest and dedication...'} 
-                                                value={data.strengths} 
+                                                data-req="strengths" value={data.strengths} 
                                                 onChange={e => setData('strengths', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={3} 
@@ -1266,7 +1261,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             </Label>
                                             <Textarea 
                                                 placeholder={lang === 'bn' ? 'শৃঙ্খলা ও মূল্যবোধের দৃষ্টিভঙ্গি লিখুন...' : 'Enter remarks on discipline and conduct...'} 
-                                                value={data.weaknesses} 
+                                                data-req="weaknesses" value={data.weaknesses} 
                                                 onChange={e => setData('weaknesses', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={3} 
@@ -1282,7 +1277,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             </Label>
                                             <Textarea 
                                                 placeholder={lang === 'bn' ? 'ভবিষ্যৎ নেতৃত্বের সম্ভাবনা সম্পর্কে লিখুন...' : 'Enter remarks on future potential...'} 
-                                                value={data.training_need} 
+                                                data-req="training_need" value={data.training_need} 
                                                 onChange={e => setData('training_need', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={3} 
@@ -1298,7 +1293,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             </Label>
                                             <Textarea 
                                                 placeholder={lang === 'bn' ? 'অন্যান্য মন্তব্য লিখুন (ঐচ্ছিক)...' : 'Enter any other observations (optional)...'} 
-                                                value={data.other_remarks} 
+                                                data-req="other_remarks" value={data.other_remarks} 
                                                 onChange={e => setData('other_remarks', e.target.value)} 
                                                 className="bg-white border-slate-300 text-xs" 
                                                 rows={2} 
@@ -1402,7 +1397,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                                     <Input 
                                                         type="number" 
                                                         placeholder="e.g. 3" 
-                                                        value={data.extend_probation_months} 
+                                                        data-req="extend_probation_months" value={data.extend_probation_months} 
                                                         onChange={e => setData('extend_probation_months', e.target.value)} 
                                                         className="bg-white border-amber-300 mt-1 h-9 text-xs"
                                                     />

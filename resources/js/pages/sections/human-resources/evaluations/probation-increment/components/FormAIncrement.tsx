@@ -4,7 +4,7 @@ import ResponsiveScoreSection from './ResponsiveScoreSection';
 
 export { formAStructure };
 
-export default function FormAIncrement({ scores = [], setScores, onChange, lang = 'bn', structure }: any) {
+export default function FormAIncrement({ scores = [], setScores, onChange, lang = 'bn', structure, invalidKeys = [] }: any) {
     const activeStructure = structure || formAStructure;
     const scoreMap = useMemo(() => {
         const map: Record<string, any> = {};
@@ -76,6 +76,7 @@ export default function FormAIncrement({ scores = [], setScores, onChange, lang 
                     scoreMap={scoreMap}
                     onScoreChange={handleScoreChange}
                     lang={lang}
+                    invalidKeys={invalidKeys}
                 />
             ))}
         </div>
