@@ -68,8 +68,11 @@ export function hasOrganogramLineRole(
     'Team Leader',
   ];
   const names = new Set<string>();
-  if (auth.user.role?.name) names.add(auth.user.role.name);
-  auth.user.roles?.forEach((r) => r.name && names.add(r.name));
+  if (auth.user.roles && auth.user.roles.length > 0) {
+    auth.user.roles.forEach((r) => r.name && names.add(r.name));
+  } else if (auth.user.role?.name) {
+    names.add(auth.user.role.name);
+  }
   return organogramRoles.some((n) => names.has(n));
 }
 
@@ -92,13 +95,12 @@ function addPermissionsFromRaw(set: Set<string>, raw: unknown): void {
 export function collectGrantedPermissions(auth: { user?: { role?: { permissions?: unknown }; roles?: { permissions?: unknown }[] } } | null | undefined): Set<string> {
   const set = new Set<string>();
   if (!auth?.user) return set;
-  if (auth.user.role?.permissions != null) {
-    addPermissionsFromRaw(set, auth.user.role.permissions);
-  }
-  if (auth.user.roles) {
+  if (auth.user.roles && auth.user.roles.length > 0) {
     for (const role of auth.user.roles) {
       if (role.permissions != null) addPermissionsFromRaw(set, role.permissions);
     }
+  } else if (auth.user.role?.permissions != null) {
+    addPermissionsFromRaw(set, auth.user.role.permissions);
   }
   return set;
 }
@@ -145,8 +147,11 @@ export function hasAppPermission(
       return true;
     }
     const names = new Set<string>();
-    if (auth?.user?.role?.name) names.add(auth.user.role.name);
-    auth?.user?.roles?.forEach((r) => r.name && names.add(r.name));
+    if (auth?.user?.roles && auth.user.roles.length > 0) {
+      auth.user.roles.forEach((r) => r.name && names.add(r.name));
+    } else if (auth?.user?.role?.name) {
+      names.add(auth.user.role.name);
+    }
     if (
       names.has('Director Finance and Accounts') || 
       names.has('Director Finance and Account') ||

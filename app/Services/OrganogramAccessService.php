@@ -21,13 +21,14 @@ class OrganogramAccessService
         $user->loadMissing(['role', 'roles', 'employee']);
 
         $names = [];
-        if ($user->role?->name) {
-            $names[] = (string) $user->role->name;
-        }
-        foreach ($user->roles ?? [] as $r) {
-            if ($r->name) {
-                $names[] = (string) $r->name;
+        if ($user->roles && $user->roles->isNotEmpty()) {
+            foreach ($user->roles as $r) {
+                if ($r->name) {
+                    $names[] = (string) $r->name;
+                }
             }
+        } elseif ($user->role?->name) {
+            $names[] = (string) $user->role->name;
         }
 
         return array_values(array_unique($names));
@@ -336,6 +337,15 @@ class OrganogramAccessService
         $user->loadMissing(['employee.designation']);
 
         $roleNames = self::mergedRoleNames($user);
+
+        if (
+            in_array('Regional Manager', $roleNames, true) ||
+            in_array('Zonal Manager', $roleNames, true) ||
+            in_array('Director (Microfinance)', $roleNames, true) ||
+            in_array('Executive Director', $roleNames, true)
+        ) {
+            return false;
+        }
 
         if (in_array('Branch Manager', $roleNames, true)) {
             return true;

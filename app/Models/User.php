@@ -181,9 +181,12 @@ class User extends Authenticatable
             }
         };
 
-        $merge($this->role);
-        foreach ($this->roles as $role) {
-            $merge($role);
+        if ($this->roles && $this->roles->isNotEmpty()) {
+            foreach ($this->roles as $role) {
+                $merge($role);
+            }
+        } elseif ($this->role) {
+            $merge($this->role);
         }
 
         $this->resolvedPermissions = array_keys($set);
@@ -388,10 +391,12 @@ class User extends Authenticatable
             }
         };
 
-        $merge($this->role);
-
-        foreach ($this->roles as $role) {
-            $merge($role);
+        if ($this->roles && $this->roles->isNotEmpty()) {
+            foreach ($this->roles as $role) {
+                $merge($role);
+            }
+        } elseif ($this->role) {
+            $merge($this->role);
         }
 
         return array_values(array_intersect(SectionRegistry::ids(), array_keys($blocked)));

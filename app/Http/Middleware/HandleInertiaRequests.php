@@ -172,7 +172,9 @@ class HandleInertiaRequests extends Middleware
                     'branch_id' => $user->branch_id,
                     'is_department_head' => $user->isDepartmentHead(),
                     'blocked_sections' => $user->effectiveBlockedSections(),
-                    'role' => $user->role,
+                    'role' => ($user->roles && $user->roles->isNotEmpty())
+                        ? ($user->roles->firstWhere('id', $user->role_id) ?? $user->roles->first())
+                        : $user->role,
                     'roles' => $user->roles,
                     'signature' => $user->getSignaturePath(),
                 ] : null,

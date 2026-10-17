@@ -63,6 +63,7 @@ interface User {
   name: string;
   username?: string;
   email: string;
+  role_id?: number | null;
   employee_id: number | null;
   branch_id: number | null;
   active_status: boolean;
@@ -86,6 +87,11 @@ export default function UserEdit({ user, roles, employees, branches, autoEmailDo
   // Extract role IDs from user.roles
   const userRoleIds = user.roles ? user.roles.map(role => role.id) : [];
 
+  const initialPrimaryRoleId =
+    user.role_id && userRoleIds.includes(user.role_id)
+      ? user.role_id
+      : (userRoleIds.length > 0 ? userRoleIds[0] : '');
+
   const linkedEmployeeOnLoad = employees.find((emp) => emp.id === user.employee_id);
   const initialUsername =
     user.username != null && String(user.username).trim() !== ''
@@ -102,6 +108,7 @@ export default function UserEdit({ user, roles, employees, branches, autoEmailDo
     password: '',
     password_confirmation: '',
     role_ids: userRoleIds, // Use the array of role IDs
+    primary_role_id: initialPrimaryRoleId as number | string,
     employee_id: user.employee_id ? user.employee_id.toString() : '',
     branch_id: user.branch_id ? user.branch_id.toString() : '',
     active_status: user.active_status,
@@ -176,10 +183,22 @@ export default function UserEdit({ user, roles, employees, branches, autoEmailDo
     
     if (currentRoles.includes(roleId)) {
       // Remove role if already selected
-      setData('role_ids', currentRoles.filter(id => id !== roleId));
+      const newRoles = currentRoles.filter(id => id !== roleId);
+      setData('role_ids', newRoles);
+
+      // If we're removing the primary role, update primary_role_id
+      if (Number(data.primary_role_id) === roleId) {
+        setData('primary_role_id', newRoles.length > 0 ? newRoles[0] : '');
+      }
     } else {
       // Add role if not selected
-      setData('role_ids', [...currentRoles, roleId]);
+      const newRoles = [...currentRoles, roleId];
+      setData('role_ids', newRoles);
+
+      // If this is the first role or primary is not set, set it as primary automatically
+      if (newRoles.length === 1 || !data.primary_role_id) {
+        setData('primary_role_id', roleId);
+      }
     }
   };
 
@@ -202,6 +221,11 @@ export default function UserEdit({ user, roles, employees, branches, autoEmailDo
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (data.role_ids.length > 0 && !data.primary_role_id) {
+      data.primary_role_id = data.role_ids[0];
+    }
+
     put(route('admin.users.update', user.id));
   };
 
@@ -419,27 +443,52 @@ export default function UserEdit({ user, roles, employees, branches, autoEmailDo
                     <Label htmlFor="roles">
                       System Roles <span className="text-red-500">*</span>
                     </Label>
-                    <div className="space-y-2 border rounded-md p-3">
+                    <div className="space-y-3 border rounded-md p-3">
                       {roles.map(role => (
-                        <div key={role.id} className="flex items-center space-x-2">
-                          <Checkbox 
-                            id={`role-${role.id}`} 
-                            checked={data.role_ids.includes(role.id)}
-                            onCheckedChange={() => handleRoleToggle(role.id)}
-                          />
-                          <Label 
-                            htmlFor={`role-${role.id}`} 
-                            className="font-normal cursor-pointer"
-                          >
-                            {role.name}
-                          </Label>
+                        <div key={role.id} className="space-y-1.5 border-b last:border-0 pb-2 last:pb-0">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox 
+                              id={`role-${role.id}`} 
+                              checked={data.role_ids.includes(role.id)}
+                              onCheckedChange={() => handleRoleToggle(role.id)}
+                            />
+                            <Label 
+                              htmlFor={`role-${role.id}`} 
+                              className="font-normal cursor-pointer"
+                            >
+                              {role.name}
+                            </Label>
+                          </div>
+                          {data.role_ids.includes(role.id) && (
+                            <div className="pl-6">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="radio"
+                                  id={`primary-${role.id}`}
+                                  name="primary_role"
+                                  value={role.id}
+                                  checked={Number(data.primary_role_id) === role.id}
+                                  onChange={() => setData('primary_role_id', role.id)}
+                                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary cursor-pointer"
+                                />
+                                <Label
+                                  htmlFor={`primary-${role.id}`}
+                                  className="text-xs text-gray-600 font-normal cursor-pointer"
+                                >
+                                  Set as primary role
+                                </Label>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                     {errors.role_ids && <p className="mt-1 text-sm text-red-500">{errors.role_ids}</p>}
+                    {errors.primary_role_id && <p className="mt-1 text-sm text-red-500">{errors.primary_role_id}</p>}
                     {data.role_ids.length > 0 && (
                       <p className="mt-1 text-xs text-gray-500">
                         {data.role_ids.length} role(s) selected
+                        {data.primary_role_id && ` (Primary: ${roles.find(r => r.id === Number(data.primary_role_id))?.name})`}
                       </p>
                     )}
                   </div>

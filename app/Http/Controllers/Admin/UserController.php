@@ -314,14 +314,21 @@ class UserController extends Controller
                 $user->password = Hash::make($request->password);
             }
 
-            $user->save();
+            $roleIds = array_values(array_filter(array_map('intval', (array) ($request->role_ids ?? []))));
+            $primaryRoleId = $request->filled('primary_role_id') ? (int) $request->primary_role_id : null;
 
-            if ($request->primary_role_id) {
-                $user->role_id = $request->primary_role_id;
-                $user->save();
+            if (! $primaryRoleId || ! in_array($primaryRoleId, $roleIds, true)) {
+                if ($user->role_id && in_array((int) $user->role_id, $roleIds, true)) {
+                    $primaryRoleId = (int) $user->role_id;
+                } else {
+                    $primaryRoleId = ! empty($roleIds) ? $roleIds[0] : null;
+                }
             }
 
-            $user->roles()->sync($request->role_ids);
+            $user->role_id = $primaryRoleId;
+            $user->save();
+
+            $user->roles()->sync($roleIds);
         }
 
         return redirect()->route('admin.users.index')

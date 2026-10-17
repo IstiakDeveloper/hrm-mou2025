@@ -233,6 +233,15 @@ class ConfirmationEvaluationWorkflowService
     {
         $roleNames = OrganogramAccessService::mergedRoleNames($user);
         if (
+            in_array('Regional Manager', $roleNames, true) ||
+            in_array('Zonal Manager', $roleNames, true) ||
+            in_array('Director (Microfinance)', $roleNames, true) ||
+            in_array('Executive Director', $roleNames, true)
+        ) {
+            return false;
+        }
+
+        if (
             in_array('Branch Manager', $roleNames, true) ||
             $user->hasPermission('branch_manager') ||
             $user->hasDirectPermission('branch_manager')
