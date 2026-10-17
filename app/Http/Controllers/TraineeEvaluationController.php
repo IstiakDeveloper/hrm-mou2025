@@ -477,10 +477,13 @@ class TraineeEvaluationController extends Controller
             'extension_days' => 'nullable|integer',
         ]);
 
+        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
         $comments = $evaluation->status === 'draft'
             ? (trim((string) $request->input('comments', '')) !== ''
                 ? trim((string) $request->input('comments'))
-                : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+                : ($nextStatus === 'submitted_to_zm'
+                    ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
+                    : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
             : trim((string) $request->input('comments'));
 
         $recommendation = $request->input('recommendation_type') ?? $request->input('supervisor_recommendation');

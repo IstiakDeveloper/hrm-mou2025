@@ -519,7 +519,7 @@ class ConfirmationEvaluationController extends Controller
         DB::transaction(function () use ($evaluation, $validated, $user, $isSubmitting, $isApproving, $request) {
             $newStatus = $evaluation->status;
             if ($isSubmitting) {
-                $newStatus = 'submitted_to_rm';
+                $newStatus = $this->workflowService->determineNextStatus($evaluation, 'draft');
             } elseif ($isApproving) {
                 $newStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
             }
@@ -615,11 +615,14 @@ class ConfirmationEvaluationController extends Controller
             }
 
             if ($isSubmitting) {
+                $comments = !empty($validated['comments']) 
+                    ? $validated['comments'] 
+                    : ($newStatus === 'submitted_to_zm' ? 'Evaluation submitted to Zonal Manager' : 'Evaluation submitted to Regional Manager');
                 $evaluation->signatures()->create([
                     'user_id' => $user->id,
                     'stage' => 'initiator',
                     'action' => 'submitted',
-                    'comments' => 'Evaluation submitted to Regional Manager',
+                    'comments' => $comments,
                     'signed_at' => now(),
                 ]);
             } elseif ($isApproving) {
@@ -643,7 +646,8 @@ class ConfirmationEvaluationController extends Controller
 
         $msg = 'মূল্যায়নের পরিবর্তনসমূহ সফলভাবে সংরক্ষণ করা হয়েছে।';
         if ($isSubmitting) {
-            $msg = 'মূল্যায়নটি সফলভাবে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।';
+            $stageLabel = $this->workflowService->getStageLabel($newStatus, 'bn');
+            $msg = "মূল্যায়নটি সফলভাবে দাখিল করা হয়েছে ({$stageLabel})।";
         } elseif ($isApproving) {
             $msg = 'মূল্যায়নটি সফলভাবে সংশোধনপূর্বক অনুমোদন ও পরবর্তী স্তরে অগ্রবর্তী করা হয়েছে।';
         }
@@ -744,10 +748,13 @@ class ConfirmationEvaluationController extends Controller
             'extend_months' => 'nullable|integer',
         ]);
 
+        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
         $comments = $evaluation->status === 'draft'
             ? (trim((string) $request->input('comments', '')) !== ''
                 ? trim((string) $request->input('comments'))
-                : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+                : ($nextStatus === 'submitted_to_zm'
+                    ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
+                    : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
             : trim((string) $request->input('comments'));
 
         $this->workflowService->forward(
@@ -758,9 +765,10 @@ class ConfirmationEvaluationController extends Controller
             $request->extend_months
         );
 
-        $msg = $evaluation->status === 'submitted_to_rm'
-            ? 'মূল্যায়নটি সফলভাবে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'
-            : 'মূল্যায়নটি সফলভাবে অনুমোদন ও পরবর্তী স্তরে অগ্রবর্তী করা হয়েছে।';
+        $nextStageLabel = $this->workflowService->getStageLabel($evaluation->fresh()->status, 'bn');
+        $msg = $evaluation->fresh()->status === 'approved'
+            ? 'স্থায়ীকরণ মূল্যায়নটি সফলভাবে চূড়ান্ত অনুমোদন দেওয়া হয়েছে।'
+            : "মূল্যায়নটি সফলভাবে পরবর্তী স্তরে ({$nextStageLabel}) অগ্রবর্তী করা হয়েছে।";
 
         return redirect()->back()->with('success', $msg);
     }

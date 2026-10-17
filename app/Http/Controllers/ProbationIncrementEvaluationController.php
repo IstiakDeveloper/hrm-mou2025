@@ -708,10 +708,13 @@ class ProbationIncrementEvaluationController extends Controller
             'supervisor_recommendation' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
         ]);
 
+        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
         $comments = $evaluation->status === 'draft'
             ? (trim((string) ($validated['comments'] ?? '')) !== ''
                 ? trim((string) $validated['comments'])
-                : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+                : ($nextStatus === 'submitted_to_zm'
+                    ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
+                    : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
             : trim((string) $validated['comments']);
 
         $this->workflowService->forward(

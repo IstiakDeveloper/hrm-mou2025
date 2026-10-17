@@ -69,8 +69,8 @@ class TraineeWorkflowService
      */
     public function forward(TraineeEvaluation $evaluation, User $user, string $comments, ?string $recommendationType = null, ?int $extensionDays = null, ?array $additionalData = []): void
     {
-        DB::transaction(function () use ($evaluation, $user, $comments, $recommendationType, $extensionDays, $additionalData) {
-            $currentStatus = $evaluation->status;
+        $currentStatus = $evaluation->status;
+        DB::transaction(function () use ($evaluation, $user, $comments, $recommendationType, $extensionDays, $additionalData, $currentStatus) {
             $nextStatus = $this->determineNextStatus($evaluation, $currentStatus);
             $stage = $this->determineStageRole($currentStatus);
 
@@ -100,7 +100,7 @@ class TraineeWorkflowService
             $evaluation->save();
         });
 
-        $this->notifyStakeholders($evaluation, $evaluation->status === 'submitted_to_rm' ? 'submitted' : 'forwarded', $comments);
+        $this->notifyStakeholders($evaluation, $currentStatus === 'draft' ? 'submitted' : 'forwarded', $comments);
     }
 
     /**
@@ -270,9 +270,77 @@ class TraineeWorkflowService
             $user->hasPermission('trainee-evaluations.approve');
     }
 
+    public function getUserHierarchyLevel(User $user): int
+    {
+        $roleNames = OrganogramAccessService::mergedRoleNames($user);
+
+        if (
+            in_array('Executive Director', $roleNames, true) || 
+            OrganogramAccessService::isExecutiveDirector($user) ||
+            $user->isSuperAdmin()
+        ) {
+            return 0;
+        }
+
+        if (
+            in_array('Director (Microfinance)', $roleNames, true) || 
+            in_array('Assistant Director (Microfinance)', $roleNames, true) ||
+            in_array('Director Finance and Accounts', $roleNames, true) ||
+            in_array('Director Finance and Account', $roleNames, true) ||
+            OrganogramAccessService::isMicrofinanceDirector($user) ||
+            OrganogramAccessService::isMicrofinanceAssistantDirector($user)
+        ) {
+            return 0;
+        }
+
+        if (
+            in_array('Zonal Manager', $roleNames, true) || 
+            $user->hasDirectPermission('organogram.zonal_manager') || 
+            OrganogramAccessService::isZonalManager($user)
+        ) {
+            return 1;
+        }
+
+        if (
+            in_array('Regional Manager', $roleNames, true) || 
+            $user->hasDirectPermission('organogram.regional_manager') || 
+            OrganogramAccessService::isRegionalManager($user)
+        ) {
+            return 2;
+        }
+
+        if (
+            in_array('Branch Manager', $roleNames, true) || 
+            $user->hasDirectPermission('branch_manager') || 
+            $this->isBranchManager($user)
+        ) {
+            return 3;
+        }
+
+        $user->loadMissing('employee.designation');
+        if ($user->employee?->designation) {
+            $tier = \App\Support\BranchOrganogram::resolveTier($user->employee->designation->name);
+            return (int) ($tier['level'] ?? 999);
+        }
+
+        return 999;
+    }
+
     public function determineNextStatus(TraineeEvaluation $evaluation, string $currentStatus): string
     {
         if ($currentStatus === 'draft') {
+            $evaluation->loadMissing('initiator');
+            $initiator = $evaluation->initiator;
+            $initiatorLevel = $initiator ? $this->getUserHierarchyLevel($initiator) : 3;
+
+            if ($evaluation->form_type === 'bm_and_above' || $initiatorLevel === 2) {
+                return 'submitted_to_zm';
+            } elseif ($initiatorLevel === 1) {
+                return $evaluation->form_type === 'accountant' ? 'submitted_to_director_fa' : 'submitted_to_director';
+            } elseif ($initiatorLevel === 0) {
+                return 'submitted_to_hr';
+            }
+
             return 'submitted_to_rm';
         }
 

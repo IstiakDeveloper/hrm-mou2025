@@ -64,8 +64,8 @@ class ConfirmationEvaluationWorkflowService
      */
     public function forward(ConfirmationEvaluation $evaluation, User $user, string $comments, ?string $recommendationStatus = null, ?int $extendMonths = null, ?array $additionalData = []): void
     {
-        DB::transaction(function () use ($evaluation, $user, $comments, $recommendationStatus, $extendMonths, $additionalData) {
-            $currentStatus = $evaluation->status;
+        $currentStatus = $evaluation->status;
+        DB::transaction(function () use ($evaluation, $user, $comments, $recommendationStatus, $extendMonths, $additionalData, $currentStatus) {
             $nextStatus = $this->determineNextStatus($evaluation, $currentStatus);
             $stage = $this->determineStageRole($currentStatus);
 
@@ -93,7 +93,7 @@ class ConfirmationEvaluationWorkflowService
             $evaluation->save();
         });
 
-        $this->notifyStakeholders($evaluation, $evaluation->status === 'submitted_to_rm' ? 'submitted' : 'forwarded', $comments);
+        $this->notifyStakeholders($evaluation, $currentStatus === 'draft' ? 'submitted' : 'forwarded', $comments);
     }
 
     /**
@@ -418,8 +418,24 @@ class ConfirmationEvaluationWorkflowService
 
     public function determineNextStatus(ConfirmationEvaluation $evaluation, string $currentStatus): string
     {
+        if ($currentStatus === 'draft') {
+            $evaluation->loadMissing('initiator');
+            $initiator = $evaluation->initiator;
+            $initiatorLevel = $initiator ? $this->getUserHierarchyLevel($initiator) : 3;
+
+            // If candidate is BM or above, OR initiator is Regional Manager (level 2)
+            if ($evaluation->form_type === 'bm_and_above' || $initiatorLevel === 2) {
+                return 'submitted_to_zm';
+            } elseif ($initiatorLevel === 1) {
+                return $evaluation->form_type === 'accountant' ? 'submitted_to_director_fa' : 'submitted_to_director';
+            } elseif ($initiatorLevel === 0) {
+                return 'submitted_to_hr';
+            }
+
+            return 'submitted_to_rm';
+        }
+
         return match ($currentStatus) {
-            'draft' => 'submitted_to_rm',
             'submitted_to_rm' => 'submitted_to_zm',
             'submitted_to_zm' => $evaluation->form_type === 'accountant' ? 'submitted_to_director_fa' : 'submitted_to_director',
             'submitted_to_director', 'submitted_to_director_fa' => 'submitted_to_hr',

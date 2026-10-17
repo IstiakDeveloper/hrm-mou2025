@@ -64,8 +64,8 @@ class ProbationIncrementWorkflowService
      */
     public function forward(ProbationIncrementEvaluation $evaluation, User $user, string $comments, ?string $recommendationStatus = null, ?array $additionalData = []): void
     {
-        DB::transaction(function () use ($evaluation, $user, $comments, $recommendationStatus, $additionalData) {
-            $currentStatus = $evaluation->status;
+        $currentStatus = $evaluation->status;
+        DB::transaction(function () use ($evaluation, $user, $comments, $recommendationStatus, $additionalData, $currentStatus) {
             $nextStatus = $this->determineNextStatus($evaluation, $currentStatus);
             $stage = $this->determineStageRole($currentStatus);
 
@@ -92,7 +92,7 @@ class ProbationIncrementWorkflowService
             $evaluation->save();
         });
 
-        $this->notifyStakeholders($evaluation, $evaluation->status === 'submitted_to_rm' ? 'submitted' : 'forwarded', $comments);
+        $this->notifyStakeholders($evaluation, $currentStatus === 'draft' ? 'submitted' : 'forwarded', $comments);
     }
 
     /**
@@ -421,7 +421,7 @@ class ProbationIncrementWorkflowService
             $evaluation->loadMissing('initiator');
             $initiator = $evaluation->initiator;
             $initiatorLevel = $initiator ? $this->getUserHierarchyLevel($initiator) : 3;
-            if ($initiatorLevel === 2) {
+            if ($evaluation->form_type === 'bm_and_above' || $initiatorLevel === 2) {
                 return 'submitted_to_zm';
             } elseif ($initiatorLevel === 1) {
                 return $evaluation->form_type === 'accountant' ? 'submitted_to_director_fa' : 'submitted_to_director';
