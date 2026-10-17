@@ -121,9 +121,14 @@ export default function TraineeEvaluationShow({
             }
         }
 
+        const isBmorRmStuck = evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm';
+        const defaultSubmitComment = isBmorRmStuck
+            ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
+            : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।';
+
         const payload: any = {
             ...data,
-            comments: data.comments || (evaluation.status === 'draft' ? 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।' : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
+            comments: data.comments || (evaluation.status === 'draft' || isBmorRmStuck ? defaultSubmitComment : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
             is_approved: type === 'approve',
         };
 
@@ -270,7 +275,7 @@ export default function TraineeEvaluationShow({
                             <div className="flex items-center gap-2">
                                 <ShieldCheck className="h-5 w-5 text-emerald-600" />
                                 <CardTitle className="text-sm font-bold text-emerald-950">
-                                    {lang === 'bn' ? 'খসড়া দাখিল করুন' : 'Submit Draft Evaluation'}
+                                    {lang === 'bn' ? (evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm' ? 'জেডএম সমীপে দাখিল করুন' : 'খসড়া দাখিল করুন') : 'Submit Draft Evaluation'}
                                 </CardTitle>
                             </div>
                         </CardHeader>
@@ -297,7 +302,9 @@ export default function TraineeEvaluationShow({
                                     className="h-9 bg-emerald-600 px-5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
                                 >
                                     <Send className="mr-1.5 h-3.5 w-3.5" />
-                                    {processing ? (lang === 'bn' ? 'দাখিল হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'মূল্যায়ন দাখিল করুন' : 'Submit Evaluation')}
+                                    {processing
+                                        ? (lang === 'bn' ? 'দাখিল হচ্ছে...' : 'Submitting...')
+                                        : (lang === 'bn' ? (evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm' ? 'জেডএম সমীপে দাখিল করুন' : 'মূল্যায়ন দাখিল করুন') : 'Submit Evaluation')}
                                 </Button>
                             </div>
                         </CardContent>

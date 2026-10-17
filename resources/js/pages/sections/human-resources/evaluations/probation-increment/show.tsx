@@ -291,7 +291,9 @@ export default function ProbationIncrementEvaluationShow({
                             <div className="flex items-center gap-2">
                                 <ShieldCheck className="h-5 w-5 text-emerald-600" />
                                 <CardTitle className="text-sm font-bold text-emerald-950">
-                                    {lang === 'bn' ? 'খসড়া দাখিল করুন' : 'Submit Draft Evaluation'}
+                                    {evaluation.status === 'submitted_to_rm'
+                                        ? (lang === 'bn' ? 'জোনাল ম্যানেজার (ZM) সমীপে দাখিল করুন' : 'Submit to Zonal Manager (ZM)')
+                                        : (lang === 'bn' ? 'খসড়া দাখিল করুন' : 'Submit Draft Evaluation')}
                                 </CardTitle>
                             </div>
                         </CardHeader>
@@ -318,7 +320,11 @@ export default function ProbationIncrementEvaluationShow({
                                     className="h-9 bg-emerald-600 px-5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
                                 >
                                     <Send className="mr-1.5 h-3.5 w-3.5" />
-                                    {processing ? (lang === 'bn' ? 'দাখিল হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'মূল্যায়ন দাখিল করুন' : 'Submit Evaluation')}
+                                    {processing 
+                                        ? (lang === 'bn' ? 'দাখিল হচ্ছে...' : 'Submitting...') 
+                                        : (evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm'
+                                            ? (lang === 'bn' ? 'জেডএম সমীপে দাখিল করুন' : 'Submit to ZM')
+                                            : (lang === 'bn' ? 'মূল্যায়ন দাখিল করুন' : 'Submit Evaluation'))}
                                 </Button>
                             </div>
                         </CardContent>

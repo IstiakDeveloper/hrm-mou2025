@@ -101,11 +101,14 @@ class ProbationIncrementEvaluationController extends Controller
             $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $ev);
             $sentBackSig = $ev->signatures->where('action', 'sent_back')->last();
 
+            $isInitiator = (int) $ev->initiator_id === (int) $user->id;
+            $isStuckAtRm = $ev->status === 'submitted_to_rm' && ($isInitiator || $ev->form_type === 'bm_and_above');
+
             $ev->can_approve = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
-            $ev->can_edit = ($ev->status === 'draft' && (int) $ev->initiator_id === (int) $user->id) || ($canReview && !in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
             $ev->can_send_back = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
-            $ev->can_delete = ($ev->status === 'draft' && (int) $ev->initiator_id === (int) $user->id) || $user->isSuperAdmin();
-            $ev->can_submit = $ev->status === 'draft' && ((int) $ev->initiator_id === (int) $user->id);
+            $ev->can_delete = ($ev->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
+            $ev->can_submit = ($ev->status === 'draft' || $isStuckAtRm) && $isInitiator;
             $ev->has_user_signed = $hasSigned;
             $ev->sent_back_reason = $sentBackSig?->comments;
             $ev->current_stage_label = $this->workflowService->getStageLabel($ev->status);
@@ -417,12 +420,15 @@ class ProbationIncrementEvaluationController extends Controller
         $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
-        $canEdit = ($evaluation->status === 'draft' && (int) $evaluation->initiator_id === (int) $user->id)
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator)
             || ($canReview && !in_array($evaluation->status, ['approved', 'rejected']))
             || $user->isSuperAdmin();
 
-        $canDelete = (($evaluation->status === 'draft' && (int) $evaluation->initiator_id === (int) $user->id) || $user->isSuperAdmin());
-        $canSubmit = $evaluation->status === 'draft' && ((int) $evaluation->initiator_id === (int) $user->id);
+        $canDelete = (($evaluation->status === 'draft' && $isInitiator) || $user->isSuperAdmin());
+        $canSubmit = ($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator;
         $canApprove = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
         $canSendBack = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
@@ -450,8 +456,9 @@ class ProbationIncrementEvaluationController extends Controller
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
         $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
 
-        if (!$isSuperAdmin && !$isInitiator && !$canReview) {
+        if (!$isSuperAdmin && !($isInitiator && ($evaluation->status === 'draft' || $isStuckAtRm)) && !$canReview) {
             abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
         }
 
@@ -515,8 +522,9 @@ class ProbationIncrementEvaluationController extends Controller
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
         $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
 
-        if (!$isSuperAdmin && !$isInitiator && !$canReview) {
+        if (!$isSuperAdmin && !($isInitiator && ($evaluation->status === 'draft' || $isStuckAtRm)) && !$canReview) {
             abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
         }
 
@@ -637,7 +645,7 @@ class ProbationIncrementEvaluationController extends Controller
                 'recommendation_status' => $recStatus,
             ];
 
-            if (!empty($validated['submit_now']) && $evaluation->status === 'draft') {
+            if (!empty($validated['submit_now']) && ($evaluation->status === 'draft' || $isStuckAtRm)) {
                 $nextStatus = $this->workflowService->determineNextStatus($evaluation, 'draft');
                 $updateData['status'] = $nextStatus;
                 $evaluation->signatures()->create([
@@ -692,18 +700,22 @@ class ProbationIncrementEvaluationController extends Controller
     public function forward(Request $request, ProbationIncrementEvaluation $evaluation)
     {
         $user = $request->user();
-        if (!$this->workflowService->canUserReview($user, $evaluation)) {
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+
+        if (!$this->workflowService->canUserReview($user, $evaluation) && !($isStuckAtRm && $isInitiator)) {
             abort(403, 'আপনার এই মূল্যায়নে স্বাক্ষর বা ফরোয়ার্ড করার অনুমতি নেই।');
         }
 
-        if ($evaluation->status === 'draft') {
+        if ($evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator)) {
             AppraisalRequiredFields::assertStored('probation', $evaluation);
         } else {
             AppraisalRequiredFields::assertActor($request, 'probation', 'reviewer');
         }
 
+        $isSubmitStage = $evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator);
         $validated = $request->validate([
-            'comments' => $evaluation->status === 'draft' ? 'nullable|string|max:1000' : 'required|string|max:1000',
+            'comments' => $isSubmitStage ? 'nullable|string|max:1000' : 'required|string|max:1000',
             'recommendation_status' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
             'supervisor_recommendation' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
         ]);

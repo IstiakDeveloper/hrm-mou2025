@@ -102,11 +102,14 @@ class TraineeEvaluationController extends Controller
             $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $ev);
             $sentBackSig = $ev->signatures->where('action', 'sent_back')->last();
 
+            $isInitiator = (int) $ev->initiator_id === (int) $user->id;
+            $isStuckAtRm = $ev->status === 'submitted_to_rm' && ($isInitiator || $ev->form_type === 'bm_and_above');
+
             $ev->can_approve = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
-            $ev->can_edit = ($ev->status === 'draft' && (int) $ev->initiator_id === (int) $user->id) || ($canReview && !in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
             $ev->can_send_back = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
-            $ev->can_delete = ($ev->status === 'draft' && (int) $ev->initiator_id === (int) $user->id) || $user->isSuperAdmin();
-            $ev->can_submit = $ev->status === 'draft' && ((int) $ev->initiator_id === (int) $user->id);
+            $ev->can_delete = ($ev->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
+            $ev->can_submit = ($ev->status === 'draft' || $isStuckAtRm) && $isInitiator;
             $ev->has_user_signed = $hasSigned;
             $ev->sent_back_reason = ($ev->status === 'draft' && $sentBackSig) ? $sentBackSig->comments : null;
             $ev->unsetRelation('signatures');
@@ -326,9 +329,12 @@ class TraineeEvaluationController extends Controller
         $userSignature = $user->signature ?? $user->employee?->signature;
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
-        $canEdit = ($evaluation->status === 'draft' && (int) $evaluation->initiator_id === (int) $user->id) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
-        $canDelete = ($evaluation->status === 'draft' && (int) $evaluation->initiator_id === (int) $user->id) || $user->isSuperAdmin();
-        $canSubmit = $evaluation->status === 'draft' && ((int) $evaluation->initiator_id === (int) $user->id);
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+        $canDelete = ($evaluation->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
+        $canSubmit = ($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator;
         $canApprove = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
         $canSendBack = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
@@ -350,6 +356,17 @@ class TraineeEvaluationController extends Controller
 
     public function edit(TraineeEvaluation $evaluation, Request $request): Response
     {
+        $user = $request->user();
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
+        $canReview = (!$hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+
+        if (!$canEdit) {
+            abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
+        }
+
         $evaluation->load(array_merge(
             ['scores', 'ratings', 'employee.designation', 'employee.branch'],
             AppraisalListQuery::signerWith(),
@@ -366,6 +383,17 @@ class TraineeEvaluationController extends Controller
 
     public function update(Request $request, TraineeEvaluation $evaluation)
     {
+        $user = $request->user();
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
+        $canReview = (!$hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+
+        if (!$canEdit) {
+            abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
+        }
+
         AppraisalRequiredFields::assertInitiator($request, 'trainee', $evaluation->form_type);
 
         $validated = $request->validate([
@@ -464,21 +492,30 @@ class TraineeEvaluationController extends Controller
 
     public function forward(Request $request, TraineeEvaluation $evaluation)
     {
-        if ($evaluation->status === 'draft') {
+        $user = $request->user();
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+
+        if (!$this->workflowService->canUserReview($user, $evaluation) && !($isStuckAtRm && $isInitiator)) {
+            abort(403, 'আপনার এই মূল্যায়নে স্বাক্ষর বা ফরোয়ার্ড করার অনুমতি নেই।');
+        }
+
+        if ($evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator)) {
             AppraisalRequiredFields::assertStored('trainee', $evaluation);
         } else {
             AppraisalRequiredFields::assertActor($request, 'trainee', 'reviewer');
         }
 
+        $isSubmitStage = $evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator);
         $request->validate([
-            'comments' => $evaluation->status === 'draft' ? 'nullable|string|max:1000' : 'required|string|max:1000',
+            'comments' => $isSubmitStage ? 'nullable|string|max:1000' : 'required|string|max:1000',
             'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
             'supervisor_recommendation' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
             'extension_days' => 'nullable|integer',
         ]);
 
         $nextStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
-        $comments = $evaluation->status === 'draft'
+        $comments = $isSubmitStage
             ? (trim((string) $request->input('comments', '')) !== ''
                 ? trim((string) $request->input('comments'))
                 : ($nextStatus === 'submitted_to_zm'

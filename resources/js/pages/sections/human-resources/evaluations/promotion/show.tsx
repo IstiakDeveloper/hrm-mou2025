@@ -287,7 +287,7 @@ export default function PromotionEvaluationShow({
                 )}
 
                 {/* Has User Already Signed Notification */}
-                {hasUserSigned && !canApprove && !['approved', 'rejected'].includes(evaluation.status) && (
+                {hasUserSigned && !canApprove && !canSubmit && !['approved', 'rejected'].includes(evaluation.status) && (
                     <div className="p-4 rounded-xl border border-emerald-300 bg-emerald-50/80 text-emerald-900 shadow-xs flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-emerald-200/80 text-emerald-800 shrink-0">
@@ -307,7 +307,7 @@ export default function PromotionEvaluationShow({
                     </div>
                 )}
 
-                {/* Draft Banner if status is draft */}
+                {/* Draft Banner if status is draft or canSubmit */}
                 {!userHasSignature && (canSubmit || canApprove) && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 shadow-xs">
                         <div className="flex items-center gap-3">
@@ -333,7 +333,7 @@ export default function PromotionEvaluationShow({
                     </div>
                 )}
 
-                {evaluation.status === 'draft' && (
+                {(evaluation.status === 'draft' || canSubmit) && (
                     <Card className="border-amber-300 bg-amber-50/50 shadow-sm overflow-hidden">
                         <div className="px-5 pt-4">
                             <MissingFieldsAlert gaps={draftGaps} lang={lang} />
@@ -341,15 +341,25 @@ export default function PromotionEvaluationShow({
                         <CardHeader className="bg-amber-100/60 border-b border-amber-200 py-3 px-5">
                             <CardTitle className="text-xs font-bold text-amber-900 flex items-center gap-2">
                                 <Clock className="h-4 w-4 text-amber-700" />
-                                {lang === 'bn' ? 'খসড়া মূল্যায়ন (Draft) — দাখিলের অপেক্ষায়' : 'Draft Evaluation — Pending Submission'}
+                                {evaluation.status === 'submitted_to_rm'
+                                    ? (lang === 'bn' ? 'আঞ্চলিক পর্যায় — জোনাল ম্যানেজার (ZM) সমীপে দাখিলের অপেক্ষায়' : 'Regional Level — Pending Submission to ZM')
+                                    : (lang === 'bn' ? 'খসড়া মূল্যায়ন (Draft) — দাখিলের অপেক্ষায়' : 'Draft Evaluation — Pending Submission')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <p className="text-xs text-amber-900 font-medium">
-                                    {lang === 'bn'
-                                        ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় সংরক্ষিত আছে। আপনি চাইলে এখনো এটি সম্পাদনা বা মুছে ফেলতে পারেন। সবকিছু ঠিক থাকলে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করুন।'
-                                        : 'This evaluation is currently saved as a draft. You can still edit or delete it. When ready, submit it to the Regional Manager.'}
+                                    {evaluation.status === 'submitted_to_rm'
+                                        ? (lang === 'bn'
+                                            ? 'এই মূল্যায়নটি শাখা ব্যবস্থাপকের জন্য তৈরি করা হয়েছে। সবকিছু ঠিক থাকলে পরবর্তী পর্যালোচনার জন্য জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
+                                            : 'This evaluation is for Branch Manager. When ready, submit it to the Zonal Manager (ZM).')
+                                        : (lang === 'bn'
+                                            ? (evaluation.form_type === 'bm_and_above'
+                                                ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় রয়েছে। সবকিছু ঠিক থাকলে জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
+                                                : 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় সংরক্ষিত আছে। আপনি চাইলে এখনো এটি সম্পাদনা বা মুছে ফেলতে পারেন। সবকিছু ঠিক থাকলে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করুন।')
+                                            : (evaluation.form_type === 'bm_and_above'
+                                                ? 'This evaluation is currently in draft. When ready, submit it to the Zonal Manager.'
+                                                : 'This evaluation is currently saved as a draft. You can still edit or delete it. When ready, submit it to the Regional Manager.'))}
                                 </p>
                                 <p className="text-[11px] text-amber-700 mt-1 italic">
                                     {lang === 'bn' 
@@ -373,7 +383,9 @@ export default function PromotionEvaluationShow({
                                         className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
                                     >
                                         <Send className="h-3.5 w-3.5 mr-1" />
-                                        {lang === 'bn' ? 'আরএম সমীপে দাখিল করুন' : 'Submit to RM'}
+                                        {evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm'
+                                            ? (lang === 'bn' ? 'জেডএম সমীপে দাখিল করুন' : 'Submit to ZM')
+                                            : (lang === 'bn' ? 'আরএম সমীপে দাখিল করুন' : 'Submit to RM')}
                                     </Button>
                                 )}
                                 {canDelete && (
