@@ -65,6 +65,15 @@ export default function TraineeEvaluationShow({
     const [approvalOpen, setApprovalOpen] = useState(false);
     const [draftGaps, setDraftGaps] = useState<FieldGap[]>([]);
 
+    useEffect(() => {
+        if (evaluation.status === 'draft' || canSubmit) {
+            const gaps = savedInitiatorGaps('trainee', evaluation, lang);
+            if (gaps.length > 0) {
+                setDraftGaps(gaps);
+            }
+        }
+    }, [evaluation, canSubmit, lang]);
+
     const openApproval = () => {
         if (!userHasSignature) {
             alert(lang === 'bn'
@@ -112,11 +121,15 @@ export default function TraineeEvaluationShow({
             return;
         }
         
-        if (evaluation.status === 'draft' && route === 'forward') {
+        const isSubmitStage = evaluation.status === 'draft' || canSubmit;
+        if (isSubmitStage && route === 'forward') {
             const gaps = savedInitiatorGaps('trainee', evaluation, lang);
             setDraftGaps(gaps);
             if (gaps.length > 0) {
                 scrollToMissingFields();
+                alert(lang === 'bn' 
+                    ? `নিম্নোক্ত আবশ্যক তথ্য পূরণ না থাকায় দাখিল করা যাচ্ছে না:\n\n• ${gaps.map(g => g.message).join('\n• ')}\n\nঅনুগ্রহ করে 'সম্পাদনা' বাটনে ক্লিক করে তথ্যগুলো পূরণ করুন।` 
+                    : `Cannot submit because the following required fields are missing:\n\n• ${gaps.map(g => g.message).join('\n• ')}`);
                 return;
             }
         }
@@ -128,13 +141,26 @@ export default function TraineeEvaluationShow({
 
         const payload: any = {
             ...data,
-            comments: data.comments || (evaluation.status === 'draft' || isBmorRmStuck ? defaultSubmitComment : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
+            comments: data.comments || (isSubmitStage ? defaultSubmitComment : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
             is_approved: type === 'approve',
         };
 
         router.post(`/trainee-evaluations/${evaluation.id}/${route}`, payload, {
             preserveScroll: true,
             onSuccess: () => reset('comments'),
+            onError: (errors: Record<string, string | string[]>) => {
+                const serverGaps: FieldGap[] = Object.entries(errors).map(([key, msg]) => ({
+                    key,
+                    message: Array.isArray(msg) ? msg.join(', ') : String(msg),
+                }));
+                if (serverGaps.length > 0) {
+                    setDraftGaps(serverGaps);
+                    scrollToMissingFields();
+                    alert(lang === 'bn' 
+                        ? `দাখিল ব্যর্থ হয়েছে! নিম্নোক্ত তথ্য পূরণ করা প্রয়োজন:\n\n• ${serverGaps.map(g => g.message).join('\n• ')}`
+                        : `Submission failed! Please complete required fields:\n\n• ${serverGaps.map(g => g.message).join('\n• ')}`);
+                }
+            },
         });
     };
 
@@ -280,7 +306,7 @@ export default function TraineeEvaluationShow({
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-4 p-4 sm:p-5">
-                            <MissingFieldsAlert gaps={draftGaps} lang={lang} />
+                            <MissingFieldsAlert gaps={draftGaps} lang={lang} editUrl={canEdit ? `/trainee-evaluations/${evaluation.id}/edit` : undefined} />
                             <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-800">
                                     {lang === 'bn' ? 'আপনার মন্তব্য বা সুপারিশ (যদি থাকে):' : 'Remarks / Comments:'}
