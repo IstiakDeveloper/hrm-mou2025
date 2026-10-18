@@ -567,10 +567,21 @@ class FinalClearanceService
         }
 
         $roles = $this->roleNames($user);
-
-        return in_array('Director Finance and Accounts', $roles, true)
+        if (in_array('Director Finance and Accounts', $roles, true)
             || in_array('Director Finance and Account', $roles, true)
-            || in_array('Director (Finance & Accounts)', $roles, true);
+            || in_array('Director (Finance & Accounts)', $roles, true)) {
+            return true;
+        }
+
+        $employeeId = (int) ($user->employee_id ?? 0);
+        if ($employeeId === 0) {
+            return false;
+        }
+
+        return DB::table('departments')
+            ->where('head_employee_id', $employeeId)
+            ->where('name', 'Finance and Accounts')
+            ->exists();
     }
 
     private function isExecutiveDirector(User $user): bool
