@@ -231,12 +231,20 @@ class FinalClearanceController extends Controller
         $data = $request->validate([
             'id_card_returned' => ['required', 'boolean'],
             'sim_returned' => ['required', 'boolean'],
-            'member_loan_outstanding' => ['nullable', 'numeric', 'min:0'],
-            'savings_outstanding' => ['nullable', 'numeric', 'min:0'],
-            'total_member' => ['nullable', 'integer', 'min:0'],
-            'total_borrower' => ['nullable', 'integer', 'min:0'],
-            'preparer_comments' => ['nullable', 'string', 'max:2000'],
-        ]);
+            'member_loan_outstanding' => ['required', 'numeric', 'min:0'],
+            'savings_outstanding' => ['required', 'numeric', 'min:0'],
+            'total_member' => ['required', 'integer', 'min:0'],
+            'total_borrower' => ['required', 'integer', 'min:0'],
+            'preparer_comments' => ['required', 'string', 'max:2000'],
+        ], $this->requiredMessages([
+            'id_card_returned' => 'ID card returned',
+            'sim_returned' => 'SIM returned',
+            'member_loan_outstanding' => 'Member loan outstanding',
+            'savings_outstanding' => 'Savings outstanding',
+            'total_member' => 'Total member',
+            'total_borrower' => 'Total borrower',
+            'preparer_comments' => "Preparer's comments",
+        ]));
 
         $finalClearance->fill($data);
         $finalClearance->status = FinalClearance::STATUS_HR;
@@ -256,14 +264,21 @@ class FinalClearanceController extends Controller
 
         if ($finalClearance->status === FinalClearance::STATUS_HR) {
             $data = $request->validate([
-                'joining_date' => ['nullable', 'date'],
-                'confirmation_date' => ['nullable', 'date'],
-                'dropout_date' => ['nullable', 'date'],
-                'leave_balance' => ['nullable', 'numeric'],
+                'joining_date' => ['required', 'date'],
+                'confirmation_date' => ['required', 'date'],
+                'dropout_date' => ['required', 'date'],
+                'leave_balance' => ['required', 'numeric', 'min:0'],
                 'hr_issue' => ['required', 'boolean'],
-                'hr_issue_note' => ['nullable', 'string', 'max:2000'],
+                'hr_issue_note' => ['required', 'string', 'max:2000'],
                 'comments' => ['nullable', 'string', 'max:2000'],
-            ]);
+            ], $this->requiredMessages([
+                'joining_date' => 'Joining date',
+                'confirmation_date' => 'Confirmation date',
+                'dropout_date' => 'Dropout date',
+                'leave_balance' => 'Leave balance',
+                'hr_issue' => 'Any HR issue',
+                'hr_issue_note' => 'HR note',
+            ]));
             $finalClearance->fill(collect($data)->except('comments')->all());
             $this->clearances->recomputeService($finalClearance);
             $finalClearance->status = FinalClearance::STATUS_ACCOUNTS;
@@ -274,9 +289,31 @@ class FinalClearanceController extends Controller
         }
 
         if ($finalClearance->status === FinalClearance::STATUS_ACCOUNTS) {
-            $data = $request->validate($this->moneyRules() + [
+            $data = $request->validate($this->moneyRules(required: true) + [
                 'comments' => ['nullable', 'string', 'max:2000'],
-            ]);
+            ], $this->requiredMessages([
+                'unpaid_salary' => 'Unpaid salary',
+                'unpaid_salary_remarks' => 'Unpaid salary remarks',
+                'pf_amount' => 'Provident fund',
+                'pf_remarks' => 'Provident fund remarks',
+                'gratuity_amount' => 'Gratuity',
+                'gratuity_remarks' => 'Gratuity remarks',
+                'staff_security' => 'Staff security',
+                'staff_security_remarks' => 'Staff security remarks',
+                'other_payable' => 'Other payable',
+                'other_payable_remarks' => 'Other payable remarks',
+                'pf_loan' => 'PF loan',
+                'pf_loan_remarks' => 'PF loan remarks',
+                'motorcycle_loan' => 'Motorcycle loan',
+                'motorcycle_loan_remarks' => 'Motorcycle loan remarks',
+                'laptop_loan' => 'Laptop loan',
+                'laptop_loan_remarks' => 'Laptop loan remarks',
+                'other_loan' => 'Other loan',
+                'other_loan_remarks' => 'Other loan remarks',
+                'advance_received' => 'Advance received',
+                'advance_remarks' => 'Advance remarks',
+                'accounts_comments' => 'Accounts comments',
+            ]));
             $finalClearance->fill(collect($data)->except('comments')->all());
             $this->clearances->recomputeTotals($finalClearance);
             $finalClearance->status = FinalClearance::STATUS_DIRECTOR_FA;
@@ -330,8 +367,10 @@ class FinalClearanceController extends Controller
         }
 
         $data = $request->validate([
-            'comments' => ['nullable', 'string', 'max:2000'],
-        ]);
+            'comments' => ['required', 'string', 'max:2000'],
+        ], $this->requiredMessages([
+            'comments' => 'Comment',
+        ]));
 
         if ($finalClearance->status === FinalClearance::STATUS_DIRECTOR_FA) {
             $finalClearance->status = FinalClearance::STATUS_ED;
@@ -396,10 +435,20 @@ class FinalClearanceController extends Controller
         return redirect()->route('final-clearances.index')->with('success', 'Final clearance deleted.');
     }
 
-    private function moneyRules(): array
+    private function requiredMessages(array $labels): array
     {
-        $money = ['nullable', 'numeric', 'min:0'];
-        $note = ['nullable', 'string', 'max:255'];
+        $messages = [];
+        foreach ($labels as $field => $label) {
+            $messages["{$field}.required"] = "{$label} is required before submit.";
+        }
+
+        return $messages;
+    }
+
+    private function moneyRules(bool $required = false): array
+    {
+        $money = [$required ? 'required' : 'nullable', 'numeric', 'min:0'];
+        $note = [$required ? 'required' : 'nullable', 'string', 'max:255'];
 
         return [
             'unpaid_salary' => $money,
@@ -422,7 +471,7 @@ class FinalClearanceController extends Controller
             'other_loan_remarks' => $note,
             'advance_received' => $money,
             'advance_remarks' => $note,
-            'accounts_comments' => ['nullable', 'string', 'max:2000'],
+            'accounts_comments' => [$required ? 'required' : 'nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -442,6 +491,7 @@ class FinalClearanceController extends Controller
                 }
             }
         }
+        $data = array_merge($data, $this->clearances->lengthLabels($clearance));
         $data['status_label'] = $this->clearances->stageLabel($clearance->status);
         $data['initiator_name'] = $clearance->initiator?->name;
         $data['signatures'] = $clearance->signatures->map(function ($sig) {

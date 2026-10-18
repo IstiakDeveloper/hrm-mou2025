@@ -39,6 +39,8 @@ export type ClearanceRecord = {
     hr_issue?: boolean | null;
     hr_issue_note?: string | null;
     service_length_label?: string | null;
+    joining_length_label?: string | null;
+    confirmation_length_label?: string | null;
     confirmation_days?: number | null;
     unpaid_salary?: string | number | null;
     unpaid_salary_remarks?: string | null;
@@ -112,6 +114,15 @@ function dateText(value?: string | null) {
     return `${day}/${month}/${year}`;
 }
 
+function leaveDays(value: unknown) {
+    if (value === null || value === undefined || value === '') return '';
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '';
+    const normalized = Math.round(amount * 100) / 100;
+    const shown = Number.isInteger(normalized) ? String(normalized) : String(normalized);
+    return `${shown} Days`;
+}
+
 function latestSignature(signatures: Signature[] | undefined, stage: string, actions: string[]) {
     return [...(signatures ?? [])].reverse().find((sig) => sig.stage === stage && actions.includes(sig.action));
 }
@@ -157,10 +168,6 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
     const hrSig = latestSignature(clearance.signatures, 'hr', ['forwarded']);
     const directorSig = latestSignature(clearance.signatures, 'director_fa', ['approved']);
     const edSig = latestSignature(clearance.signatures, 'ed', ['approved']);
-    const days = clearance.confirmation_days != null && clearance.confirmation_days !== undefined
-        ? `${clearance.confirmation_days} Days`
-        : '............. Days';
-
     const payable: [string, unknown, string | null | undefined][] = [
         ['Unpaid Salary and other admissible benefits amount (TK)', clearance.unpaid_salary, clearance.unpaid_salary_remarks],
         ['Provident Fund Amount (TK)', clearance.pf_amount, clearance.pf_remarks],
@@ -271,35 +278,31 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
 
                     <table className="mb-1 w-full border-collapse">
                         <colgroup>
+                            <col className="w-[24%]" />
+                            <col className="w-[28%]" />
+                            <col className="w-[26%]" />
                             <col className="w-[22%]" />
-                            <col className="w-[22%]" />
-                            <col className="w-[20%]" />
-                            <col className="w-[18%]" />
-                            <col className="w-[18%]" />
                         </colgroup>
                         <tbody>
                             <tr>
-                                <td className={td} colSpan={5}><span className={label}>HR Department:</span></td>
+                                <td className={td} colSpan={4}><span className={label}>HR Department:</span></td>
                             </tr>
                             <tr>
                                 <td className={td}><span className={label}>Joining Date</span> : {dateText(clearance.joining_date)}</td>
                                 <td className={td}><span className={label}>Confirmation Date</span> : {dateText(clearance.confirmation_date)}</td>
-                                <td className={td} rowSpan={2}>
-                                    <span className={label}>Service Length</span> : {text(clearance.service_length_label)}
-                                </td>
-                                <td className={td}><span className={label}>From Joining</span> :</td>
-                                <td className={td}><span className={label}>Leave Balance</span> {text(clearance.leave_balance)}</td>
+                                <td className={td}><span className={label}>From Joining</span> : {text(clearance.joining_length_label)}</td>
+                                <td className={td}><span className={label}>Leave Balance</span> : {leaveDays(clearance.leave_balance)}</td>
                             </tr>
                             <tr>
                                 <td className={td}>
                                     <span className={label}>Any HR Issue</span> : <span className={shade}>{yesNo(clearance.hr_issue)}</span>
                                 </td>
                                 <td className={td}><span className={label}>Dropout Date</span> : {dateText(clearance.dropout_date)}</td>
-                                <td className={td}><span className={label}>From Confirmation</span> :</td>
-                                <td className={td}>{days}</td>
+                                <td className={td}><span className={label}>From Confirmation</span> : {text(clearance.confirmation_length_label)}</td>
+                                <td className={td} />
                             </tr>
                             <tr>
-                                <td className={`${td} h-7 align-top`} colSpan={5}>{text(clearance.hr_issue_note)}</td>
+                                <td className={`${td} h-7 align-top`} colSpan={4}>{text(clearance.hr_issue_note)}</td>
                             </tr>
                         </tbody>
                     </table>

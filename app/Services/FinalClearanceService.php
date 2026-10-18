@@ -274,13 +274,7 @@ class FinalClearanceService
         $end = $clearance->dropout_date ? Carbon::parse($clearance->dropout_date) : Carbon::today();
 
         if ($joining) {
-            $diff = $joining->diff($end);
-            $clearance->service_length_label = trim(sprintf(
-                '%d years %d months %d days',
-                $diff->y,
-                $diff->m,
-                $diff->d,
-            ));
+            $clearance->service_length_label = $this->ymdLabel($joining, $end);
         }
 
         if ($clearance->confirmation_date) {
@@ -497,15 +491,42 @@ class FinalClearanceService
         return $text === '' ? null : $text;
     }
 
+    public function lengthLabels(FinalClearance $clearance): array
+    {
+        $end = $clearance->dropout_date
+            ? Carbon::parse($clearance->dropout_date)->startOfDay()
+            : Carbon::today();
+
+        return [
+            'joining_length_label' => $this->ymdLabel(
+                $clearance->joining_date ? Carbon::parse($clearance->joining_date) : null,
+                $end,
+            ),
+            'confirmation_length_label' => $this->ymdLabel(
+                $clearance->confirmation_date ? Carbon::parse($clearance->confirmation_date) : null,
+                $end,
+            ),
+        ];
+    }
+
+    private function ymdLabel(?Carbon $start, Carbon $end): ?string
+    {
+        if (! $start) {
+            return null;
+        }
+
+        $diff = $start->copy()->startOfDay()->diff($end->copy()->startOfDay());
+
+        return sprintf('%dY %dM %dD', $diff->y, $diff->m, $diff->d);
+    }
+
     private function serviceLengthLabel(Employee $employee): ?string
     {
         if (! $employee->joining_date) {
             return null;
         }
 
-        $diff = Carbon::parse($employee->joining_date)->diff($employee->getServiceEndDate());
-
-        return trim(sprintf('%d years %d months %d days', $diff->y, $diff->m, $diff->d));
+        return $this->ymdLabel(Carbon::parse($employee->joining_date), $employee->getServiceEndDate());
     }
 
     private function roleNames(User $user): array

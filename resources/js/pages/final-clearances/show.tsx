@@ -30,17 +30,27 @@ function statusClass(status: string) {
     return styles[status] ?? styles.draft;
 }
 
-function yesNo(name: string, value: boolean | null | undefined, set: (value: boolean) => void) {
+function yesNo(name: string, value: boolean | null | undefined, set: (value: boolean) => void, required = false) {
+    const unanswered = value !== true && value !== false;
     return (
         <div className="flex gap-4 text-sm">
             <label className="flex items-center gap-1.5">
-                <input type="radio" name={name} checked={value === true} onChange={() => set(true)} /> Yes
+                <input type="radio" name={name} required={required && unanswered} checked={value === true} onChange={() => set(true)} /> Yes
             </label>
             <label className="flex items-center gap-1.5">
-                <input type="radio" name={name} checked={value === false} onChange={() => set(false)} /> No
+                <input type="radio" name={name} required={required && unanswered} checked={value === false} onChange={() => set(false)} /> No
             </label>
         </div>
     );
+}
+
+function Req() {
+    return <span className="text-rose-600"> *</span>;
+}
+
+function FieldError({ message }: { message?: string }) {
+    if (!message) return null;
+    return <p className="mt-1 text-xs text-rose-600">{message}</p>;
 }
 
 const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
@@ -107,6 +117,16 @@ export default function FinalClearanceShow({
         comments: '',
     });
     const decision = useForm({ comments: '' });
+
+    const postDecision = (url: string) => {
+        if (blockWithoutSignature(userHasSignature)) return;
+        if (decision.data.comments.trim() === '') {
+            decision.setError('comments', 'Comment is required before submit.');
+            return;
+        }
+        decision.clearErrors('comments');
+        decision.post(url);
+    };
 
     const moneyFields: { key: keyof typeof accounts.data; label: string; remarks: keyof typeof accounts.data }[] = [
         { key: 'unpaid_salary', label: 'Unpaid salary and other benefits', remarks: 'unpaid_salary_remarks' },
@@ -202,6 +222,7 @@ export default function FinalClearanceShow({
                     <Card className="border-slate-200 bg-white shadow-xs">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm">Field information</CardTitle>
+                            <p className="text-xs text-slate-500">Submit করতে হলে এই অংশের সব ঘর পূরণ করতে হবে। ০ বসানো যাবে, খালি রাখা যাবে না।</p>
                         </CardHeader>
                         <CardContent>
                             <form
@@ -213,29 +234,34 @@ export default function FinalClearanceShow({
                                 }}
                             >
                                 <div>
-                                    <div className="mb-1.5 text-xs font-semibold text-slate-700">ID card returned</div>
-                                    {yesNo('id_card', field.data.id_card_returned, (value) => field.setData('id_card_returned', value))}
-                                    {field.errors.id_card_returned && <p className="mt-1 text-xs text-rose-600">{field.errors.id_card_returned}</p>}
+                                    <div className="mb-1.5 text-xs font-semibold text-slate-700">ID card returned<Req /></div>
+                                    {yesNo('id_card', field.data.id_card_returned, (value) => field.setData('id_card_returned', value), true)}
+                                    <FieldError message={field.errors.id_card_returned} />
                                 </div>
                                 <div>
-                                    <div className="mb-1.5 text-xs font-semibold text-slate-700">SIM returned</div>
-                                    {yesNo('sim', field.data.sim_returned, (value) => field.setData('sim_returned', value))}
-                                    {field.errors.sim_returned && <p className="mt-1 text-xs text-rose-600">{field.errors.sim_returned}</p>}
+                                    <div className="mb-1.5 text-xs font-semibold text-slate-700">SIM returned<Req /></div>
+                                    {yesNo('sim', field.data.sim_returned, (value) => field.setData('sim_returned', value), true)}
+                                    <FieldError message={field.errors.sim_returned} />
                                 </div>
-                                <label className="text-xs font-semibold text-slate-700">Member loan outstanding
-                                    <Input className="mt-1 h-9 font-normal" value={field.data.member_loan_outstanding} onChange={(e) => field.setData('member_loan_outstanding', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Member loan outstanding<Req />
+                                    <Input required className="mt-1 h-9 font-normal" value={field.data.member_loan_outstanding} onChange={(e) => field.setData('member_loan_outstanding', e.target.value)} />
+                                    <FieldError message={field.errors.member_loan_outstanding} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Savings outstanding
-                                    <Input className="mt-1 h-9 font-normal" value={field.data.savings_outstanding} onChange={(e) => field.setData('savings_outstanding', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Savings outstanding<Req />
+                                    <Input required className="mt-1 h-9 font-normal" value={field.data.savings_outstanding} onChange={(e) => field.setData('savings_outstanding', e.target.value)} />
+                                    <FieldError message={field.errors.savings_outstanding} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Total member
-                                    <Input className="mt-1 h-9 font-normal" value={field.data.total_member} onChange={(e) => field.setData('total_member', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Total member<Req />
+                                    <Input required className="mt-1 h-9 font-normal" value={field.data.total_member} onChange={(e) => field.setData('total_member', e.target.value)} />
+                                    <FieldError message={field.errors.total_member} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Total borrower
-                                    <Input className="mt-1 h-9 font-normal" value={field.data.total_borrower} onChange={(e) => field.setData('total_borrower', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Total borrower<Req />
+                                    <Input required className="mt-1 h-9 font-normal" value={field.data.total_borrower} onChange={(e) => field.setData('total_borrower', e.target.value)} />
+                                    <FieldError message={field.errors.total_borrower} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700 md:col-span-2">Preparer's comments
-                                    <Textarea className="mt-1 font-normal" rows={3} value={field.data.preparer_comments} onChange={(e) => field.setData('preparer_comments', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700 md:col-span-2">Preparer's comments<Req />
+                                    <Textarea required className="mt-1 font-normal" rows={3} value={field.data.preparer_comments} onChange={(e) => field.setData('preparer_comments', e.target.value)} />
+                                    <FieldError message={field.errors.preparer_comments} />
                                 </label>
                                 <div className="flex flex-wrap gap-2 md:col-span-2">
                                     <Button type="button" variant="outline" disabled={field.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) field.put(`/final-clearances/${clearance.id}`); }}>Save draft</Button>
@@ -250,6 +276,7 @@ export default function FinalClearanceShow({
                     <Card className="border-slate-200 bg-white shadow-xs">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm">HR</CardTitle>
+                            <p className="text-xs text-slate-500">Submit করতে হলে এই অংশের সব ঘর পূরণ করতে হবে। ০ বসানো যাবে, খালি রাখা যাবে না।</p>
                         </CardHeader>
                         <CardContent>
                             <form
@@ -260,25 +287,30 @@ export default function FinalClearanceShow({
                                     hr.post(`/final-clearances/${clearance.id}/forward`);
                                 }}
                             >
-                                <label className="text-xs font-semibold text-slate-700">Joining date
-                                    <Input type="date" className="mt-1 h-9 font-normal" value={hr.data.joining_date} onChange={(e) => hr.setData('joining_date', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Joining date<Req />
+                                    <Input required type="date" className="mt-1 h-9 font-normal" value={hr.data.joining_date} onChange={(e) => hr.setData('joining_date', e.target.value)} />
+                                    <FieldError message={hr.errors.joining_date} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Confirmation date
-                                    <Input type="date" className="mt-1 h-9 font-normal" value={hr.data.confirmation_date} onChange={(e) => hr.setData('confirmation_date', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Confirmation date<Req />
+                                    <Input required type="date" className="mt-1 h-9 font-normal" value={hr.data.confirmation_date} onChange={(e) => hr.setData('confirmation_date', e.target.value)} />
+                                    <FieldError message={hr.errors.confirmation_date} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Dropout date
-                                    <Input type="date" className="mt-1 h-9 font-normal" value={hr.data.dropout_date} onChange={(e) => hr.setData('dropout_date', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Dropout date<Req />
+                                    <Input required type="date" className="mt-1 h-9 font-normal" value={hr.data.dropout_date} onChange={(e) => hr.setData('dropout_date', e.target.value)} />
+                                    <FieldError message={hr.errors.dropout_date} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Leave balance from joining
-                                    <Input className="mt-1 h-9 font-normal" value={hr.data.leave_balance} onChange={(e) => hr.setData('leave_balance', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Leave balance from joining<Req />
+                                    <Input required className="mt-1 h-9 font-normal" value={hr.data.leave_balance} onChange={(e) => hr.setData('leave_balance', e.target.value)} />
+                                    <FieldError message={hr.errors.leave_balance} />
                                 </label>
                                 <div>
-                                    <div className="mb-1.5 text-xs font-semibold text-slate-700">Any HR issue</div>
-                                    {yesNo('hr_issue', hr.data.hr_issue, (value) => hr.setData('hr_issue', value))}
-                                    {hr.errors.hr_issue && <p className="mt-1 text-xs text-rose-600">{hr.errors.hr_issue}</p>}
+                                    <div className="mb-1.5 text-xs font-semibold text-slate-700">Any HR issue<Req /></div>
+                                    {yesNo('hr_issue', hr.data.hr_issue, (value) => hr.setData('hr_issue', value), true)}
+                                    <FieldError message={hr.errors.hr_issue} />
                                 </div>
-                                <label className="text-xs font-semibold text-slate-700 md:col-span-2">HR note
-                                    <Textarea className="mt-1 font-normal" rows={2} value={hr.data.hr_issue_note} onChange={(e) => hr.setData('hr_issue_note', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700 md:col-span-2">HR note<Req />
+                                    <Textarea required className="mt-1 font-normal" rows={2} value={hr.data.hr_issue_note} onChange={(e) => hr.setData('hr_issue_note', e.target.value)} />
+                                    <FieldError message={hr.errors.hr_issue_note} />
                                 </label>
                                 <label className="text-xs font-semibold text-slate-700 md:col-span-2">Comment for accounts
                                     <Textarea className="mt-1 font-normal" rows={2} value={hr.data.comments} onChange={(e) => hr.setData('comments', e.target.value)} />
@@ -286,9 +318,9 @@ export default function FinalClearanceShow({
                                 <div className="flex flex-wrap gap-2 md:col-span-2">
                                     <Button type="button" variant="outline" disabled={hr.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) hr.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
                                     <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={hr.processing}>Submit to Accounts</Button>
-                                    <Button type="button" variant="outline" onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/send-back`); }}>Send back</Button>
+                                    <Button type="button" variant="outline" onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
                                 </div>
-                                <label className="text-xs font-semibold text-slate-700 md:col-span-2">Send-back comment
+                                <label className="text-xs font-semibold text-slate-700 md:col-span-2">Send-back comment<Req />
                                     <Textarea className="mt-1 font-normal" rows={2} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
                                     {decision.errors.comments && <p className="mt-1 text-xs text-rose-600">{decision.errors.comments}</p>}
                                 </label>
@@ -301,6 +333,7 @@ export default function FinalClearanceShow({
                     <Card className="border-slate-200 bg-white shadow-xs">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm">Accounts</CardTitle>
+                            <p className="text-xs text-slate-500">Submit করতে হলে প্রতিটি পরিমাণ ও রিমার্কস পূরণ করতে হবে। পরিমাণ ০ হলেও রিমার্কস লিখতে হবে।</p>
                         </CardHeader>
                         <CardContent>
                             <form
@@ -313,23 +346,26 @@ export default function FinalClearanceShow({
                             >
                                 {moneyFields.map((item) => (
                                     <div key={item.key} className="grid gap-2 md:grid-cols-2">
-                                        <label className="text-xs font-semibold text-slate-700">{item.label}
-                                            <Input className="mt-1 h-9 font-normal" value={accounts.data[item.key] as string | number} onChange={(e) => accounts.setData(item.key, e.target.value)} />
+                                        <label className="text-xs font-semibold text-slate-700">{item.label}<Req />
+                                            <Input required className="mt-1 h-9 font-normal" value={accounts.data[item.key] as string | number} onChange={(e) => accounts.setData(item.key, e.target.value)} />
+                                            <FieldError message={accounts.errors[item.key]} />
                                         </label>
-                                        <label className="text-xs font-semibold text-slate-700">Remarks
-                                            <Input className="mt-1 h-9 font-normal" value={accounts.data[item.remarks] as string} onChange={(e) => accounts.setData(item.remarks, e.target.value)} />
+                                        <label className="text-xs font-semibold text-slate-700">Remarks<Req />
+                                            <Input required className="mt-1 h-9 font-normal" value={accounts.data[item.remarks] as string} onChange={(e) => accounts.setData(item.remarks, e.target.value)} />
+                                            <FieldError message={accounts.errors[item.remarks]} />
                                         </label>
                                     </div>
                                 ))}
-                                <label className="text-xs font-semibold text-slate-700">Accounts comments
-                                    <Textarea className="mt-1 font-normal" rows={3} value={accounts.data.accounts_comments} onChange={(e) => accounts.setData('accounts_comments', e.target.value)} />
+                                <label className="text-xs font-semibold text-slate-700">Accounts comments<Req />
+                                    <Textarea required className="mt-1 font-normal" rows={3} value={accounts.data.accounts_comments} onChange={(e) => accounts.setData('accounts_comments', e.target.value)} />
+                                    <FieldError message={accounts.errors.accounts_comments} />
                                 </label>
                                 <div className="flex flex-wrap gap-2">
                                     <Button type="button" variant="outline" disabled={accounts.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) accounts.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
                                     <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={accounts.processing}>Submit to Director Finance</Button>
-                                    <Button type="button" variant="outline" onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/send-back`); }}>Send back</Button>
+                                    <Button type="button" variant="outline" onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
                                 </div>
-                                <label className="text-xs font-semibold text-slate-700">Send-back comment
+                                <label className="text-xs font-semibold text-slate-700">Send-back comment<Req />
                                     <Textarea className="mt-1 font-normal" rows={2} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
                                     {decision.errors.comments && <p className="mt-1 text-xs text-rose-600">{decision.errors.comments}</p>}
                                 </label>
@@ -345,16 +381,17 @@ export default function FinalClearanceShow({
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(event) => event.preventDefault()}>
-                                <label className="text-xs font-semibold text-slate-700">Comment
-                                    <Textarea className="mt-1 font-normal" rows={3} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
-                                    {decision.errors.comments && <p className="mt-1 text-xs text-rose-600">{decision.errors.comments}</p>}
+                                <label className="text-xs font-semibold text-slate-700">Comment<Req />
+                                    <Textarea required className="mt-1 font-normal" rows={3} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
+                                    <FieldError message={decision.errors.comments} />
                                 </label>
+                                <p className="mt-1 text-xs text-slate-500">Approve, send back, বা reject করতে কমেন্ট লিখতে হবে।</p>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={decision.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/approve`); }}>
+                                    <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/approve`)}>
                                         {clearance.status === 'submitted_to_ed' ? 'Approve and close' : 'Approve'}
                                     </Button>
-                                    <Button type="button" variant="outline" disabled={decision.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/send-back`); }}>Send back</Button>
-                                    <Button type="button" variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" disabled={decision.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) decision.post(`/final-clearances/${clearance.id}/reject`); }}>Reject</Button>
+                                    <Button type="button" variant="outline" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
+                                    <Button type="button" variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/reject`)}>Reject</Button>
                                 </div>
                             </form>
                         </CardContent>
