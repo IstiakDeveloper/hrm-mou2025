@@ -1153,7 +1153,7 @@ class DashboardController extends Controller
                 $status = 'holiday';
             } elseif ($isHoliday) {
                 $status = 'holiday';
-            } elseif (in_array($cursor->dayOfWeek, $weekendDays, true)) {
+            } elseif (AttendanceSetting::dateFallsOnWeekend($cursor, $weekendDays)) {
                 $status = 'weekend';
             }
 

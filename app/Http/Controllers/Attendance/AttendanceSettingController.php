@@ -10,6 +10,7 @@ use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Designation;
 use App\Models\GuardShiftSetting;
+use App\Models\OfficeOpenDate;
 use App\Models\ZktecoSyncSetting;
 use App\Services\AdmsDeviceCommandService;
 use Illuminate\Http\Request;
@@ -97,7 +98,58 @@ class AttendanceSettingController extends Controller
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
             'attlogKeepDays' => ZktecoSyncSetting::attlogKeepDays(),
             'devicePushes' => $this->devicePushRows(),
+            'officeOpenDates' => $this->officeOpenDateRows(),
         ]);
+    }
+
+    /**
+     * @return list<array{id: int, date: string, note: ?string}>
+     */
+    private function officeOpenDateRows(): array
+    {
+        if (! Schema::hasTable('office_open_dates')) {
+            return [];
+        }
+
+        return OfficeOpenDate::query()
+            ->orderByDesc('date')
+            ->get(['id', 'date', 'note'])
+            ->map(fn (OfficeOpenDate $row) => [
+                'id' => $row->id,
+                'date' => $row->date->format('Y-m-d'),
+                'note' => $row->note,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Mark one calendar date as a working day without changing Friday/Saturday weekends.
+     */
+    public function storeOfficeOpenDate(Request $request)
+    {
+        $data = $request->validate([
+            'date' => 'required|date|unique:office_open_dates,date',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        OfficeOpenDate::create([
+            'date' => $data['date'],
+            'note' => $data['note'] ?? null,
+        ]);
+        OfficeOpenDate::forgetCache();
+
+        return redirect()->route('attendance.settings.index')
+            ->with('success', 'That date is now a working day. Other Fridays and Saturdays stay weekends.');
+    }
+
+    public function destroyOfficeOpenDate(OfficeOpenDate $officeOpenDate)
+    {
+        $officeOpenDate->delete();
+        OfficeOpenDate::forgetCache();
+
+        return redirect()->route('attendance.settings.index')
+            ->with('success', 'Office open date removed. That day follows the weekend again.');
     }
 
     /**

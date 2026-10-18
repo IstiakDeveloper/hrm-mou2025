@@ -209,7 +209,7 @@ export default function AttendanceMonthly({
     dailyStatusByEmployee = {},
     summaryByEmployee = {}
 }: AttendanceMonthlyProps) {
-    const { auth } = usePage().props as any;
+    const { auth, officeOpenDates = [] } = usePage().props as any;
     const branchAccount = isBranchAccount(auth);
 
     const [search, setSearch] = useState(filters.search || '');
@@ -289,11 +289,15 @@ export default function AttendanceMonthly({
 
     // Check if a date is a weekend for an employee
     const isWeekend = (day: number, branchId: number): boolean => {
+        const dateToFind = toYmd(day);
+        if (Array.isArray(officeOpenDates) && officeOpenDates.includes(dateToFind)) {
+            return false;
+        }
+
         if (!attendanceSettings || !attendanceSettings[branchId] || !attendanceSettings[branchId].weekend_days) {
             return false;
         }
 
-        const dateToFind = toYmd(day);
         // Use date-fns parse to avoid UTC parsing shifts of "YYYY-MM-DD"
         const date = parse(dateToFind, 'yyyy-MM-dd', new Date());
         const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday

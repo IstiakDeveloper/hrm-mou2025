@@ -200,17 +200,29 @@ class AttendanceSetting extends Model
         return static::weekendDaysForBranch($branchId ? (int) $branchId : null);
     }
 
-    public static function isWeekendDate(Carbon|string $date, ?int $branchId = null): bool
+    /**
+     * True when this calendar date is a weekend, unless it was marked office-open.
+     *
+     * @param  list<int|string>  $weekendDays
+     */
+    public static function dateFallsOnWeekend(Carbon|string $date, array $weekendDays): bool
     {
+        if (OfficeOpenDate::isOpen($date)) {
+            return false;
+        }
+
         $carbon = $date instanceof Carbon ? $date : Carbon::parse($date);
 
-        return in_array((int) $carbon->dayOfWeek, static::weekendDaysForBranch($branchId), true);
+        return in_array((int) $carbon->dayOfWeek, array_map('intval', $weekendDays), true);
+    }
+
+    public static function isWeekendDate(Carbon|string $date, ?int $branchId = null): bool
+    {
+        return static::dateFallsOnWeekend($date, static::weekendDaysForBranch($branchId));
     }
 
     public static function isWeekendForEmployee(Carbon|string $date, ?int $employeeId): bool
     {
-        $carbon = $date instanceof Carbon ? $date : Carbon::parse($date);
-
-        return in_array((int) $carbon->dayOfWeek, static::weekendDaysForEmployee($employeeId), true);
+        return static::dateFallsOnWeekend($date, static::weekendDaysForEmployee($employeeId));
     }
 }

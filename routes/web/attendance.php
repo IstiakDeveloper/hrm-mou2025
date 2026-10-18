@@ -67,6 +67,8 @@ Route::middleware(['permission:attendance.view'])->prefix('attendance')->name('a
         Route::post('/toggle-multi-day-movement', [AttendanceSettingController::class, 'toggleMultiDayMovement'])->name('toggle-multi-day-movement');
         Route::put('/guard-shift', [AttendanceSettingController::class, 'updateGuardShift'])->name('guard-shift');
         Route::put('/device-log-keep', [AttendanceSettingController::class, 'updateDeviceLogKeep'])->name('device-log-keep');
+        Route::post('/office-open-dates', [AttendanceSettingController::class, 'storeOfficeOpenDate'])->name('office-open-dates.store');
+        Route::delete('/office-open-dates/{officeOpenDate}', [AttendanceSettingController::class, 'destroyOfficeOpenDate'])->name('office-open-dates.destroy');
         Route::post('/devices/{device}/push-missing', [AttendanceSettingController::class, 'pushMissingDeviceUsers'])->name('devices.push-missing');
         Route::get('/create', [AttendanceSettingController::class, 'create'])->name('create');
         Route::post('/', [AttendanceSettingController::class, 'store'])->name('store');

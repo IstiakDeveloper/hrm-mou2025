@@ -252,9 +252,8 @@ class ZKDeviceController extends Controller
         foreach ($groupedLogs as $employeeId => $dates) {
             foreach ($dates as $date => $record) {
                 // Skip weekend days if configured
-                $dayOfWeek = Carbon::parse($date)->dayOfWeek;
                 $weekendDays = $settings->weekendDayNumbers();
-                if (in_array($dayOfWeek, $weekendDays)) {
+                if (AttendanceSetting::dateFallsOnWeekend($date, $weekendDays)) {
                     continue;
                 }
 

@@ -251,7 +251,7 @@ export default function Create({ branches }: CreateProps) {
                 <div>
                   <Label>Weekend Days</Label>
                   <p className="text-sm text-muted-foreground mt-1 mb-2">
-                    Select days to mark as weekend (non-working days)
+                    Friday and Saturday stay weekends. To open the office on one date only, add that date under Office open dates. Do not remove Saturday here.
                   </p>
                   {errors.weekendDays && (
                     <p className="text-sm font-medium text-red-500">{errors.weekendDays}</p>

@@ -162,8 +162,9 @@ class Attendance extends Model
             return $guardStatus;
         }
 
-        // Weekend is total: no movement/attendance marks on configured weekend days
-        if (in_array((int) $carbonDate->dayOfWeek, $weekendDays, true)) {
+        // Weekend is total: no movement/attendance marks on configured weekend days.
+        // A date marked office-open is a working day.
+        if (AttendanceSetting::dateFallsOnWeekend($carbonDate, $weekendDays)) {
             return 'weekend';
         }
 

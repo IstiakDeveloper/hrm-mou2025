@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\OfficeOpenDate;
 use Carbon\Carbon;
 
 class MonthlyAttendanceCalculator
@@ -164,8 +165,10 @@ class MonthlyAttendanceCalculator
         ?string $attendanceRowStatus
     ): string {
         $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-        // Weekend is total — no present / movement / absent on configured weekend days
-        if (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend') {
+        $officeOpen = OfficeOpenDate::isOpen($date);
+        // Weekend is total — no present / movement / absent on configured weekend days.
+        // A date marked office-open stays a working day even when it falls on Friday/Saturday.
+        if (! $officeOpen && (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend')) {
             return 'weekend';
         }
 

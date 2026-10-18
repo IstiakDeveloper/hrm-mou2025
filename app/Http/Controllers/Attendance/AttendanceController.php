@@ -61,9 +61,11 @@ class AttendanceController extends Controller
         bool $hasValidAttendance,
         ?string $attendanceRowStatus
     ): string {
-        // Weekend is total — no present / movement / absent on configured weekend days
+        // Weekend is total — no present / movement / absent on configured weekend days.
+        // Office-open dates stay working days.
         $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-        if (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend') {
+        $officeOpen = \App\Models\OfficeOpenDate::isOpen($date);
+        if (! $officeOpen && (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend')) {
             return 'weekend';
         }
 
@@ -415,7 +417,7 @@ class AttendanceController extends Controller
                 $weekendDays = [5, 6];
             }
 
-            if (in_array($attendanceDate->dayOfWeek, array_map('intval', $weekendDays), true)
+            if (AttendanceSetting::dateFallsOnWeekend($attendanceDate, $weekendDays)
                 && ! $attendance->check_in
                 && ! $attendance->check_out) {
                 $attendance->auto_remarks = 'Weekend';
@@ -479,8 +481,7 @@ class AttendanceController extends Controller
 
             // Check if it's a weekend
             $weekendDays = $this->normalizeJsonArray($settings->weekend_days);
-            $dayOfWeek = $attendanceDate->dayOfWeek;
-            $isWeekend = in_array($dayOfWeek, $weekendDays);
+            $isWeekend = AttendanceSetting::dateFallsOnWeekend($attendanceDate, $weekendDays);
 
             if ($isWeekend) {
                 $attendance->auto_remarks = 'Weekend work';
@@ -963,7 +964,7 @@ class AttendanceController extends Controller
             if (empty($weekendDays)) {
                 $weekendDays = $defaultWeekendDays;
             }
-            $isWeekend = in_array($targetDate->dayOfWeek, array_map('intval', $weekendDays), true);
+            $isWeekend = AttendanceSetting::dateFallsOnWeekend($targetDate, $weekendDays);
 
             // Shift defaults
             $defaultCheckIn = $setting->work_start_time ? Carbon::parse($setting->work_start_time)->format('H:i') : '09:00';
@@ -1696,7 +1697,7 @@ class AttendanceController extends Controller
                 $dateObj = Carbon::parse($date);
 
                 // Check if it's a weekend
-                $isWeekend = in_array($dateObj->dayOfWeek, $weekendDays);
+                $isWeekend = AttendanceSetting::dateFallsOnWeekend($dateObj, $weekendDays);
 
                 // Check if it's a holiday
                 $isHoliday = $holidayMap->has($date);
@@ -1893,7 +1894,7 @@ class AttendanceController extends Controller
                     'total_days' => count($dateRange),
                     'total_working_days' => $totalWorkingDays,
                     'total_weekends' => collect($dateRange)->filter(function ($date) use ($weekendDays) {
-                        return in_array(Carbon::parse($date)->dayOfWeek, $weekendDays);
+                        return AttendanceSetting::dateFallsOnWeekend($date, $weekendDays);
                     })->count(),
                     'total_holidays' => $holidaysCollection->count(),
                     'total_employees' => $totalEmployees,

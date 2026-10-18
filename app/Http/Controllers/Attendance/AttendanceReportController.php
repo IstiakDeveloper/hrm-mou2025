@@ -209,8 +209,7 @@ class AttendanceReportController extends Controller
             // Check if it's a weekend
             // AttendanceSetting casts weekend_days to array; avoid json_decode(array)
             $weekendDays = is_array($settings->weekend_days ?? null) ? ($settings->weekend_days ?? []) : (json_decode($settings->weekend_days ?? '[]', true) ?: []);
-            $dayOfWeek = $attendanceDate->dayOfWeek;
-            $isWeekend = in_array($dayOfWeek, $weekendDays);
+            $isWeekend = AttendanceSetting::dateFallsOnWeekend($attendanceDate, $weekendDays);
 
             if ($isWeekend) {
                 $attendance->auto_remarks = 'Weekend work';

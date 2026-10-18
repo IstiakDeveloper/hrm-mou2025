@@ -170,8 +170,7 @@ $determineStatus = static function (
         return 'holiday';
     }
 
-    $dayOfWeek = Carbon::parse($dateStr)->dayOfWeek;
-    if (in_array($dayOfWeek, $weekendDays, true)) {
+    if (\App\Models\AttendanceSetting::dateFallsOnWeekend($dateStr, $weekendDays)) {
         return 'weekend';
     }
 

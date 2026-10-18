@@ -223,8 +223,10 @@ class EmployeeDashboardController extends Controller
         $currentDate = Carbon::parse($date);
         $dayOfWeek = $currentDate->dayOfWeek;
 
-        // Weekend is total — no present / movement / absent on configured weekend days
-        if (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend') {
+        // Weekend is total — no present / movement / absent on configured weekend days.
+        // Office-open dates stay working days.
+        $officeOpen = \App\Models\OfficeOpenDate::isOpen($date);
+        if (! $officeOpen && (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend')) {
             return 'weekend';
         }
 
@@ -652,8 +654,7 @@ class EmployeeDashboardController extends Controller
 
             // Check if it's a weekend
             $weekendDays = $this->decodeWeekendDays($settings->weekend_days ?? null);
-            $dayOfWeek = $attendanceDate->dayOfWeek;
-            $isWeekend = in_array($dayOfWeek, $weekendDays);
+            $isWeekend = AttendanceSetting::dateFallsOnWeekend($attendanceDate, $weekendDays);
 
             if ($isWeekend) {
                 $attendance->auto_remarks = 'Weekend work';

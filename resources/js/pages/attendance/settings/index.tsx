@@ -104,6 +104,12 @@ interface DevicePushRow {
   employees?: DeviceEmployeeRow[];
 }
 
+interface OfficeOpenDateRow {
+  id: number;
+  date: string;
+  note?: string | null;
+}
+
 interface AttendanceSettingsIndexProps {
   settings: AttendanceSetting[];
   branches: Branch[];
@@ -112,6 +118,7 @@ interface AttendanceSettingsIndexProps {
   designations: GuardDesignation[];
   attlogKeepDays?: number;
   devicePushes?: DevicePushRow[];
+  officeOpenDates?: OfficeOpenDateRow[];
 }
 
 interface GuardDesignation {
@@ -139,6 +146,7 @@ export default function AttendanceSettingsIndex({
   designations = [],
   attlogKeepDays = 15,
   devicePushes = [],
+  officeOpenDates = [],
 }: AttendanceSettingsIndexProps) {
   const { auth } = usePage().props as any;
   const isSuperAdminUser = isSuperAdmin(auth);
@@ -205,6 +213,53 @@ export default function AttendanceSettingsIndex({
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
   const [employeeQuery, setEmployeeQuery] = useState('');
   const [pushingId, setPushingId] = useState<number | null>(null);
+  const [openDate, setOpenDate] = useState('');
+  const [openNote, setOpenNote] = useState('');
+  const [savingOpenDate, setSavingOpenDate] = useState(false);
+
+  const saturdayMissing = settings.some((setting) => {
+    let days: number[] = [];
+    if (Array.isArray(setting.weekend_days)) {
+      days = setting.weekend_days.map(Number);
+    } else if (typeof setting.weekend_days === 'string') {
+      try {
+        const parsed = JSON.parse(setting.weekend_days);
+        days = Array.isArray(parsed) ? parsed.map(Number) : [];
+      } catch {
+        days = [];
+      }
+    }
+    return days.length > 0 && !days.includes(6);
+  });
+
+  const saveOfficeOpenDate = () => {
+    if (!openDate) {
+      return;
+    }
+
+    setSavingOpenDate(true);
+    router.post(route('attendance.settings.office-open-dates.store'), {
+      date: openDate,
+      note: openNote,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => {
+        setOpenDate('');
+        setOpenNote('');
+      },
+      onFinish: () => setSavingOpenDate(false),
+    });
+  };
+
+  const removeOfficeOpenDate = (id: number) => {
+    if (!confirm('Remove this office-open date? That day will follow the weekend again.')) {
+      return;
+    }
+
+    router.delete(route('attendance.settings.office-open-dates.destroy', id), {
+      preserveScroll: true,
+    });
+  };
 
   const handleToggleBulk = async (checked: boolean) => {
     setBulkEnabled(checked);
@@ -1041,6 +1096,75 @@ export default function AttendanceSettingsIndex({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white mb-6">
+          <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800">Office open on a weekend</CardTitle>
+            <CardDescription className="text-xs">
+              Friday and Saturday stay weekends. Add only the date the office is open. Attendance and movement work that day. Older Fridays and Saturdays stay weekend, not absent.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-5 space-y-4">
+            {saturdayMissing && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Saturday is missing from weekend days. Put Saturday back in branch attendance settings, then add only the open date here. Otherwise every past Saturday shows as absent.
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="space-y-1">
+                <Label htmlFor="office-open-date" className="text-xs text-slate-500">Date</Label>
+                <Input
+                  id="office-open-date"
+                  type="date"
+                  value={openDate}
+                  onChange={(event) => setOpenDate(event.target.value)}
+                  className="h-9 w-full sm:w-44"
+                />
+              </div>
+              <div className="space-y-1 flex-1">
+                <Label htmlFor="office-open-note" className="text-xs text-slate-500">Note</Label>
+                <Input
+                  id="office-open-note"
+                  value={openNote}
+                  onChange={(event) => setOpenNote(event.target.value)}
+                  placeholder="Office open"
+                  className="h-9"
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={saveOfficeOpenDate}
+                disabled={!openDate || savingOpenDate}
+                className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                {savingOpenDate ? 'Saving...' : 'Add date'}
+              </Button>
+            </div>
+            {officeOpenDates.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {officeOpenDates.map((row) => (
+                  <div key={row.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-xs font-medium text-slate-800">{format(new Date(row.date + 'T00:00:00'), 'dd MMM yyyy')}</span>
+                    {row.note ? <span className="text-[11px] text-slate-500">{row.note}</span> : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => removeOfficeOpenDate(row.id)}
+                      title="Remove date"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">No extra working dates yet.</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Settings Table */}
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">

@@ -1,5 +1,5 @@
 import React, { useState, FormEvent, useEffect, useMemo } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
   Card,
@@ -68,8 +68,9 @@ interface EditMovementProps {
   weekendDaysByEmployee?: Record<number, number[]>;
 }
 
-function isWeekendDate(date: Date | undefined, weekendDays: number[]): boolean {
+function isWeekendDate(date: Date | undefined, weekendDays: number[], officeOpenDates: string[] = []): boolean {
   if (!date || weekendDays.length === 0) return false;
+  if (officeOpenDates.includes(format(date, 'yyyy-MM-dd'))) return false;
   return weekendDays.includes(date.getDay());
 }
 
@@ -82,6 +83,7 @@ export default function EditMovement({
   weekendDays = [5, 6],
   weekendDaysByEmployee = {},
 }: EditMovementProps) {
+  const { officeOpenDates = [] } = usePage<{ officeOpenDates?: string[] }>().props;
   const fromDateTime = new Date(movement.from_datetime);
   const toDateTime = new Date(movement.to_datetime);
 
@@ -122,8 +124,8 @@ export default function EditMovement({
   }, [employeeId, weekendDays, weekendDaysByEmployee]);
 
   const isWeekendMovement = useMemo(
-    () => isWeekendDate(fromDate, resolvedWeekendDays),
-    [fromDate, resolvedWeekendDays],
+    () => isWeekendDate(fromDate, resolvedWeekendDays, officeOpenDates),
+    [fromDate, resolvedWeekendDays, officeOpenDates],
   );
 
   useEffect(() => {

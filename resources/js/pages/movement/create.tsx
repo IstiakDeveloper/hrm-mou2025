@@ -57,8 +57,9 @@ interface CreateMovementProps {
     isMultiDayAllowedForCurrent?: boolean;
 }
 
-function isWeekendDate(date: Date | undefined, weekendDays: number[]): boolean {
+function isWeekendDate(date: Date | undefined, weekendDays: number[], officeOpenDates: string[] = []): boolean {
     if (!date || weekendDays.length === 0) return false;
+    if (officeOpenDates.includes(format(date, 'yyyy-MM-dd'))) return false;
     return weekendDays.includes(date.getDay());
 }
 
@@ -270,7 +271,10 @@ export default function CreateMovement({
     multiDayAllowedBranchIds = [],
     isMultiDayAllowedForCurrent = false,
 }: CreateMovementProps) {
-    const { flash } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>().props;
+    const { flash, officeOpenDates = [] } = usePage<{
+        flash?: { success?: string; error?: string; warning?: string };
+        officeOpenDates?: string[];
+    }>().props;
 
     const getCurrentTime = () => {
         const now = new Date();
@@ -279,7 +283,7 @@ export default function CreateMovement({
 
     const [employeeId, setEmployeeId] = useState(currentEmployee ? currentEmployee.id.toString() : '');
     const [movementType, setMovementType] = useState(() =>
-        isWeekendDate(new Date(), weekendDays.length ? weekendDays : [5, 6]) ? 'personal' : 'official'
+        isWeekendDate(new Date(), weekendDays.length ? weekendDays : [5, 6], officeOpenDates) ? 'personal' : 'official'
     );
     const [isMultiDay, setIsMultiDay] = useState(false);
     const [fromDate, setFromDate] = useState<Date | undefined>(new Date());
@@ -365,8 +369,8 @@ export default function CreateMovement({
     }, [employeeId, weekendDays, weekendDaysByEmployee]);
 
     const isWeekendMovement = useMemo(
-        () => isWeekendDate(fromDate, resolvedWeekendDays),
-        [fromDate, resolvedWeekendDays],
+        () => isWeekendDate(fromDate, resolvedWeekendDays, officeOpenDates),
+        [fromDate, resolvedWeekendDays, officeOpenDates],
     );
 
     useEffect(() => {

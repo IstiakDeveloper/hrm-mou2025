@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\LeaveApplication;
+use App\Models\OfficeOpenDate;
 use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\User;
@@ -198,6 +199,7 @@ class HandleInertiaRequests extends Middleware
             'pendingLeaveCount' => $pendingLeaveCount,
             'pendingAppraisalCounts' => $pendingAppraisalCounts,
             'pendingFinalClearanceCount' => $pendingFinalClearanceCount,
+            'officeOpenDates' => OfficeOpenDate::dateStrings(),
         ];
     }
 
