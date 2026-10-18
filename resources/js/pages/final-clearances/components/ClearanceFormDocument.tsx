@@ -302,7 +302,9 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
                                 <td className={td} />
                             </tr>
                             <tr>
-                                <td className={`${td} h-7 align-top`} colSpan={4}>{text(clearance.hr_issue_note)}</td>
+                                <td className={`${td} align-top`} colSpan={4}>
+                                    <CommentWithSignature title="HR Department Comments:" comment={clearance.hr_issue_note} sig={hrSig} />
+                                </td>
                             </tr>
                         </tbody>
                     </table>
