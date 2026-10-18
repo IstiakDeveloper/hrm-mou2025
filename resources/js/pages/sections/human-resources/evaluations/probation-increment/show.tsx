@@ -22,6 +22,7 @@ import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprova
 import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import { savedInitiatorGaps, type FieldGap } from '@/lib/appraisal-required';
 import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
+import { AppraisalWorkflowResetDialog } from '@/components/appraisal/AppraisalWorkflowResetDialog';
 import ProbationIncrementOfficialFormDocument from './components/ProbationIncrementOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 
@@ -163,6 +164,7 @@ export default function ProbationIncrementEvaluationShow({
     };
 
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const [resetOpen, setResetOpen] = useState(false);
     const handleDelete = () => {
         setDeleteUrl(`/probation-increment-evaluations/${evaluation.id}`);
     };
@@ -273,6 +275,18 @@ export default function ProbationIncrementEvaluationShow({
                                     <span>{lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit'}</span>
                                 </Button>
                             </Link>
+                        )}
+
+                        {isSuperAdmin && evaluation.status !== 'draft' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setResetOpen(true)}
+                                className="h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 shadow-xs"
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                                <span>{lang === 'bn' ? 'ওয়ার্কফ্লো রিসেট' : 'Reset workflow'}</span>
+                            </Button>
                         )}
 
                         {/* Delete Button */}
@@ -392,6 +406,12 @@ export default function ProbationIncrementEvaluationShow({
                 open={deleteUrl !== null}
                 onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
                 url={deleteUrl}
+                lang={lang}
+            />
+            <AppraisalWorkflowResetDialog
+                open={resetOpen}
+                onOpenChange={setResetOpen}
+                url={`/probation-increment-evaluations/${evaluation.id}/reset-workflow`}
                 lang={lang}
             />
         </Layout>

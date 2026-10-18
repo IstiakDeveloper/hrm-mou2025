@@ -33,7 +33,7 @@ return new class extends Migration
         });
 
         // Best-effort backfill so existing payslips freeze master values as of migration time.
-        if (Schema::hasColumn('payslips', 'employee_name')) {
+        if (Schema::hasColumn('payslips', 'employee_name') && DB::getDriverName() !== 'sqlite') {
             DB::statement('
                 UPDATE payslips p
                 INNER JOIN employees e ON e.id = p.employee_id

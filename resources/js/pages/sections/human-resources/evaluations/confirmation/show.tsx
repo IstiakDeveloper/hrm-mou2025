@@ -22,6 +22,7 @@ import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprova
 import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import { savedInitiatorGaps, type FieldGap } from '@/lib/appraisal-required';
 import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
+import { AppraisalWorkflowResetDialog } from '@/components/appraisal/AppraisalWorkflowResetDialog';
 import ConfirmationOfficialFormDocument from './components/ConfirmationOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 
@@ -169,6 +170,7 @@ export default function ConfirmationEvaluationShow({
     };
 
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const [resetOpen, setResetOpen] = useState(false);
     const handleDelete = () => {
         setDeleteUrl(`/confirmation-evaluations/${evaluation.id}`);
     };
@@ -279,6 +281,18 @@ export default function ConfirmationEvaluationShow({
                                     <span>{lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit'}</span>
                                 </Button>
                             </Link>
+                        )}
+
+                        {isSuperAdmin && evaluation.status !== 'draft' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setResetOpen(true)}
+                                className="h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 shadow-xs"
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                                <span>{lang === 'bn' ? 'ওয়ার্কফ্লো রিসেট' : 'Reset workflow'}</span>
+                            </Button>
                         )}
 
                         {/* Delete Button */}
@@ -394,6 +408,12 @@ export default function ConfirmationEvaluationShow({
                     <ConfirmationOfficialFormDocument evaluation={evaluation} lang={lang} />
                 </div>
             </PageSurface>
+            <AppraisalWorkflowResetDialog
+                open={resetOpen}
+                onOpenChange={setResetOpen}
+                url={`/confirmation-evaluations/${evaluation.id}/reset-workflow`}
+                lang={lang}
+            />
             <AppraisalDeleteDialog
                 open={deleteUrl !== null}
                 onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}

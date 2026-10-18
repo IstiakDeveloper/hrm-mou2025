@@ -311,6 +311,11 @@ export default function WorkflowTimelineStepper({
                                             <p className="font-semibold text-emerald-800 dark:text-emerald-400 truncate">
                                                 {matchedSig.user?.name || '-'}
                                             </p>
+                                            {matchedSig.user?.employee?.designation?.name && (
+                                                <p className="text-[10px] text-slate-500 truncate">
+                                                    {matchedSig.user.employee.designation.name}
+                                                </p>
+                                            )}
                                             <p className="text-[10px] text-slate-500">
                                                 {matchedSig.signed_at 
                                                     ? format(new Date(matchedSig.signed_at), 'dd MMM yyyy, hh:mm a')

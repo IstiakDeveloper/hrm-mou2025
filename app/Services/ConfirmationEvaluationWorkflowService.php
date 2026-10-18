@@ -2,17 +2,19 @@
 
 namespace App\Services;
 
-use App\Models\Employee;
 use App\Models\ConfirmationEvaluation;
-use App\Models\ConfirmationEvaluationSignature;
+use App\Models\Employee;
 use App\Models\User;
 use App\Notifications\ConfirmationEvaluationNotification;
+use App\Services\Appraisal\AllowsInitiatorResubmitPastRm;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 
 class ConfirmationEvaluationWorkflowService
 {
+    use AllowsInitiatorResubmitPastRm;
+
     /**
      * Determine the correct form type based on employee designation.
      */
@@ -23,9 +25,9 @@ class ConfirmationEvaluationWorkflowService
 
         // Form A: Assistant Branch Manager (Check BEFORE Branch Manager so ABM is not classified as BM)
         if (
-            str_contains($title, 'assistant branch manager') || 
-            str_contains($title, 'asst. branch manager') || 
-            str_contains($title, 'asst branch manager') || 
+            str_contains($title, 'assistant branch manager') ||
+            str_contains($title, 'asst. branch manager') ||
+            str_contains($title, 'asst branch manager') ||
             str_contains($title, 'সহকারী শাখা ব্যবস্থাপক') ||
             str_contains($title, 'abm')
         ) {
@@ -34,7 +36,7 @@ class ConfirmationEvaluationWorkflowService
 
         // Form B: Accountant
         if (
-            str_contains($title, 'accountant') || 
+            str_contains($title, 'accountant') ||
             str_contains($title, 'হিসাবরক্ষক') ||
             str_contains($title, 'probationary-ac')
         ) {
@@ -43,8 +45,8 @@ class ConfirmationEvaluationWorkflowService
 
         // Form C: Branch Manager to Zonal Manager
         if (
-            str_contains($title, 'branch manager') || 
-            str_contains($title, 'regional manager') || 
+            str_contains($title, 'branch manager') ||
+            str_contains($title, 'regional manager') ||
             str_contains($title, 'zonal manager') ||
             str_contains($title, 'area manager') ||
             str_contains($title, 'area coordinator') ||
@@ -80,13 +82,13 @@ class ConfirmationEvaluationWorkflowService
 
             // Update evaluation
             $evaluation->status = $nextStatus;
-            
+
             if ($recommendationStatus) {
                 $evaluation->recommendation_status = $recommendationStatus;
                 $evaluation->extend_months = $extendMonths;
             }
 
-            if (!empty($additionalData)) {
+            if (! empty($additionalData)) {
                 $evaluation->fill($additionalData);
             }
 
@@ -150,7 +152,7 @@ class ConfirmationEvaluationWorkflowService
     {
         DB::transaction(function () use ($evaluation, $user, $comments, $isApproved) {
             $evaluation->status = $isApproved ? 'approved' : 'rejected';
-            
+
             $evaluation->signatures()->create([
                 'user_id' => $user->id,
                 'stage' => 'ed',
@@ -178,7 +180,7 @@ class ConfirmationEvaluationWorkflowService
         $roleNames = OrganogramAccessService::mergedRoleNames($user);
 
         if (
-            in_array('Executive Director', $roleNames, true) || 
+            in_array('Executive Director', $roleNames, true) ||
             OrganogramAccessService::isExecutiveDirector($user) ||
             $user->isSuperAdmin()
         ) {
@@ -186,7 +188,7 @@ class ConfirmationEvaluationWorkflowService
         }
 
         if (
-            in_array('Director (Microfinance)', $roleNames, true) || 
+            in_array('Director (Microfinance)', $roleNames, true) ||
             in_array('Assistant Director (Microfinance)', $roleNames, true) ||
             in_array('Director Finance and Accounts', $roleNames, true) ||
             in_array('Director Finance and Account', $roleNames, true) ||
@@ -197,24 +199,24 @@ class ConfirmationEvaluationWorkflowService
         }
 
         if (
-            in_array('Zonal Manager', $roleNames, true) || 
-            $user->hasDirectPermission('organogram.zonal_manager') || 
+            in_array('Zonal Manager', $roleNames, true) ||
+            $user->hasDirectPermission('organogram.zonal_manager') ||
             OrganogramAccessService::isZonalManager($user)
         ) {
             return 1;
         }
 
         if (
-            in_array('Regional Manager', $roleNames, true) || 
-            $user->hasDirectPermission('organogram.regional_manager') || 
+            in_array('Regional Manager', $roleNames, true) ||
+            $user->hasDirectPermission('organogram.regional_manager') ||
             OrganogramAccessService::isRegionalManager($user)
         ) {
             return 2;
         }
 
         if (
-            in_array('Branch Manager', $roleNames, true) || 
-            $user->hasDirectPermission('branch_manager') || 
+            in_array('Branch Manager', $roleNames, true) ||
+            $user->hasDirectPermission('branch_manager') ||
             $this->isBranchManager($user)
         ) {
             return 3;
@@ -223,6 +225,7 @@ class ConfirmationEvaluationWorkflowService
         $user->loadMissing('employee.designation');
         if ($user->employee?->designation) {
             $tier = \App\Support\BranchOrganogram::resolveTier($user->employee->designation->name);
+
             return (int) ($tier['level'] ?? 999);
         }
 
@@ -251,6 +254,7 @@ class ConfirmationEvaluationWorkflowService
 
         $user->loadMissing('employee.designation');
         $title = mb_strtolower(trim((string) optional($user->employee?->designation)->name));
+
         return $title === 'branch manager' || str_contains($title, 'branch manager') || str_contains($title, 'শাখা ব্যবস্থাপক');
     }
 
@@ -304,6 +308,7 @@ class ConfirmationEvaluationWorkflowService
 
         $user->loadMissing('employee.designation');
         $desigName = mb_strtolower(trim((string) optional($user->employee?->designation)->name));
+
         return $desigName !== '' && (str_contains($desigName, 'executive director') || str_contains($desigName, 'নির্বাহী পরিচালক'));
     }
 
@@ -317,11 +322,11 @@ class ConfirmationEvaluationWorkflowService
             || $user->hasDirectPermission('organogram.regional_manager')
             || OrganogramAccessService::isRegionalManager($user);
 
-        if (!$isRm && $user->employee_id) {
+        if (! $isRm && $user->employee_id) {
             $isRm = \App\Models\RegionalOffice::where('regional_manager_employee_id', $user->employee_id)->exists();
         }
 
-        if (!$isRm) {
+        if (! $isRm) {
             return false;
         }
 
@@ -335,10 +340,11 @@ class ConfirmationEvaluationWorkflowService
         }
         $rmOfficeIds = array_unique(array_filter($rmOfficeIds));
 
-        if (!empty($rmOfficeIds)) {
+        if (! empty($rmOfficeIds)) {
             if ($evaluation->regional_office_id) {
                 return in_array((int) $evaluation->regional_office_id, $rmOfficeIds, true);
             }
+
             return true;
         }
 
@@ -355,11 +361,11 @@ class ConfirmationEvaluationWorkflowService
             || $user->hasDirectPermission('organogram.zonal_manager')
             || OrganogramAccessService::isZonalManager($user);
 
-        if (!$isZm && $user->employee_id) {
+        if (! $isZm && $user->employee_id) {
             $isZm = \App\Models\Zone::where('zone_manager_employee_id', $user->employee_id)->exists();
         }
 
-        if (!$isZm) {
+        if (! $isZm) {
             return false;
         }
 
@@ -373,10 +379,11 @@ class ConfirmationEvaluationWorkflowService
         }
         $zmZoneIds = array_unique(array_filter($zmZoneIds));
 
-        if (!empty($zmZoneIds)) {
+        if (! empty($zmZoneIds)) {
             if ($evaluation->zone_id) {
                 return in_array((int) $evaluation->zone_id, $zmZoneIds, true);
             }
+
             return true;
         }
 
@@ -510,9 +517,9 @@ class ConfirmationEvaluationWorkflowService
                 $stageLabel = $this->getStageLabel($evaluation->status, 'bn');
                 $title = "স্থায়ীকরণ মূল্যায়ন: {$stageLabel}";
                 $message = "কর্মী {$empName} {$pin}-এর শিক্ষানবিশকাল স্থায়ীকরণ মূল্যায়ন আপনার পর্যালোচনার জন্য অপেক্ষমাণ।";
-                
+
                 $targets = $this->getTargetReviewerUsers($evaluation, $evaluation->status);
-                if (!empty($targets)) {
+                if (! empty($targets)) {
                     Notification::send($targets, new ConfirmationEvaluationNotification($title, $message, 'info', $link, $evaluation->id));
                 }
             } elseif ($action === 'sent_back') {
@@ -526,14 +533,16 @@ class ConfirmationEvaluationWorkflowService
             } elseif ($action === 'approved') {
                 $title = 'স্থায়ীকরণ মূল্যায়ন চূড়ান্তভাবে অনুমোদিত 🎉';
                 $message = "কর্মী {$empName} {$pin}-এর স্থায়ীকরণ মূল্যায়ন নির্বাহী পরিচালক কর্তৃক চূড়ান্ত অনুমোদন পেয়েছে।";
-                
+
                 $recipients = collect();
                 if ($evaluation->initiator_id) {
                     $initiatorUser = User::find($evaluation->initiator_id);
-                    if ($initiatorUser) $recipients->push($initiatorUser);
+                    if ($initiatorUser) {
+                        $recipients->push($initiatorUser);
+                    }
                 }
                 $signerIds = $evaluation->signatures->pluck('user_id')->unique()->all();
-                if (!empty($signerIds)) {
+                if (! empty($signerIds)) {
                     $recipients = $recipients->merge(User::whereIn('id', $signerIds)->get());
                 }
                 $recipients = $recipients->filter()->unique('id')->values();
@@ -549,7 +558,7 @@ class ConfirmationEvaluationWorkflowService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Failed to send confirmation evaluation notification: ' . $e->getMessage());
+            Log::error('Failed to send confirmation evaluation notification: '.$e->getMessage());
         }
     }
 
@@ -565,15 +574,20 @@ class ConfirmationEvaluationWorkflowService
                     $ro = \App\Models\RegionalOffice::find($regOfficeId);
                     if ($ro?->regional_manager_employee_id) {
                         $u = User::where('employee_id', $ro->regional_manager_employee_id)->first();
-                        if ($u) $users->push($u);
+                        if ($u) {
+                            $users->push($u);
+                        }
                     }
                 }
-                $rms = User::whereHas('role', fn($q) => $q->where('name', 'Regional Manager'))
-                    ->orWhereHas('roles', fn($q) => $q->where('name', 'Regional Manager'))
+                $rms = User::whereHas('role', fn ($q) => $q->where('name', 'Regional Manager'))
+                    ->orWhereHas('roles', fn ($q) => $q->where('name', 'Regional Manager'))
                     ->with('employee.branch')
                     ->get()
                     ->filter(function ($u) use ($regOfficeId) {
-                        if (!$regOfficeId) return true;
+                        if (! $regOfficeId) {
+                            return true;
+                        }
+
                         return (int) $u->employee?->branch?->regional_office_id === (int) $regOfficeId;
                     });
                 $users = $users->merge($rms);
@@ -585,55 +599,60 @@ class ConfirmationEvaluationWorkflowService
                     $z = \App\Models\Zone::find($zoneId);
                     if ($z?->zone_manager_employee_id) {
                         $u = User::where('employee_id', $z->zone_manager_employee_id)->first();
-                        if ($u) $users->push($u);
+                        if ($u) {
+                            $users->push($u);
+                        }
                     }
                 }
-                $zms = User::whereHas('role', fn($q) => $q->where('name', 'Zonal Manager'))
-                    ->orWhereHas('roles', fn($q) => $q->where('name', 'Zonal Manager'))
+                $zms = User::whereHas('role', fn ($q) => $q->where('name', 'Zonal Manager'))
+                    ->orWhereHas('roles', fn ($q) => $q->where('name', 'Zonal Manager'))
                     ->with('employee.branch.regionalOffice')
                     ->get()
                     ->filter(function ($u) use ($zoneId) {
-                        if (!$zoneId) return true;
+                        if (! $zoneId) {
+                            return true;
+                        }
+
                         return (int) $u->employee?->branch?->regionalOffice?->zone_id === (int) $zoneId;
                     });
                 $users = $users->merge($zms);
                 break;
 
             case 'submitted_to_director':
-                $directors = User::whereHas('role', fn($q) => $q->whereIn('name', ['Director (Microfinance)', 'Assistant Director (Microfinance)']))
-                    ->orWhereHas('roles', fn($q) => $q->whereIn('name', ['Director (Microfinance)', 'Assistant Director (Microfinance)']))
+                $directors = User::whereHas('role', fn ($q) => $q->whereIn('name', ['Director (Microfinance)', 'Assistant Director (Microfinance)']))
+                    ->orWhereHas('roles', fn ($q) => $q->whereIn('name', ['Director (Microfinance)', 'Assistant Director (Microfinance)']))
                     ->get();
                 $users = $users->merge($directors);
                 break;
 
             case 'submitted_to_director_fa':
-                $directorsFa = User::whereHas('role', fn($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
-                    ->orWhereHas('roles', fn($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
+                $directorsFa = User::whereHas('role', fn ($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
+                    ->orWhereHas('roles', fn ($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
                     ->get();
                 $users = $users->merge($directorsFa);
                 break;
 
             case 'submitted_to_hr':
-                $hrs = User::whereHas('role', fn($q) => $q->whereIn('name', ['HR Manager', 'HR Admin', 'Assistant Director (HR)']))
-                    ->orWhereHas('roles', fn($q) => $q->whereIn('name', ['HR Manager', 'HR Admin', 'Assistant Director (HR)']))
-                    ->orWhereHas('employee', fn($q) => $q->where('department_id', 5))
+                $hrs = User::whereHas('role', fn ($q) => $q->whereIn('name', ['HR Manager', 'HR Admin', 'Assistant Director (HR)']))
+                    ->orWhereHas('roles', fn ($q) => $q->whereIn('name', ['HR Manager', 'HR Admin', 'Assistant Director (HR)']))
+                    ->orWhereHas('employee', fn ($q) => $q->where('department_id', 5))
                     ->get();
                 $users = $users->merge($hrs);
                 break;
 
             case 'submitted_to_ed':
-                $eds = User::whereHas('role', fn($q) => $q->where('name', 'Executive Director'))
-                    ->orWhereHas('roles', fn($q) => $q->where('name', 'Executive Director'))
+                $eds = User::whereHas('role', fn ($q) => $q->where('name', 'Executive Director'))
+                    ->orWhereHas('roles', fn ($q) => $q->where('name', 'Executive Director'))
                     ->get();
                 if ($eds->isEmpty()) {
-                    $eds = User::whereHas('role', fn($q) => $q->where('name', 'Super Admin'))->get();
+                    $eds = User::whereHas('role', fn ($q) => $q->where('name', 'Super Admin'))->get();
                 }
                 $users = $users->merge($eds);
                 break;
         }
 
         return $users->unique('id')
-            ->reject(fn($u) => (int) $u->id === (int) $evaluation->initiator_id)
+            ->reject(fn ($u) => (int) $u->id === (int) $evaluation->initiator_id)
             ->values()
             ->all();
     }

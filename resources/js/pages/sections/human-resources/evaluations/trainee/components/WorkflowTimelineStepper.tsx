@@ -230,6 +230,11 @@ export default function WorkflowTimelineStepper({
                                             <div className="font-semibold truncate">
                                                 {sig.user?.name || sig.user?.employee?.name_bn || 'Signed'}
                                             </div>
+                                            {sig.user?.employee?.designation?.name && (
+                                                <div className="truncate text-slate-500">
+                                                    {sig.user.employee.designation.name}
+                                                </div>
+                                            )}
                                             {sig.signed_at && (
                                                 <div className="text-slate-500">
                                                     {format(new Date(sig.signed_at), 'dd MMM yyyy, p')}

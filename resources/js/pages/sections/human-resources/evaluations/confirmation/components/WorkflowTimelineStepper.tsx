@@ -344,6 +344,9 @@ export default function WorkflowTimelineStepper({
                                             {signature ? (
                                                 <div className="mt-1.5 p-1 rounded bg-slate-100/70 dark:bg-slate-800/60 text-[10px] text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/50">
                                                     <p className="font-semibold truncate">{signature.user?.name}</p>
+                                                    {signature.user?.employee?.designation?.name && (
+                                                        <p className="truncate text-slate-500">{signature.user.employee.designation.name}</p>
+                                                    )}
                                                     <p className="text-[9px] text-slate-500 dark:text-slate-400">
                                                         {signature.signed_at ? format(new Date(signature.signed_at), 'dd/MM/yy') : ''}
                                                     </p>
@@ -430,6 +433,9 @@ export default function WorkflowTimelineStepper({
                                         {signature && (
                                             <div className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
                                                 <span className="font-semibold">{signature.user?.name}</span>
+                                                {signature.user?.employee?.designation?.name && (
+                                                    <span className="ml-1 text-slate-500">({signature.user.employee.designation.name})</span>
+                                                )}
                                                 {signature.signed_at && (
                                                     <span className="text-slate-400 ml-1.5">
                                                         ({format(new Date(signature.signed_at), 'dd/MM/yyyy')})

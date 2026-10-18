@@ -1,397 +1,310 @@
 <?php
 
-use App\Http\Controllers\Admin\ActiveSessionController;
-use App\Http\Controllers\Admin\AdminNoticeController;
-use App\Http\Controllers\Admin\RoleController;
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Attendance\AttendanceController;
-use App\Http\Controllers\Attendance\AttendanceDeviceController;
-use App\Http\Controllers\Attendance\AttendanceReportController;
-use App\Http\Controllers\Attendance\AttendanceSettingController;
-use App\Http\Controllers\Attendance\SelfAttendanceController;
-use App\Http\Controllers\AttendanceExportController;
-use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Branch\BranchController;
 use App\Http\Controllers\Confirmation\ConfirmationController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Demotion\DemotionController;
-use App\Http\Controllers\Department\DepartmentController;
-use App\Http\Controllers\Designation\DesignationController;
-use App\Http\Controllers\Employee\DisciplinaryActionController;
-use App\Http\Controllers\Employee\EmployeeAssetController;
-use App\Http\Controllers\Employee\EmployeeController;
-use App\Http\Controllers\Employee\EmployeeDashboardController;
-use App\Http\Controllers\Employee\EmployeeDocumentController;
-use App\Http\Controllers\Employee\EmployeeLeaveController;
-use App\Http\Controllers\Employee\EmployeeMovementController;
-use App\Http\Controllers\FixedAsset\AssetAssignmentController;
-use App\Http\Controllers\FixedAsset\AssetCategoryController;
-use App\Http\Controllers\FixedAsset\AssetCustodianChangeController;
-use App\Http\Controllers\FixedAsset\AssetCustodianController;
-use App\Http\Controllers\FixedAsset\AssetCustodianDepartmentController;
-use App\Http\Controllers\FixedAsset\AssetCustodianDesignationController;
-use App\Http\Controllers\FixedAsset\AssetDepreciationController;
-use App\Http\Controllers\FixedAsset\AssetDisposalController;
-use App\Http\Controllers\FixedAsset\AssetDisposalReasonController;
-use App\Http\Controllers\FixedAsset\AssetFinancialYearController;
-use App\Http\Controllers\FixedAsset\AssetGuaranteeController;
-use App\Http\Controllers\FixedAsset\AssetInsuranceController;
-use App\Http\Controllers\FixedAsset\AssetMaintenanceController;
-use App\Http\Controllers\FixedAsset\AssetNotInUseController;
-use App\Http\Controllers\FixedAsset\AssetPurchaseController;
-use App\Http\Controllers\FixedAsset\AssetRevaluationController;
-use App\Http\Controllers\FixedAsset\AssetStockController;
-use App\Http\Controllers\FixedAsset\AssetSubCategoryController;
-use App\Http\Controllers\FixedAsset\AssetTrackingController;
-use App\Http\Controllers\FixedAsset\AssetTransferController;
-use App\Http\Controllers\FixedAsset\AssetVendorController;
-use App\Http\Controllers\FixedAsset\AssetWarrantyController;
-use App\Http\Controllers\FixedAsset\FixedAssetController;
-use App\Http\Controllers\FixedAsset\FixedAssetDashboardController;
-use App\Http\Controllers\FixedAsset\FixedAssetImportController;
-use App\Http\Controllers\FixedAsset\FixedAssetReportController;
-use App\Http\Controllers\Holiday\HolidayController;
-use App\Http\Controllers\Inventory\InventoryDashboardController;
-use App\Http\Controllers\Inventory\InventoryOperationsController;
-use App\Http\Controllers\Inventory\InventoryProductController;
-use App\Http\Controllers\Inventory\InventoryReportController;
-use App\Http\Controllers\Leave\LeaveApplicationController;
-use App\Http\Controllers\Leave\LeaveBalanceController;
-use App\Http\Controllers\Leave\LeaveSettingController;
-use App\Http\Controllers\Leave\LeaveTypeController;
-use App\Http\Controllers\Movement\MovementController;
-use App\Http\Controllers\Movement\MovementLogBookController;
-use App\Http\Controllers\Movement\MovementLogBookPaymentController;
-use App\Http\Controllers\Movement\MovementPenaltyController;
-use App\Http\Controllers\MyNoticeController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\Organization\EmployeeTypeController;
-use App\Http\Controllers\Organization\OfficeMapController;
-use App\Http\Controllers\Organization\OrganizationStructureController;
-use App\Http\Controllers\Organization\ProgramController;
-use App\Http\Controllers\Organization\ProjectController;
-use App\Http\Controllers\Payroll\BonusCalculationController;
-use App\Http\Controllers\Payroll\BonusConfigurationController;
-use App\Http\Controllers\Payroll\BonusPostController;
-use App\Http\Controllers\Payroll\BonusTypeController;
-use App\Http\Controllers\Payroll\BranchPayrollBankController;
-use App\Http\Controllers\Payroll\PayscaleController;
-use App\Http\Controllers\Payroll\SalaryGradeController;
-use App\Http\Controllers\Payroll\SalaryHeadController;
-use App\Http\Controllers\Payroll\SalaryStepController;
 use App\Http\Controllers\Payroll\SalaryIncrementController;
-use App\Http\Controllers\Payroll\SalaryStructureController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Promotion\PromotionController;
-use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
-use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Separation\SeparationController;
 use App\Http\Controllers\Transfer\TransferController;
-use App\Http\Controllers\ZKTeco\ZKDeviceController;
-use App\Http\Controllers\Zone\ZoneController;
-use App\Models\User;
-use Illuminate\Foundation\Application;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
-    // ====================
-    // TRANSFER MANAGEMENT
-    // ====================
-    Route::middleware(['permission:transfers.view'])->prefix('transfers')->name('transfers.')->group(function () {
-        Route::get('/', [TransferController::class, 'index'])->name('index');
+// ====================
+// TRANSFER MANAGEMENT
+// ====================
+Route::middleware(['permission:transfers.view'])->prefix('transfers')->name('transfers.')->group(function () {
+    Route::get('/', [TransferController::class, 'index'])->name('index');
 
-        Route::middleware(['permission:transfers.create'])->group(function () {
-            Route::get('/create', [TransferController::class, 'create'])->name('create');
-            Route::get('/bulk', [TransferController::class, 'bulkCreate'])->name('bulk.create');
-            Route::post('/bulk', [TransferController::class, 'storeBulk'])->name('bulk.store');
-            Route::post('/', [TransferController::class, 'store'])->name('store');
-        });
-
-        Route::get('/{transfer}', [TransferController::class, 'show'])->name('show');
-
-        Route::middleware(['permission:transfers.edit'])->group(function () {
-            Route::get('/{transfer}/edit', [TransferController::class, 'edit'])->name('edit');
-            Route::put('/{transfer}', [TransferController::class, 'update'])->name('update');
-            Route::post('/{transfer}/cancel', [TransferController::class, 'cancel'])->name('cancel');
-            Route::post('/{transfer}/complete', [TransferController::class, 'complete'])->name('complete');
-        });
-
-        Route::middleware(['permission:transfers.approve'])->group(function () {
-            Route::post('/{transfer}/approve', [TransferController::class, 'approve'])->name('approve');
-            Route::post('/{transfer}/reject', [TransferController::class, 'reject'])->name('reject');
-        });
+    Route::middleware(['permission:transfers.create'])->group(function () {
+        Route::get('/create', [TransferController::class, 'create'])->name('create');
+        Route::get('/bulk', [TransferController::class, 'bulkCreate'])->name('bulk.create');
+        Route::post('/bulk', [TransferController::class, 'storeBulk'])->name('bulk.store');
+        Route::post('/', [TransferController::class, 'store'])->name('store');
     });
 
-    // ====================
-    // CONFIRMATION MANAGEMENT
-    // ====================
-    Route::middleware(['permission:confirmations.view'])->prefix('confirmations')->name('confirmations.')->group(function () {
-        Route::get('/', [ConfirmationController::class, 'index'])->name('index');
+    Route::get('/{transfer}', [TransferController::class, 'show'])->name('show');
 
-        Route::middleware(['permission:confirmations.create'])->group(function () {
-            Route::get('/create', [ConfirmationController::class, 'create'])->name('create');
-            Route::post('/', [ConfirmationController::class, 'store'])->name('store');
-        });
-
-        Route::get('/{confirmation}', [ConfirmationController::class, 'show'])->name('show');
-
-        Route::middleware(['permission:confirmations.edit'])->group(function () {
-            Route::get('/{confirmation}/edit', [ConfirmationController::class, 'edit'])->name('edit');
-            Route::put('/{confirmation}', [ConfirmationController::class, 'update'])->name('update');
-            Route::post('/{confirmation}/cancel', [ConfirmationController::class, 'cancel'])->name('cancel');
-            Route::post('/{confirmation}/complete', [ConfirmationController::class, 'complete'])->name('complete');
-        });
-
-        Route::middleware(['permission:confirmations.approve'])->group(function () {
-            Route::post('/{confirmation}/approve', [ConfirmationController::class, 'approve'])->name('approve');
-            Route::post('/{confirmation}/reject', [ConfirmationController::class, 'reject'])->name('reject');
-        });
+    Route::middleware(['permission:transfers.edit'])->group(function () {
+        Route::get('/{transfer}/edit', [TransferController::class, 'edit'])->name('edit');
+        Route::put('/{transfer}', [TransferController::class, 'update'])->name('update');
+        Route::post('/{transfer}/cancel', [TransferController::class, 'cancel'])->name('cancel');
+        Route::post('/{transfer}/complete', [TransferController::class, 'complete'])->name('complete');
     });
 
-    // ====================
-    // SEPARATION MANAGEMENT (Obbahoti / Termination)
-    // ====================
-    Route::middleware(['permission:separations.view'])->prefix('separations')->name('separations.')->group(function () {
-        Route::get('/', [SeparationController::class, 'index'])->name('index');
+    Route::middleware(['permission:transfers.approve'])->group(function () {
+        Route::post('/{transfer}/approve', [TransferController::class, 'approve'])->name('approve');
+        Route::post('/{transfer}/reject', [TransferController::class, 'reject'])->name('reject');
+    });
+});
 
-        Route::middleware(['permission:separations.create'])->group(function () {
-            Route::get('/create', [SeparationController::class, 'create'])->name('create');
-            Route::post('/', [SeparationController::class, 'store'])->name('store');
-        });
+// ====================
+// CONFIRMATION MANAGEMENT
+// ====================
+Route::middleware(['permission:confirmations.view'])->prefix('confirmations')->name('confirmations.')->group(function () {
+    Route::get('/', [ConfirmationController::class, 'index'])->name('index');
 
-        Route::get('/{separation}', [SeparationController::class, 'show'])->name('show');
-
-        Route::middleware(['permission:separations.edit'])->group(function () {
-            Route::get('/{separation}/edit', [SeparationController::class, 'edit'])->name('edit');
-            Route::put('/{separation}', [SeparationController::class, 'update'])->name('update');
-            Route::post('/{separation}/cancel', [SeparationController::class, 'cancel'])->name('cancel');
-            Route::post('/{separation}/complete', [SeparationController::class, 'complete'])->name('complete');
-        });
-
-        Route::delete('/{separation}', [SeparationController::class, 'destroy'])->name('destroy');
-
-        Route::middleware(['permission:separations.approve'])->group(function () {
-            Route::post('/{separation}/approve', [SeparationController::class, 'approve'])->name('approve');
-            Route::post('/{separation}/reject', [SeparationController::class, 'reject'])->name('reject');
-        });
+    Route::middleware(['permission:confirmations.create'])->group(function () {
+        Route::get('/create', [ConfirmationController::class, 'create'])->name('create');
+        Route::post('/', [ConfirmationController::class, 'store'])->name('store');
     });
 
-    // ====================
-    // DEMOTION MANAGEMENT
-    // ===================
-    Route::middleware(['permission:demotions.view'])->prefix('demotions')->name('demotions.')->group(function () {
-        Route::get('/', [DemotionController::class, 'index'])->name('index');
+    Route::get('/{confirmation}', [ConfirmationController::class, 'show'])->name('show');
 
-        Route::middleware(['permission:demotions.create'])->group(function () {
-            Route::get('/create', [DemotionController::class, 'create'])->name('create');
-            Route::post('/', [DemotionController::class, 'store'])->name('store');
-        });
-
-        Route::get('/{demotion}', [DemotionController::class, 'show'])->name('show');
-
-        Route::middleware(['permission:demotions.edit'])->group(function () {
-            Route::get('/{demotion}/edit', [DemotionController::class, 'edit'])->name('edit');
-            Route::put('/{demotion}', [DemotionController::class, 'update'])->name('update');
-            Route::post('/{demotion}/cancel', [DemotionController::class, 'cancel'])->name('cancel');
-            Route::post('/{demotion}/complete', [DemotionController::class, 'complete'])->name('complete');
-        });
-
-        Route::middleware(['permission:demotions.approve'])->group(function () {
-            Route::post('/{demotion}/approve', [DemotionController::class, 'approve'])->name('approve');
-            Route::post('/{demotion}/reject', [DemotionController::class, 'reject'])->name('reject');
-        });
+    Route::middleware(['permission:confirmations.edit'])->group(function () {
+        Route::get('/{confirmation}/edit', [ConfirmationController::class, 'edit'])->name('edit');
+        Route::put('/{confirmation}', [ConfirmationController::class, 'update'])->name('update');
+        Route::post('/{confirmation}/cancel', [ConfirmationController::class, 'cancel'])->name('cancel');
+        Route::post('/{confirmation}/complete', [ConfirmationController::class, 'complete'])->name('complete');
     });
 
-    // PROMOTION MANAGEMENT
-    // ====================
-    Route::middleware(['permission:promotions.view'])->prefix('promotions')->name('promotions.')->group(function () {
-        Route::get('/', [PromotionController::class, 'index'])->name('index');
+    Route::middleware(['permission:confirmations.approve'])->group(function () {
+        Route::post('/{confirmation}/approve', [ConfirmationController::class, 'approve'])->name('approve');
+        Route::post('/{confirmation}/reject', [ConfirmationController::class, 'reject'])->name('reject');
+    });
+});
 
-        Route::middleware(['permission:promotions.create'])->group(function () {
-            Route::get('/create', [PromotionController::class, 'create'])->name('create');
-            Route::post('/', [PromotionController::class, 'store'])->name('store');
-        });
+// ====================
+// SEPARATION MANAGEMENT (Obbahoti / Termination)
+// ====================
+Route::middleware(['permission:separations.view'])->prefix('separations')->name('separations.')->group(function () {
+    Route::get('/', [SeparationController::class, 'index'])->name('index');
 
-        Route::get('/{promotion}', [PromotionController::class, 'show'])->name('show');
-
-        Route::middleware(['permission:promotions.edit'])->group(function () {
-            Route::get('/{promotion}/edit', [PromotionController::class, 'edit'])->name('edit');
-            Route::put('/{promotion}', [PromotionController::class, 'update'])->name('update');
-            Route::post('/{promotion}/cancel', [PromotionController::class, 'cancel'])->name('cancel');
-            Route::post('/{promotion}/complete', [PromotionController::class, 'complete'])->name('complete');
-        });
-
-        Route::middleware(['permission:promotions.approve'])->group(function () {
-            Route::post('/{promotion}/approve', [PromotionController::class, 'approve'])->name('approve');
-            Route::post('/{promotion}/reject', [PromotionController::class, 'reject'])->name('reject');
-        });
+    Route::middleware(['permission:separations.create'])->group(function () {
+        Route::get('/create', [SeparationController::class, 'create'])->name('create');
+        Route::post('/', [SeparationController::class, 'store'])->name('store');
     });
 
-    // ANNUAL SALARY INCREMENT (same grade, next step)
-    Route::middleware(['permission:salary-increments.view'])->prefix('salary-increments')->name('salary-increments.')->group(function () {
-        Route::get('/', [SalaryIncrementController::class, 'index'])->name('index');
+    Route::get('/{separation}', [SeparationController::class, 'show'])->name('show');
 
-        Route::middleware(['permission:salary-increments.create'])->group(function () {
-            Route::get('/create', [SalaryIncrementController::class, 'create'])->name('create');
-            Route::post('/', [SalaryIncrementController::class, 'store'])->name('store');
-        });
-
-        Route::middleware(['permission:salary-increments.edit'])->group(function () {
-            Route::post('/employees/{employee}/release-stop', [SalaryIncrementController::class, 'releaseStop'])->name('release-stop');
-        });
-
-        Route::post('/{salaryIncrement}/rollback', [SalaryIncrementController::class, 'rollback'])->name('rollback');
-
-        Route::get('/{salaryIncrement}', [SalaryIncrementController::class, 'show'])->name('show');
+    Route::middleware(['permission:separations.edit'])->group(function () {
+        Route::get('/{separation}/edit', [SeparationController::class, 'edit'])->name('edit');
+        Route::put('/{separation}', [SeparationController::class, 'update'])->name('update');
+        Route::post('/{separation}/cancel', [SeparationController::class, 'cancel'])->name('cancel');
+        Route::post('/{separation}/complete', [SeparationController::class, 'complete'])->name('complete');
     });
 
-    // PROMOTION EVALUATIONS
-    // ====================
-    Route::middleware(['permission:promotion-evaluations.view'])->prefix('promotion-evaluations')->name('promotions.evaluations.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'index'])->name('index');
+    Route::delete('/{separation}', [SeparationController::class, 'destroy'])->name('destroy');
 
-        Route::middleware(['permission:promotion-evaluations.create'])->group(function () {
-            Route::get('/employees/lookup', [\App\Http\Controllers\PromotionEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
-            Route::get('/create', [\App\Http\Controllers\PromotionEvaluationController::class, 'create'])->name('create');
-            Route::post('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'store'])->name('store');
-        });
+    Route::middleware(['permission:separations.approve'])->group(function () {
+        Route::post('/{separation}/approve', [SeparationController::class, 'approve'])->name('approve');
+        Route::post('/{separation}/reject', [SeparationController::class, 'reject'])->name('reject');
+    });
+});
 
-        // Rubrics & Templates Management
-        Route::prefix('templates')->name('templates.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\EvaluationTemplateController::class, 'index'])->name('index');
-            Route::put('/{template}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateTemplate'])->name('update');
-            Route::post('/{template}/sections', [\App\Http\Controllers\EvaluationTemplateController::class, 'storeSection'])->name('sections.store');
-            Route::put('/sections/{section}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateSection'])->name('sections.update');
-            Route::delete('/sections/{section}', [\App\Http\Controllers\EvaluationTemplateController::class, 'destroySection'])->name('sections.destroy');
-            Route::put('/criteria/{criterion}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateCriterion'])->name('criteria.update');
-            Route::post('/sections/{section}/criteria', [\App\Http\Controllers\EvaluationTemplateController::class, 'storeCriterion'])->name('criteria.store');
-            Route::delete('/criteria/{criterion}', [\App\Http\Controllers\EvaluationTemplateController::class, 'destroyCriterion'])->name('criteria.destroy');
-        });
+// ====================
+// DEMOTION MANAGEMENT
+// ===================
+Route::middleware(['permission:demotions.view'])->prefix('demotions')->name('demotions.')->group(function () {
+    Route::get('/', [DemotionController::class, 'index'])->name('index');
 
-        Route::get('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'show'])->name('show');
-        Route::get('/{evaluation}/print', [\App\Http\Controllers\PromotionEvaluationController::class, 'print'])->name('print');
-        Route::get('/{evaluation}/edit', [\App\Http\Controllers\PromotionEvaluationController::class, 'edit'])->name('edit');
-        Route::put('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'update'])->name('update');
-        Route::delete('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'destroy'])->name('destroy');
-
-        Route::post('/{evaluation}/forward', [\App\Http\Controllers\PromotionEvaluationController::class, 'forward'])->name('forward');
-        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\PromotionEvaluationController::class, 'sendBack'])->name('sendBack');
-
-        Route::middleware(['permission:promotion-evaluations.hr_verify'])->group(function () {
-            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\PromotionEvaluationController::class, 'hrVerify'])->name('hrVerify');
-        });
-
-        Route::middleware(['permission:promotion-evaluations.approve'])->group(function () {
-            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\PromotionEvaluationController::class, 'edApprove'])->name('edApprove');
-        });
+    Route::middleware(['permission:demotions.create'])->group(function () {
+        Route::get('/create', [DemotionController::class, 'create'])->name('create');
+        Route::post('/', [DemotionController::class, 'store'])->name('store');
     });
 
-    // CONFIRMATION EVALUATIONS
-    // ========================
-    Route::middleware(['permission:confirmation-evaluations.view'])->prefix('confirmation-evaluations')->name('confirmation.evaluations.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'index'])->name('index');
+    Route::get('/{demotion}', [DemotionController::class, 'show'])->name('show');
 
-        Route::middleware(['permission:confirmation-evaluations.create'])->group(function () {
-            Route::get('/employees/lookup', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
-            Route::get('/create', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'create'])->name('create');
-            Route::post('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'store'])->name('store');
-        });
-
-        Route::get('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'show'])->name('show');
-        Route::get('/{evaluation}/print', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'print'])->name('print');
-        Route::get('/{evaluation}/edit', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'edit'])->name('edit');
-        Route::put('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'update'])->name('update');
-        Route::delete('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'destroy'])->name('destroy');
-
-        Route::post('/{evaluation}/forward', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'forward'])->name('forward');
-        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'sendBack'])->name('sendBack');
-
-        Route::middleware(['permission:confirmation-evaluations.hr_verify'])->group(function () {
-            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'hrVerify'])->name('hrVerify');
-        });
-
-        Route::middleware(['permission:confirmation-evaluations.approve'])->group(function () {
-            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'edApprove'])->name('edApprove');
-        });
+    Route::middleware(['permission:demotions.edit'])->group(function () {
+        Route::get('/{demotion}/edit', [DemotionController::class, 'edit'])->name('edit');
+        Route::put('/{demotion}', [DemotionController::class, 'update'])->name('update');
+        Route::post('/{demotion}/cancel', [DemotionController::class, 'cancel'])->name('cancel');
+        Route::post('/{demotion}/complete', [DemotionController::class, 'complete'])->name('complete');
     });
 
-    // PROBATION INCREMENT EVALUATIONS
-    // ===============================
-    Route::middleware(['permission:probation-increment-evaluations.view'])->prefix('probation-increment-evaluations')->name('probation-increment-evaluations.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'index'])->name('index');
+    Route::middleware(['permission:demotions.approve'])->group(function () {
+        Route::post('/{demotion}/approve', [DemotionController::class, 'approve'])->name('approve');
+        Route::post('/{demotion}/reject', [DemotionController::class, 'reject'])->name('reject');
+    });
+});
 
-        Route::middleware(['permission:probation-increment-evaluations.create'])->group(function () {
-            Route::get('/employees/lookup', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
-            Route::get('/create', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'create'])->name('create');
-            Route::post('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'store'])->name('store');
-        });
+// PROMOTION MANAGEMENT
+// ====================
+Route::middleware(['permission:promotions.view'])->prefix('promotions')->name('promotions.')->group(function () {
+    Route::get('/', [PromotionController::class, 'index'])->name('index');
 
-        Route::get('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'show'])->name('show');
-        Route::get('/{evaluation}/print', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'print'])->name('print');
-        Route::get('/{evaluation}/edit', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'edit'])->name('edit');
-        Route::put('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'update'])->name('update');
-        Route::delete('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'destroy'])->name('destroy');
-
-        Route::post('/{evaluation}/forward', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'forward'])->name('forward');
-        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'sendBack'])->name('sendBack');
-        Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'quickApprove'])->name('quickApprove');
-
-        Route::middleware(['permission:probation-increment-evaluations.hr_verify'])->group(function () {
-            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'hrVerify'])->name('hrVerify');
-        });
-
-        Route::middleware(['permission:probation-increment-evaluations.approve'])->group(function () {
-            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'edApprove'])->name('edApprove');
-        });
+    Route::middleware(['permission:promotions.create'])->group(function () {
+        Route::get('/create', [PromotionController::class, 'create'])->name('create');
+        Route::post('/', [PromotionController::class, 'store'])->name('store');
     });
 
-    // TRAINEE EVALUATIONS (প্রশিক্ষণার্থী মূল্যায়ন)
-    // ==============================================
-    Route::middleware(['permission:trainee-evaluations.view'])->prefix('trainee-evaluations')->name('trainee-evaluations.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'index'])->name('index');
+    Route::get('/{promotion}', [PromotionController::class, 'show'])->name('show');
 
-        Route::middleware(['permission:trainee-evaluations.create'])->group(function () {
-            Route::get('/employees/lookup', [\App\Http\Controllers\TraineeEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
-            Route::get('/create', [\App\Http\Controllers\TraineeEvaluationController::class, 'create'])->name('create');
-            Route::post('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'store'])->name('store');
-        });
-
-        Route::get('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'show'])->name('show');
-        Route::get('/{evaluation}/print', [\App\Http\Controllers\TraineeEvaluationController::class, 'print'])->name('print');
-        Route::get('/{evaluation}/edit', [\App\Http\Controllers\TraineeEvaluationController::class, 'edit'])->name('edit');
-        Route::put('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'update'])->name('update');
-        Route::delete('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'destroy'])->name('destroy');
-
-        Route::post('/{evaluation}/forward', [\App\Http\Controllers\TraineeEvaluationController::class, 'forward'])->name('forward');
-        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\TraineeEvaluationController::class, 'sendBack'])->name('sendBack');
-        Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'quickApprove'])->name('quickApprove');
-
-        Route::middleware(['permission:trainee-evaluations.hr_verify'])->group(function () {
-            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\TraineeEvaluationController::class, 'hrVerify'])->name('hrVerify');
-        });
-
-        Route::middleware(['permission:trainee-evaluations.approve'])->group(function () {
-            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'edApprove'])->name('edApprove');
-        });
+    Route::middleware(['permission:promotions.edit'])->group(function () {
+        Route::get('/{promotion}/edit', [PromotionController::class, 'edit'])->name('edit');
+        Route::put('/{promotion}', [PromotionController::class, 'update'])->name('update');
+        Route::post('/{promotion}/cancel', [PromotionController::class, 'cancel'])->name('cancel');
+        Route::post('/{promotion}/complete', [PromotionController::class, 'complete'])->name('complete');
     });
 
-    Route::prefix('final-clearances')->name('final-clearances.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\FinalClearanceController::class, 'index'])->name('index');
-        Route::get('/employees/lookup', [\App\Http\Controllers\FinalClearanceController::class, 'lookup'])->name('lookup');
-        Route::get('/create', [\App\Http\Controllers\FinalClearanceController::class, 'create'])->name('create');
-        Route::post('/', [\App\Http\Controllers\FinalClearanceController::class, 'store'])->name('store');
-        Route::get('/{finalClearance}/print', [\App\Http\Controllers\FinalClearanceController::class, 'print'])->name('print');
-        Route::get('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'show'])->name('show');
-        Route::put('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'update'])->name('update');
-        Route::delete('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'destroy'])->name('destroy');
-        Route::post('/{finalClearance}/submit', [\App\Http\Controllers\FinalClearanceController::class, 'submit'])->name('submit');
-        Route::post('/{finalClearance}/forward', [\App\Http\Controllers\FinalClearanceController::class, 'forward'])->name('forward');
-        Route::post('/{finalClearance}/send-back', [\App\Http\Controllers\FinalClearanceController::class, 'sendBack'])->name('send-back');
-        Route::post('/{finalClearance}/approve', [\App\Http\Controllers\FinalClearanceController::class, 'approve'])->name('approve');
-        Route::post('/{finalClearance}/reject', [\App\Http\Controllers\FinalClearanceController::class, 'reject'])->name('reject');
+    Route::middleware(['permission:promotions.approve'])->group(function () {
+        Route::post('/{promotion}/approve', [PromotionController::class, 'approve'])->name('approve');
+        Route::post('/{promotion}/reject', [PromotionController::class, 'reject'])->name('reject');
+    });
+});
+
+// ANNUAL SALARY INCREMENT (same grade, next step)
+Route::middleware(['permission:salary-increments.view'])->prefix('salary-increments')->name('salary-increments.')->group(function () {
+    Route::get('/', [SalaryIncrementController::class, 'index'])->name('index');
+
+    Route::middleware(['permission:salary-increments.create'])->group(function () {
+        Route::get('/create', [SalaryIncrementController::class, 'create'])->name('create');
+        Route::post('/', [SalaryIncrementController::class, 'store'])->name('store');
     });
 
+    Route::middleware(['permission:salary-increments.edit'])->group(function () {
+        Route::post('/employees/{employee}/release-stop', [SalaryIncrementController::class, 'releaseStop'])->name('release-stop');
+    });
+
+    Route::post('/{salaryIncrement}/rollback', [SalaryIncrementController::class, 'rollback'])->name('rollback');
+
+    Route::get('/{salaryIncrement}', [SalaryIncrementController::class, 'show'])->name('show');
+});
+
+// PROMOTION EVALUATIONS
+// ====================
+Route::middleware(['permission:promotion-evaluations.view'])->prefix('promotion-evaluations')->name('promotions.evaluations.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'index'])->name('index');
+
+    Route::middleware(['permission:promotion-evaluations.create'])->group(function () {
+        Route::get('/employees/lookup', [\App\Http\Controllers\PromotionEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
+        Route::get('/create', [\App\Http\Controllers\PromotionEvaluationController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'store'])->name('store');
+    });
+
+    // Rubrics & Templates Management
+    Route::prefix('templates')->name('templates.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\EvaluationTemplateController::class, 'index'])->name('index');
+        Route::put('/{template}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateTemplate'])->name('update');
+        Route::post('/{template}/sections', [\App\Http\Controllers\EvaluationTemplateController::class, 'storeSection'])->name('sections.store');
+        Route::put('/sections/{section}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateSection'])->name('sections.update');
+        Route::delete('/sections/{section}', [\App\Http\Controllers\EvaluationTemplateController::class, 'destroySection'])->name('sections.destroy');
+        Route::put('/criteria/{criterion}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateCriterion'])->name('criteria.update');
+        Route::post('/sections/{section}/criteria', [\App\Http\Controllers\EvaluationTemplateController::class, 'storeCriterion'])->name('criteria.store');
+        Route::delete('/criteria/{criterion}', [\App\Http\Controllers\EvaluationTemplateController::class, 'destroyCriterion'])->name('criteria.destroy');
+    });
+
+    Route::get('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'show'])->name('show');
+    Route::get('/{evaluation}/print', [\App\Http\Controllers\PromotionEvaluationController::class, 'print'])->name('print');
+    Route::get('/{evaluation}/edit', [\App\Http\Controllers\PromotionEvaluationController::class, 'edit'])->name('edit');
+    Route::put('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'update'])->name('update');
+    Route::delete('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'destroy'])->name('destroy');
+    Route::post('/{evaluation}/reset-workflow', [\App\Http\Controllers\PromotionEvaluationController::class, 'resetWorkflow'])->name('reset-workflow');
+
+    Route::post('/{evaluation}/forward', [\App\Http\Controllers\PromotionEvaluationController::class, 'forward'])->name('forward');
+    Route::post('/{evaluation}/send-back', [\App\Http\Controllers\PromotionEvaluationController::class, 'sendBack'])->name('sendBack');
+
+    Route::middleware(['permission:promotion-evaluations.hr_verify'])->group(function () {
+        Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\PromotionEvaluationController::class, 'hrVerify'])->name('hrVerify');
+    });
+
+    Route::middleware(['permission:promotion-evaluations.approve'])->group(function () {
+        Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\PromotionEvaluationController::class, 'edApprove'])->name('edApprove');
+    });
+});
+
+// CONFIRMATION EVALUATIONS
+// ========================
+Route::middleware(['permission:confirmation-evaluations.view'])->prefix('confirmation-evaluations')->name('confirmation.evaluations.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'index'])->name('index');
+
+    Route::middleware(['permission:confirmation-evaluations.create'])->group(function () {
+        Route::get('/employees/lookup', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
+        Route::get('/create', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'store'])->name('store');
+    });
+
+    Route::get('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'show'])->name('show');
+    Route::get('/{evaluation}/print', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'print'])->name('print');
+    Route::get('/{evaluation}/edit', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'edit'])->name('edit');
+    Route::put('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'update'])->name('update');
+    Route::delete('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'destroy'])->name('destroy');
+    Route::post('/{evaluation}/reset-workflow', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'resetWorkflow'])->name('reset-workflow');
+
+    Route::post('/{evaluation}/forward', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'forward'])->name('forward');
+    Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'sendBack'])->name('sendBack');
+
+    Route::middleware(['permission:confirmation-evaluations.hr_verify'])->group(function () {
+        Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'hrVerify'])->name('hrVerify');
+    });
+
+    Route::middleware(['permission:confirmation-evaluations.approve'])->group(function () {
+        Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'edApprove'])->name('edApprove');
+    });
+});
+
+// PROBATION INCREMENT EVALUATIONS
+// ===============================
+Route::middleware(['permission:probation-increment-evaluations.view'])->prefix('probation-increment-evaluations')->name('probation-increment-evaluations.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'index'])->name('index');
+
+    Route::middleware(['permission:probation-increment-evaluations.create'])->group(function () {
+        Route::get('/employees/lookup', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
+        Route::get('/create', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'store'])->name('store');
+    });
+
+    Route::get('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'show'])->name('show');
+    Route::get('/{evaluation}/print', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'print'])->name('print');
+    Route::get('/{evaluation}/edit', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'edit'])->name('edit');
+    Route::put('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'update'])->name('update');
+    Route::delete('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'destroy'])->name('destroy');
+    Route::post('/{evaluation}/reset-workflow', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'resetWorkflow'])->name('reset-workflow');
+
+    Route::post('/{evaluation}/forward', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'forward'])->name('forward');
+    Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'sendBack'])->name('sendBack');
+    Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'quickApprove'])->name('quickApprove');
+
+    Route::middleware(['permission:probation-increment-evaluations.hr_verify'])->group(function () {
+        Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'hrVerify'])->name('hrVerify');
+    });
+
+    Route::middleware(['permission:probation-increment-evaluations.approve'])->group(function () {
+        Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'edApprove'])->name('edApprove');
+    });
+});
+
+// TRAINEE EVALUATIONS (প্রশিক্ষণার্থী মূল্যায়ন)
+// ==============================================
+Route::middleware(['permission:trainee-evaluations.view'])->prefix('trainee-evaluations')->name('trainee-evaluations.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'index'])->name('index');
+
+    Route::middleware(['permission:trainee-evaluations.create'])->group(function () {
+        Route::get('/employees/lookup', [\App\Http\Controllers\TraineeEvaluationController::class, 'lookupEmployees'])->name('employees.lookup');
+        Route::get('/create', [\App\Http\Controllers\TraineeEvaluationController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'store'])->name('store');
+    });
+
+    Route::get('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'show'])->name('show');
+    Route::get('/{evaluation}/print', [\App\Http\Controllers\TraineeEvaluationController::class, 'print'])->name('print');
+    Route::get('/{evaluation}/edit', [\App\Http\Controllers\TraineeEvaluationController::class, 'edit'])->name('edit');
+    Route::put('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'update'])->name('update');
+    Route::delete('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'destroy'])->name('destroy');
+    Route::post('/{evaluation}/reset-workflow', [\App\Http\Controllers\TraineeEvaluationController::class, 'resetWorkflow'])->name('reset-workflow');
+
+    Route::post('/{evaluation}/forward', [\App\Http\Controllers\TraineeEvaluationController::class, 'forward'])->name('forward');
+    Route::post('/{evaluation}/send-back', [\App\Http\Controllers\TraineeEvaluationController::class, 'sendBack'])->name('sendBack');
+    Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'quickApprove'])->name('quickApprove');
+
+    Route::middleware(['permission:trainee-evaluations.hr_verify'])->group(function () {
+        Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\TraineeEvaluationController::class, 'hrVerify'])->name('hrVerify');
+    });
+
+    Route::middleware(['permission:trainee-evaluations.approve'])->group(function () {
+        Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'edApprove'])->name('edApprove');
+    });
+});
+
+Route::prefix('final-clearances')->name('final-clearances.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\FinalClearanceController::class, 'index'])->name('index');
+    Route::get('/employees/lookup', [\App\Http\Controllers\FinalClearanceController::class, 'lookup'])->name('lookup');
+    Route::get('/create', [\App\Http\Controllers\FinalClearanceController::class, 'create'])->name('create');
+    Route::post('/', [\App\Http\Controllers\FinalClearanceController::class, 'store'])->name('store');
+    Route::get('/{finalClearance}/print', [\App\Http\Controllers\FinalClearanceController::class, 'print'])->name('print');
+    Route::get('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'show'])->name('show');
+    Route::put('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'update'])->name('update');
+    Route::delete('/{finalClearance}', [\App\Http\Controllers\FinalClearanceController::class, 'destroy'])->name('destroy');
+    Route::post('/{finalClearance}/submit', [\App\Http\Controllers\FinalClearanceController::class, 'submit'])->name('submit');
+    Route::post('/{finalClearance}/forward', [\App\Http\Controllers\FinalClearanceController::class, 'forward'])->name('forward');
+    Route::post('/{finalClearance}/send-back', [\App\Http\Controllers\FinalClearanceController::class, 'sendBack'])->name('send-back');
+    Route::post('/{finalClearance}/approve', [\App\Http\Controllers\FinalClearanceController::class, 'approve'])->name('approve');
+    Route::post('/{finalClearance}/reject', [\App\Http\Controllers\FinalClearanceController::class, 'reject'])->name('reject');
+});

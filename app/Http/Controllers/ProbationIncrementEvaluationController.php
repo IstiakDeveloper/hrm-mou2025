@@ -2,24 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
+use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\ProbationIncrementEvaluation;
-use App\Models\ProbationIncrementEvaluationScore;
-use App\Models\ProbationIncrementEvaluationSignature;
-use App\Models\Branch;
 use App\Models\Zone;
 use App\Services\Appraisal\AppraisalEmployeeLookup;
 use App\Services\Appraisal\AppraisalListQuery;
 use App\Services\Appraisal\AppraisalTemplateCache;
+use App\Services\OrganogramAccessService;
 use App\Services\ProbationIncrementWorkflowService;
 use App\Support\AppraisalRequiredFields;
-use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ProbationIncrementEvaluationController extends Controller
 {
+    use ResetsAppraisalWorkflow;
+
     protected ProbationIncrementWorkflowService $workflowService;
 
     public function __construct(ProbationIncrementWorkflowService $workflowService)
@@ -77,13 +78,13 @@ class ProbationIncrementEvaluationController extends Controller
             $search = trim($request->search);
             $query->whereHas('employee', function ($q) use ($search) {
                 $q->where('name_en', 'like', "%{$search}%")
-                  ->orWhere('name_bn', 'like', "%{$search}%")
-                  ->orWhere('pin', 'like', "%{$search}%");
+                    ->orWhere('name_bn', 'like', "%{$search}%")
+                    ->orWhere('pin', 'like', "%{$search}%");
             });
         }
 
         $perPage = (int) $request->input('per_page', 15);
-        if (!in_array($perPage, [10, 15, 25, 50, 100], true)) {
+        if (! in_array($perPage, [10, 15, 25, 50, 100], true)) {
             $perPage = 15;
         }
 
@@ -98,15 +99,15 @@ class ProbationIncrementEvaluationController extends Controller
         // Attach reviewer eligibility
         $evaluations->getCollection()->transform(function ($ev) use ($user) {
             $hasSigned = $ev->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-            $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $ev);
+            $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $ev);
             $sentBackSig = $ev->signatures->where('action', 'sent_back')->last();
 
             $isInitiator = (int) $ev->initiator_id === (int) $user->id;
-            $isStuckAtRm = $ev->status === 'submitted_to_rm' && ($isInitiator || $ev->form_type === 'bm_and_above');
+            $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $ev);
 
-            $ev->can_approve = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
-            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
-            $ev->can_send_back = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
+            $ev->can_approve = $canReview && ! in_array($ev->status, ['draft', 'approved', 'rejected']);
+            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+            $ev->can_send_back = $canReview && ! in_array($ev->status, ['draft', 'approved', 'rejected']);
             $ev->can_delete = ($ev->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
             $ev->can_submit = ($ev->status === 'draft' || $isStuckAtRm) && $isInitiator;
             $ev->has_user_signed = $hasSigned;
@@ -114,7 +115,7 @@ class ProbationIncrementEvaluationController extends Controller
             $ev->current_stage_label = $this->workflowService->getStageLabel($ev->status);
             $ev->unsetRelation('signatures');
             AppraisalListQuery::hideNarratives($ev);
-            
+
             return $ev;
         });
 
@@ -153,15 +154,15 @@ class ProbationIncrementEvaluationController extends Controller
                          in_array('Director Finance and Accounts', $roleNames, true) || in_array('Director Finance and Account', $roleNames, true) ||
                          $user->hasPermission('probation-increment-evaluations.create');
 
-        if (!$isLineManager && !$isSuperAdmin) {
+        if (! $isLineManager && ! $isSuperAdmin) {
             return redirect()->route('probation-increment-evaluations.index')->with('error', 'Only Branch Managers, Regional Managers, Zonal Managers, or Directors can create an increment evaluation.');
         }
 
-        if (!$user->hasSignature()) {
+        if (! $user->hasSignature()) {
             return redirect()->route('settings.profile.edit')->with('error', 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন শুরু করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
         }
 
-        if (!$isSuperAdmin && $isLineManager && !$user->employee) {
+        if (! $isSuperAdmin && $isLineManager && ! $user->employee) {
             return redirect()->route('probation-increment-evaluations.index')->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
         }
 
@@ -184,18 +185,17 @@ class ProbationIncrementEvaluationController extends Controller
         return response()->json($rows);
     }
 
-
     public function store(Request $request)
     {
         $user = $request->user();
 
-        if (!$user->hasSignature()) {
+        if (! $user->hasSignature()) {
             return redirect()->route('settings.profile.edit')->with('error', 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন সংরক্ষণ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
         }
 
         if ($user->employee_id && (int) $request->input('employee_id') === (int) $user->employee_id) {
             return redirect()->back()->withErrors([
-                'employee_id' => 'আপনি নিজের শিক্ষানবিশ মূল্যায়ন করতে পারবেন না।'
+                'employee_id' => 'আপনি নিজের শিক্ষানবিশ মূল্যায়ন করতে পারবেন না।',
             ])->withInput();
         }
 
@@ -207,7 +207,7 @@ class ProbationIncrementEvaluationController extends Controller
             'education_at_joining' => 'nullable|string|max:255',
             'education_current' => 'nullable|string|max:255',
             'closing_month' => 'required|string|max:50',
-            
+
             // Achievement stats
             'joining_members_count' => 'nullable|integer',
             'closing_members_count' => 'nullable|integer',
@@ -245,7 +245,7 @@ class ProbationIncrementEvaluationController extends Controller
             'initiator_remarks' => 'nullable|string',
             'recommendation_status' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
             'supervisor_recommendation' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
-            
+
             // Scores array
             'scores' => 'required|array',
             'scores.*.section_key' => 'required|string',
@@ -266,17 +266,20 @@ class ProbationIncrementEvaluationController extends Controller
             $candLevel = (int) ($candTier['level'] ?? 999);
             if ($candLevel <= $userLevel) {
                 return redirect()->back()->withErrors([
-                    'employee_id' => 'আপনি শুধুমাত্র আপনার অধীনস্থ (নিচের পদবীর) কর্মীদের শিক্ষানবিশ মূল্যায়ন তৈরি করতে পারবেন।'
+                    'employee_id' => 'আপনি শুধুমাত্র আপনার অধীনস্থ (নিচের পদবীর) কর্মীদের শিক্ষানবিশ মূল্যায়ন তৈরি করতে পারবেন।',
                 ])->withInput();
             }
         }
 
         $parseDate = function ($dateVal) {
-            if (empty($dateVal)) return null;
+            if (empty($dateVal)) {
+                return null;
+            }
             try {
                 if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $dateVal)) {
                     return \Illuminate\Support\Carbon::createFromFormat('d/m/Y', $dateVal)->format('Y-m-d');
                 }
+
                 return \Illuminate\Support\Carbon::parse($dateVal)->format('Y-m-d');
             } catch (\Throwable $e) {
                 return null;
@@ -286,7 +289,7 @@ class ProbationIncrementEvaluationController extends Controller
         $formType = $validated['form_type'];
         AppraisalRequiredFields::assertInitiator($request, 'probation', $formType);
         $joiningDate = $parseDate($validated['joining_date'] ?? null) ?? $employee->joining_date?->format('Y-m-d');
-        $probationDate = $parseDate($validated['probation_3m_completion_date'] ?? null) ?? ($joiningDate ? date('Y-m-d', strtotime($joiningDate . ' +3 months')) : null);
+        $probationDate = $parseDate($validated['probation_3m_completion_date'] ?? null) ?? ($joiningDate ? date('Y-m-d', strtotime($joiningDate.' +3 months')) : null);
         $branchId = $employee->current_branch_id ?? $employee->branch_id;
         $regionalOfficeId = $employee->branch?->regional_office_id;
         $zoneId = $employee->branch?->regionalOffice?->zone_id;
@@ -301,7 +304,7 @@ class ProbationIncrementEvaluationController extends Controller
                 'regional_office_id' => $regionalOfficeId,
                 'zone_id' => $zoneId,
                 'form_type' => $formType,
-                
+
                 'joining_date' => $joiningDate,
                 'probation_3m_completion_date' => $probationDate,
                 'education_at_joining' => $validated['education_at_joining'] ?? null,
@@ -311,46 +314,46 @@ class ProbationIncrementEvaluationController extends Controller
                 'joining_members_count' => $validated['joining_members_count'] ?? null,
                 'closing_members_count' => $validated['closing_members_count'] ?? null,
                 'diff_members_count' => $validated['diff_members_count'] ?? (isset($validated['closing_members_count']) || isset($validated['joining_members_count']) ? ((int) ($validated['closing_members_count'] ?? 0) - (int) ($validated['joining_members_count'] ?? 0)) : null),
-                
+
                 'joining_borrowers_count' => $validated['joining_borrowers_count'] ?? null,
                 'closing_borrowers_count' => $validated['closing_borrowers_count'] ?? null,
                 'diff_borrowers_count' => $validated['diff_borrowers_count'] ?? (isset($validated['closing_borrowers_count']) || isset($validated['joining_borrowers_count']) ? ((int) ($validated['closing_borrowers_count'] ?? 0) - (int) ($validated['joining_borrowers_count'] ?? 0)) : null),
-                
+
                 'joining_loan_balance' => $validated['joining_loan_balance'] ?? null,
                 'closing_loan_balance' => $validated['closing_loan_balance'] ?? null,
                 'diff_loan_balance' => $validated['diff_loan_balance'] ?? (isset($validated['closing_loan_balance']) || isset($validated['joining_loan_balance']) ? ((float) ($validated['closing_loan_balance'] ?? 0) - (float) ($validated['joining_loan_balance'] ?? 0)) : null),
-                
+
                 'joining_savings_balance' => $validated['joining_savings_balance'] ?? null,
                 'closing_savings_balance' => $validated['closing_savings_balance'] ?? null,
                 'diff_savings_balance' => $validated['diff_savings_balance'] ?? (isset($validated['closing_savings_balance']) || isset($validated['joining_savings_balance']) ? ((float) ($validated['closing_savings_balance'] ?? 0) - (float) ($validated['joining_savings_balance'] ?? 0)) : null),
-                
+
                 'joining_overdue_borrowers' => $validated['joining_overdue_borrowers'] ?? null,
                 'closing_overdue_borrowers' => $validated['closing_overdue_borrowers'] ?? null,
                 'diff_overdue_borrowers' => $validated['diff_overdue_borrowers'] ?? (isset($validated['closing_overdue_borrowers']) || isset($validated['joining_overdue_borrowers']) ? ((int) ($validated['closing_overdue_borrowers'] ?? 0) - (int) ($validated['joining_overdue_borrowers'] ?? 0)) : null),
-                
+
                 'joining_overdue_amount' => $validated['joining_overdue_amount'] ?? null,
                 'closing_overdue_amount' => $validated['closing_overdue_amount'] ?? null,
                 'diff_overdue_amount' => $validated['diff_overdue_amount'] ?? (isset($validated['closing_overdue_amount']) || isset($validated['joining_overdue_amount']) ? ((float) ($validated['closing_overdue_amount'] ?? 0) - (float) ($validated['joining_overdue_amount'] ?? 0)) : null),
-                
+
                 'joining_otr_pct' => $validated['joining_otr_pct'] ?? null,
                 'closing_otr_pct' => $validated['closing_otr_pct'] ?? null,
                 'diff_otr_pct' => $validated['diff_otr_pct'] ?? (isset($validated['closing_otr_pct']) || isset($validated['joining_otr_pct']) ? ((float) ($validated['closing_otr_pct'] ?? 0) - (float) ($validated['joining_otr_pct'] ?? 0)) : null),
-                
+
                 'joining_par_pct' => $validated['joining_par_pct'] ?? null,
                 'closing_par_pct' => $validated['closing_par_pct'] ?? null,
                 'diff_par_pct' => $validated['diff_par_pct'] ?? (isset($validated['closing_par_pct']) || isset($validated['joining_par_pct']) ? ((float) ($validated['closing_par_pct'] ?? 0) - (float) ($validated['joining_par_pct'] ?? 0)) : null),
-                
+
                 'has_cashier' => $validated['has_cashier'] ?? null,
-                
+
                 'total_score' => $validated['total_score'],
                 'calculated_grade' => $validated['calculated_grade'],
-                
+
                 'strengths' => $validated['strengths'] ?? null,
                 'weaknesses' => $validated['weaknesses'] ?? null,
                 'training_need' => $validated['training_need'] ?? null,
                 'other_remarks' => $remarks,
                 'recommendation_status' => $recStatus,
-                
+
                 'status' => 'draft',
             ]);
 
@@ -370,12 +373,12 @@ class ProbationIncrementEvaluationController extends Controller
             $eval->signatures()->create([
                 'user_id' => $user->id,
                 'stage' => 'initiator',
-                'action' => !empty($validated['submit_now']) ? 'submitted' : 'drafted',
+                'action' => ! empty($validated['submit_now']) ? 'submitted' : 'drafted',
                 'comments' => $remarks ?: 'Initial appraisal created',
                 'signed_at' => now(),
             ]);
 
-            if (!empty($validated['submit_now'])) {
+            if (! empty($validated['submit_now'])) {
                 $nextStatus = $this->workflowService->determineNextStatus($eval, 'draft');
                 $eval->status = $nextStatus;
                 $eval->save();
@@ -384,13 +387,13 @@ class ProbationIncrementEvaluationController extends Controller
             return $eval;
         });
 
-        if (!empty($validated['submit_now'])) {
+        if (! empty($validated['submit_now'])) {
             $this->workflowService->notifyStakeholders($evaluation, 'submitted', $remarks);
         }
 
         return redirect()->route('probation-increment-evaluations.show', $evaluation->id)
-            ->with('success', !empty($validated['submit_now']) 
-                ? 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন সফলভাবে দাখিল করা হয়েছে।' 
+            ->with('success', ! empty($validated['submit_now'])
+                ? 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন সফলভাবে দাখিল করা হয়েছে।'
                 : 'শিক্ষানবিশ ইনক্রিমেন্ট মূল্যায়ন খসড়া সফলভাবে সংরক্ষিত হয়েছে।');
     }
 
@@ -417,20 +420,20 @@ class ProbationIncrementEvaluationController extends Controller
         }
 
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
+        $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
 
         $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator)
-            || ($canReview && !in_array($evaluation->status, ['approved', 'rejected']))
+            || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected']))
             || $user->isSuperAdmin();
 
         $canDelete = (($evaluation->status === 'draft' && $isInitiator) || $user->isSuperAdmin());
         $canSubmit = ($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator;
-        $canApprove = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
-        $canSendBack = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
+        $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
+        $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
         return Inertia::render('sections/human-resources/evaluations/probation-increment/show', [
             'evaluation' => $evaluation,
@@ -454,11 +457,11 @@ class ProbationIncrementEvaluationController extends Controller
         $isSuperAdmin = $user->isSuperAdmin();
 
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
+        $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
 
-        if (!$isSuperAdmin && !($isInitiator && ($evaluation->status === 'draft' || $isStuckAtRm)) && !$canReview) {
+        if (! $isSuperAdmin && ! ($isInitiator && ($evaluation->status === 'draft' || $isStuckAtRm)) && ! $canReview) {
             abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
         }
 
@@ -484,7 +487,7 @@ class ProbationIncrementEvaluationController extends Controller
             'evaluation' => $evaluation,
             'templates' => $templates,
             'isSuperAdmin' => $isSuperAdmin,
-            'isReviewerEdit' => !$isInitiator && $canReview,
+            'isReviewerEdit' => ! $isInitiator && $canReview,
             'sentBackReason' => $sentBackSig?->comments,
         ]);
     }
@@ -520,11 +523,11 @@ class ProbationIncrementEvaluationController extends Controller
         $isSuperAdmin = $user->isSuperAdmin();
 
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
+        $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
 
-        if (!$isSuperAdmin && !($isInitiator && ($evaluation->status === 'draft' || $isStuckAtRm)) && !$canReview) {
+        if (! $isSuperAdmin && ! ($isInitiator && ($evaluation->status === 'draft' || $isStuckAtRm)) && ! $canReview) {
             abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
         }
 
@@ -534,7 +537,7 @@ class ProbationIncrementEvaluationController extends Controller
             'education_at_joining' => 'nullable|string|max:255',
             'education_current' => 'nullable|string|max:255',
             'closing_month' => 'required|string|max:50',
-            
+
             // Stats
             'joining_members_count' => 'nullable|integer',
             'closing_members_count' => 'nullable|integer',
@@ -571,7 +574,7 @@ class ProbationIncrementEvaluationController extends Controller
             'initiator_remarks' => 'nullable|string',
             'recommendation_status' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
             'supervisor_recommendation' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
-            
+
             'scores' => 'required|array',
             'scores.*.section_key' => 'required|string',
             'scores.*.section_name' => 'required|string',
@@ -583,16 +586,19 @@ class ProbationIncrementEvaluationController extends Controller
             'submit_now' => 'nullable|boolean',
         ]);
 
-        if (!empty($validated['submit_now']) && !$user->hasSignature()) {
+        if (! empty($validated['submit_now']) && ! $user->hasSignature()) {
             return redirect()->route('settings.profile.edit')->with('error', 'মূল্যায়ন জমা দেওয়ার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।');
         }
 
         $parseDate = function ($dateVal) {
-            if (empty($dateVal)) return null;
+            if (empty($dateVal)) {
+                return null;
+            }
             try {
                 if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $dateVal)) {
                     return \Illuminate\Support\Carbon::createFromFormat('d/m/Y', $dateVal)->format('Y-m-d');
                 }
+
                 return \Illuminate\Support\Carbon::parse($dateVal)->format('Y-m-d');
             } catch (\Throwable $e) {
                 return null;
@@ -645,7 +651,7 @@ class ProbationIncrementEvaluationController extends Controller
                 'recommendation_status' => $recStatus,
             ];
 
-            if (!empty($validated['submit_now']) && ($evaluation->status === 'draft' || $isStuckAtRm)) {
+            if (! empty($validated['submit_now']) && ($evaluation->status === 'draft' || $isStuckAtRm)) {
                 $nextStatus = $this->workflowService->determineNextStatus($evaluation, 'draft');
                 $updateData['status'] = $nextStatus;
                 $evaluation->signatures()->create([
@@ -674,7 +680,7 @@ class ProbationIncrementEvaluationController extends Controller
             }
         });
 
-        if (!empty($validated['submit_now'])) {
+        if (! empty($validated['submit_now'])) {
             $this->workflowService->notifyStakeholders($evaluation, 'submitted', $remarks);
         }
 
@@ -682,10 +688,15 @@ class ProbationIncrementEvaluationController extends Controller
             ->with('success', 'মূল্যায়ন সফলভাবে হালনাগাদ করা হয়েছে।');
     }
 
+    public function resetWorkflow(Request $request, ProbationIncrementEvaluation $evaluation)
+    {
+        return $this->resetAppraisalWorkflow($request, $evaluation);
+    }
+
     public function destroy(Request $request, ProbationIncrementEvaluation $evaluation)
     {
         $user = $request->user();
-        if (!$user->isSuperAdmin() && !($evaluation->status === 'draft' && (int) $evaluation->initiator_id === (int) $user->id)) {
+        if (! $user->isSuperAdmin() && ! ($evaluation->status === 'draft' && (int) $evaluation->initiator_id === (int) $user->id)) {
             abort(403, 'আপনার এটি মুছে ফেলার অনুমতি নেই।');
         }
 
@@ -701,33 +712,39 @@ class ProbationIncrementEvaluationController extends Controller
     {
         $user = $request->user();
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
 
-        if (!$this->workflowService->canUserReview($user, $evaluation) && !($isStuckAtRm && $isInitiator)) {
+        if (! $this->workflowService->canUserReview($user, $evaluation) && ! $isStuckAtRm) {
             abort(403, 'আপনার এই মূল্যায়নে স্বাক্ষর বা ফরোয়ার্ড করার অনুমতি নেই।');
         }
 
-        if ($evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator)) {
+        if ($evaluation->status === 'draft' || $isStuckAtRm) {
             AppraisalRequiredFields::assertStored('probation', $evaluation);
         } else {
             AppraisalRequiredFields::assertActor($request, 'probation', 'reviewer');
         }
 
-        $isSubmitStage = $evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator);
+        $isSubmitStage = $evaluation->status === 'draft' || $isStuckAtRm;
         $validated = $request->validate([
             'comments' => $isSubmitStage ? 'nullable|string|max:1000' : 'required|string|max:1000',
             'recommendation_status' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
             'supervisor_recommendation' => 'nullable|in:recommend_increment,defer_increment,not_suitable',
         ]);
 
-        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
-        $comments = $evaluation->status === 'draft'
+        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $isStuckAtRm ? 'draft' : $evaluation->status);
+        $comments = $isSubmitStage
             ? (trim((string) ($validated['comments'] ?? '')) !== ''
                 ? trim((string) $validated['comments'])
                 : ($nextStatus === 'submitted_to_zm'
                     ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
                     : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
             : trim((string) $validated['comments']);
+
+        if ($isStuckAtRm) {
+            $this->workflowService->resubmitPastRm($evaluation, $user, $comments);
+
+            return back()->with('success', 'সফলভাবে স্বাক্ষর করে পরবর্তী স্তরে ফরোয়ার্ড করা হয়েছে।');
+        }
 
         $this->workflowService->forward(
             $evaluation,
@@ -742,7 +759,7 @@ class ProbationIncrementEvaluationController extends Controller
     public function sendBack(Request $request, ProbationIncrementEvaluation $evaluation)
     {
         $user = $request->user();
-        if (!$this->workflowService->canUserReview($user, $evaluation)) {
+        if (! $this->workflowService->canUserReview($user, $evaluation)) {
             abort(403, 'আপনার এই মূল্যায়ন ফেরত পাঠানোর অনুমতি নেই।');
         }
 
@@ -758,7 +775,7 @@ class ProbationIncrementEvaluationController extends Controller
     public function hrVerify(Request $request, ProbationIncrementEvaluation $evaluation)
     {
         $user = $request->user();
-        if (!$this->workflowService->canUserReview($user, $evaluation) || $evaluation->status !== 'submitted_to_hr') {
+        if (! $this->workflowService->canUserReview($user, $evaluation) || $evaluation->status !== 'submitted_to_hr') {
             abort(403, 'আপনার এই পর্যায়ে যাচাই করার অনুমতি নেই।');
         }
 
@@ -780,7 +797,7 @@ class ProbationIncrementEvaluationController extends Controller
     public function edApprove(Request $request, ProbationIncrementEvaluation $evaluation)
     {
         $user = $request->user();
-        if (!$this->workflowService->canUserReview($user, $evaluation) || $evaluation->status !== 'submitted_to_ed') {
+        if (! $this->workflowService->canUserReview($user, $evaluation) || $evaluation->status !== 'submitted_to_ed') {
             abort(403, 'আপনার চূড়ান্ত অনুমোদনের অনুমতি নেই।');
         }
 
@@ -799,7 +816,7 @@ class ProbationIncrementEvaluationController extends Controller
     public function quickApprove(Request $request, ProbationIncrementEvaluation $evaluation)
     {
         $user = $request->user();
-        if (!$this->workflowService->canUserReview($user, $evaluation)) {
+        if (! $this->workflowService->canUserReview($user, $evaluation)) {
             abort(403, 'আপনার অনুমোদনের অনুমতি নেই।');
         }
 

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
 use App\Models\Branch;
-use App\Models\Employee;
 use App\Models\TraineeEvaluation;
 use App\Models\User;
 use App\Models\Zone;
@@ -20,6 +20,8 @@ use Inertia\Response;
 
 class TraineeEvaluationController extends Controller
 {
+    use ResetsAppraisalWorkflow;
+
     public function __construct(
         protected TraineeWorkflowService $workflowService
     ) {}
@@ -77,14 +79,14 @@ class TraineeEvaluationController extends Controller
             $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('candidate_name', 'like', "%{$search}%")
-                  ->orWhere('designation_name', 'like', "%{$search}%")
-                  ->orWhere('pin', 'like', "%{$search}%")
-                  ->orWhere('branch_name', 'like', "%{$search}%");
+                    ->orWhere('designation_name', 'like', "%{$search}%")
+                    ->orWhere('pin', 'like', "%{$search}%")
+                    ->orWhere('branch_name', 'like', "%{$search}%");
             });
         }
 
         $perPage = (int) $request->input('per_page', 15);
-        if (!in_array($perPage, [10, 15, 25, 50, 100], true)) {
+        if (! in_array($perPage, [10, 15, 25, 50, 100], true)) {
             $perPage = 15;
         }
 
@@ -99,15 +101,15 @@ class TraineeEvaluationController extends Controller
         // Attach reviewer eligibility
         $evaluations->getCollection()->transform(function ($ev) use ($user) {
             $hasSigned = $ev->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-            $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $ev);
+            $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $ev);
             $sentBackSig = $ev->signatures->where('action', 'sent_back')->last();
 
             $isInitiator = (int) $ev->initiator_id === (int) $user->id;
-            $isStuckAtRm = $ev->status === 'submitted_to_rm' && ($isInitiator || $ev->form_type === 'bm_and_above');
+            $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $ev);
 
-            $ev->can_approve = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
-            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
-            $ev->can_send_back = $canReview && !in_array($ev->status, ['draft', 'approved', 'rejected']);
+            $ev->can_approve = $canReview && ! in_array($ev->status, ['draft', 'approved', 'rejected']);
+            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+            $ev->can_send_back = $canReview && ! in_array($ev->status, ['draft', 'approved', 'rejected']);
             $ev->can_delete = ($ev->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
             $ev->can_submit = ($ev->status === 'draft' || $isStuckAtRm) && $isInitiator;
             $ev->has_user_signed = $hasSigned;
@@ -136,7 +138,7 @@ class TraineeEvaluationController extends Controller
             'branches' => Branch::select('id', 'name')->orderBy('name')->get(),
             'zones' => Zone::select('id', 'name')->orderBy('name')->get(),
             'canCreate' => $user->isSuperAdmin() || $isLineManager || $user->hasPermission('trainee-evaluations.create'),
-            'userHasSignature' => !empty($userSignature),
+            'userHasSignature' => ! empty($userSignature),
             'currentUserId' => $user->id,
             'isSuperAdmin' => $user->isSuperAdmin(),
         ]);
@@ -169,7 +171,7 @@ class TraineeEvaluationController extends Controller
             'templates' => AppraisalTemplateCache::load('trainee'),
             'branches' => $this->branchOptions(),
             'currentUserBranch' => $currentUserBranch,
-            'userHasSignature' => !empty($userSignature),
+            'userHasSignature' => ! empty($userSignature),
         ]);
     }
 
@@ -214,26 +216,26 @@ class TraineeEvaluationController extends Controller
             'branch_id' => 'nullable|exists:branches,id',
             'regional_office_id' => 'nullable|exists:regional_offices,id',
             'zone_id' => 'nullable|exists:zones,id',
-            
+
             'evaluation_month' => 'nullable|string|max:100',
             'training_joining_date' => 'nullable|date',
             'training_completion_date' => 'nullable|date',
-            
+
             'total_score' => 'required|numeric|min:0|max:100',
             'calculated_grade' => 'required|in:excellent,very_good,good,not_satisfactory',
             'other_remarks' => 'nullable|string',
-            
+
             'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
             'extension_days' => 'nullable|integer|min:1',
             'supervisor_remarks' => 'nullable|string',
-            
+
             'scores' => 'required|array|min:1',
             'scores.*.sl_no' => 'required|integer',
             'scores.*.criteria_key' => 'required|string',
             'scores.*.criteria_name' => 'required|string',
             'scores.*.max_score' => 'required|numeric|min:1',
             'scores.*.score' => 'required|numeric|min:0',
-            
+
             'ratings' => 'required|array|min:1',
             'ratings.*.sl_no' => 'required|integer',
             'ratings.*.indicator_key' => 'required|string',
@@ -249,26 +251,26 @@ class TraineeEvaluationController extends Controller
                 'regional_office_id' => $validated['regional_office_id'] ?? null,
                 'zone_id' => $validated['zone_id'] ?? null,
                 'form_type' => $validated['form_type'],
-                
+
                 'candidate_name' => $validated['candidate_name'],
                 'designation_name' => $validated['designation_name'],
                 'pin' => $validated['pin'] ?? null,
                 'branch_name' => $validated['branch_name'] ?? null,
                 'regional_office_name' => $validated['regional_office_name'] ?? null,
                 'zone_name' => $validated['zone_name'] ?? null,
-                
+
                 'evaluation_month' => $validated['evaluation_month'] ?? null,
                 'training_joining_date' => $validated['training_joining_date'] ?? null,
                 'training_completion_date' => $validated['training_completion_date'] ?? null,
-                
+
                 'total_score' => $validated['total_score'],
                 'calculated_grade' => $validated['calculated_grade'],
                 'other_remarks' => $validated['other_remarks'] ?? null,
-                
+
                 'recommendation_type' => $validated['recommendation_type'] ?? 'recommend_appointment',
                 'extension_days' => $validated['extension_days'] ?? null,
                 'supervisor_remarks' => $validated['supervisor_remarks'] ?? null,
-                
+
                 'status' => 'draft',
             ]);
 
@@ -325,24 +327,24 @@ class TraineeEvaluationController extends Controller
 
         $user = $request->user();
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = !$hasSigned && $this->workflowService->canUserReview($user, $evaluation);
+        $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $evaluation);
         $userSignature = $user->signature ?? $user->employee?->signature;
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
 
-        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
         $canDelete = ($evaluation->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
         $canSubmit = ($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator;
-        $canApprove = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
-        $canSendBack = $canReview && !in_array($evaluation->status, ['draft', 'approved', 'rejected']);
+        $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
+        $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
         return Inertia::render('sections/human-resources/evaluations/trainee/show', [
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
             'currentUserId' => $user->id,
-            'userHasSignature' => !empty($userSignature),
+            'userHasSignature' => ! empty($userSignature),
             'canEdit' => $canEdit,
             'canDelete' => $canDelete,
             'canSubmit' => $canSubmit,
@@ -358,12 +360,12 @@ class TraineeEvaluationController extends Controller
     {
         $user = $request->user();
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = (!$hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
-        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+        $canReview = (! $hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
 
-        if (!$canEdit) {
+        if (! $canEdit) {
             abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
         }
 
@@ -385,12 +387,12 @@ class TraineeEvaluationController extends Controller
     {
         $user = $request->user();
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
         $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = (!$hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
-        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && !in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+        $canReview = (! $hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
 
-        if (!$canEdit) {
+        if (! $canEdit) {
             abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
         }
 
@@ -406,19 +408,19 @@ class TraineeEvaluationController extends Controller
             'branch_id' => 'nullable|exists:branches,id',
             'regional_office_id' => 'nullable|exists:regional_offices,id',
             'zone_id' => 'nullable|exists:zones,id',
-            
+
             'evaluation_month' => 'nullable|string|max:100',
             'training_joining_date' => 'nullable|date',
             'training_completion_date' => 'nullable|date',
-            
+
             'total_score' => 'required|numeric|min:0|max:100',
             'calculated_grade' => 'required|in:excellent,very_good,good,not_satisfactory',
             'other_remarks' => 'nullable|string',
-            
+
             'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
             'extension_days' => 'nullable|integer|min:1',
             'supervisor_remarks' => 'nullable|string',
-            
+
             'scores' => 'required|array|min:1',
             'scores.*.id' => 'nullable|integer',
             'scores.*.sl_no' => 'required|integer',
@@ -426,7 +428,7 @@ class TraineeEvaluationController extends Controller
             'scores.*.criteria_name' => 'required|string',
             'scores.*.max_score' => 'required|numeric|min:1',
             'scores.*.score' => 'required|numeric|min:0',
-            
+
             'ratings' => 'required|array|min:1',
             'ratings.*.id' => 'nullable|integer',
             'ratings.*.sl_no' => 'required|integer',
@@ -446,15 +448,15 @@ class TraineeEvaluationController extends Controller
                 'branch_id' => $validated['branch_id'] ?? $evaluation->branch_id,
                 'regional_office_id' => $validated['regional_office_id'] ?? $evaluation->regional_office_id,
                 'zone_id' => $validated['zone_id'] ?? $evaluation->zone_id,
-                
+
                 'evaluation_month' => $validated['evaluation_month'] ?? null,
                 'training_joining_date' => $validated['training_joining_date'] ?? null,
                 'training_completion_date' => $validated['training_completion_date'] ?? null,
-                
+
                 'total_score' => $validated['total_score'],
                 'calculated_grade' => $validated['calculated_grade'],
                 'other_remarks' => $validated['other_remarks'] ?? null,
-                
+
                 'recommendation_type' => $validated['recommendation_type'] ?? $evaluation->recommendation_type,
                 'extension_days' => $validated['extension_days'] ?? null,
                 'supervisor_remarks' => $validated['supervisor_remarks'] ?? $evaluation->supervisor_remarks,
@@ -494,19 +496,19 @@ class TraineeEvaluationController extends Controller
     {
         $user = $request->user();
         $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
-        $isStuckAtRm = $evaluation->status === 'submitted_to_rm' && ($isInitiator || $evaluation->form_type === 'bm_and_above');
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
 
-        if (!$this->workflowService->canUserReview($user, $evaluation) && !($isStuckAtRm && $isInitiator)) {
+        if (! $this->workflowService->canUserReview($user, $evaluation) && ! $isStuckAtRm) {
             abort(403, 'আপনার এই মূল্যায়নে স্বাক্ষর বা ফরোয়ার্ড করার অনুমতি নেই।');
         }
 
-        if ($evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator)) {
+        if ($evaluation->status === 'draft' || $isStuckAtRm) {
             AppraisalRequiredFields::assertStored('trainee', $evaluation);
         } else {
             AppraisalRequiredFields::assertActor($request, 'trainee', 'reviewer');
         }
 
-        $isSubmitStage = $evaluation->status === 'draft' || ($isStuckAtRm && $isInitiator);
+        $isSubmitStage = $evaluation->status === 'draft' || $isStuckAtRm;
         $request->validate([
             'comments' => $isSubmitStage ? 'nullable|string|max:1000' : 'required|string|max:1000',
             'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
@@ -514,7 +516,7 @@ class TraineeEvaluationController extends Controller
             'extension_days' => 'nullable|integer',
         ]);
 
-        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $evaluation->status);
+        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $isStuckAtRm ? 'draft' : $evaluation->status);
         $comments = $isSubmitStage
             ? (trim((string) $request->input('comments', '')) !== ''
                 ? trim((string) $request->input('comments'))
@@ -522,6 +524,12 @@ class TraineeEvaluationController extends Controller
                     ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
                     : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
             : trim((string) $request->input('comments'));
+
+        if ($isStuckAtRm) {
+            $this->workflowService->resubmitPastRm($evaluation, $user, $comments);
+
+            return back()->with('success', 'মূল্যায়ন পরবর্তী স্তরে সফলভাবে অগ্রবর্তী করা হয়েছে।');
+        }
 
         $recommendation = $request->input('recommendation_type') ?? $request->input('supervisor_recommendation');
 
@@ -638,6 +646,11 @@ class TraineeEvaluationController extends Controller
         return Inertia::render('sections/human-resources/evaluations/trainee/print', [
             'evaluation' => $evaluation,
         ]);
+    }
+
+    public function resetWorkflow(Request $request, TraineeEvaluation $evaluation)
+    {
+        return $this->resetAppraisalWorkflow($request, $evaluation);
     }
 
     public function destroy(Request $request, TraineeEvaluation $evaluation)

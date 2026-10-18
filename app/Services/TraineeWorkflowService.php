@@ -4,15 +4,16 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\TraineeEvaluation;
-use App\Models\TraineeEvaluationSignature;
 use App\Models\User;
 use App\Notifications\TraineeEvaluationNotification;
+use App\Services\Appraisal\AllowsInitiatorResubmitPastRm;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 class TraineeWorkflowService
 {
+    use AllowsInitiatorResubmitPastRm;
+
     /**
      * Determine the correct form type based on designation string or employee designation.
      */
@@ -28,7 +29,7 @@ class TraineeWorkflowService
 
         // Form B: Accountant
         if (
-            str_contains($title, 'accountant') || 
+            str_contains($title, 'accountant') ||
             str_contains($title, 'হিসাবরক্ষক') ||
             str_contains($title, 'trainee-ac')
         ) {
@@ -37,9 +38,9 @@ class TraineeWorkflowService
 
         // Form A: Assistant Branch Manager (Check BEFORE Branch Manager so ABM is not classified as BM)
         if (
-            str_contains($title, 'assistant branch manager') || 
-            str_contains($title, 'asst. branch manager') || 
-            str_contains($title, 'asst branch manager') || 
+            str_contains($title, 'assistant branch manager') ||
+            str_contains($title, 'asst. branch manager') ||
+            str_contains($title, 'asst branch manager') ||
             str_contains($title, 'সহকারী শাখা ব্যবস্থাপক') ||
             str_contains($title, 'abm')
         ) {
@@ -48,8 +49,8 @@ class TraineeWorkflowService
 
         // Form C: Branch Manager to Zonal Manager
         if (
-            str_contains($title, 'branch manager') || 
-            str_contains($title, 'regional manager') || 
+            str_contains($title, 'branch manager') ||
+            str_contains($title, 'regional manager') ||
             str_contains($title, 'zonal manager') ||
             str_contains($title, 'area manager') ||
             str_contains($title, 'area coordinator') ||
@@ -85,7 +86,7 @@ class TraineeWorkflowService
 
             // Update evaluation
             $evaluation->status = $nextStatus;
-            
+
             if ($recommendationType) {
                 $evaluation->recommendation_type = $recommendationType;
             }
@@ -93,7 +94,7 @@ class TraineeWorkflowService
                 $evaluation->extension_days = $extensionDays;
             }
 
-            if (!empty($additionalData)) {
+            if (! empty($additionalData)) {
                 $evaluation->fill($additionalData);
             }
 
@@ -134,7 +135,7 @@ class TraineeWorkflowService
     {
         DB::transaction(function () use ($evaluation, $user, $comments, $isApproved) {
             $evaluation->status = $isApproved ? 'approved' : 'rejected';
-            
+
             $evaluation->signatures()->create([
                 'user_id' => $user->id,
                 'stage' => 'ed',
@@ -171,6 +172,7 @@ class TraineeWorkflowService
 
         $user->loadMissing('employee.designation');
         $title = mb_strtolower(trim((string) optional($user->employee?->designation)->name));
+
         return $title === 'branch manager' || str_contains($title, 'branch manager') || str_contains($title, 'শাখা ব্যবস্থাপক');
     }
 
@@ -217,37 +219,52 @@ class TraineeWorkflowService
 
     private function isUserAuthorizedForRm(User $user, TraineeEvaluation $evaluation, array $roleNames): bool
     {
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
         if (
             in_array('Regional Manager', $roleNames, true) ||
             $user->hasDirectPermission('organogram.regional_manager') ||
             OrganogramAccessService::isRegionalManager($user)
         ) {
-            if (!$evaluation->regional_office_id) return true;
+            if (! $evaluation->regional_office_id) {
+                return true;
+            }
             $userRegId = $user->employee?->branch?->regional_office_id;
-            return !$userRegId || (int) $userRegId === (int) $evaluation->regional_office_id;
+
+            return ! $userRegId || (int) $userRegId === (int) $evaluation->regional_office_id;
         }
+
         return false;
     }
 
     private function isUserAuthorizedForZm(User $user, TraineeEvaluation $evaluation, array $roleNames): bool
     {
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
         if (
             in_array('Zonal Manager', $roleNames, true) ||
             $user->hasDirectPermission('organogram.zonal_manager') ||
             OrganogramAccessService::isZonalManager($user)
         ) {
-            if (!$evaluation->zone_id) return true;
+            if (! $evaluation->zone_id) {
+                return true;
+            }
             $userZoneId = $user->employee?->branch?->regionalOffice?->zone_id;
-            return !$userZoneId || (int) $userZoneId === (int) $evaluation->zone_id;
+
+            return ! $userZoneId || (int) $userZoneId === (int) $evaluation->zone_id;
         }
+
         return false;
     }
 
     private function isUserAuthorizedForDirectorMf(User $user, array $roleNames): bool
     {
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
         return in_array('Director (Microfinance)', $roleNames, true) ||
             in_array('Assistant Director (Microfinance)', $roleNames, true) ||
             OrganogramAccessService::isMicrofinanceDirector($user) ||
@@ -256,7 +273,10 @@ class TraineeWorkflowService
 
     private function isUserAuthorizedForDirectorFa(User $user, array $roleNames): bool
     {
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
         return in_array('Director Finance and Accounts', $roleNames, true) ||
             in_array('Director Finance and Account', $roleNames, true) ||
             in_array('Finance Director', $roleNames, true);
@@ -264,7 +284,10 @@ class TraineeWorkflowService
 
     private function isUserAuthorizedForHr(User $user, array $roleNames): bool
     {
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
         return in_array('HR Admin', $roleNames, true) ||
             in_array('HR Manager', $roleNames, true) ||
             in_array('Assistant Director (HR)', $roleNames, true) ||
@@ -273,7 +296,10 @@ class TraineeWorkflowService
 
     private function isUserAuthorizedForEd(User $user, array $roleNames): bool
     {
-        if ($user->isSuperAdmin()) return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
         return in_array('Executive Director', $roleNames, true) ||
             OrganogramAccessService::isExecutiveDirector($user) ||
             $user->hasPermission('trainee-evaluations.approve');
@@ -284,7 +310,7 @@ class TraineeWorkflowService
         $roleNames = OrganogramAccessService::mergedRoleNames($user);
 
         if (
-            in_array('Executive Director', $roleNames, true) || 
+            in_array('Executive Director', $roleNames, true) ||
             OrganogramAccessService::isExecutiveDirector($user) ||
             $user->isSuperAdmin()
         ) {
@@ -292,7 +318,7 @@ class TraineeWorkflowService
         }
 
         if (
-            in_array('Director (Microfinance)', $roleNames, true) || 
+            in_array('Director (Microfinance)', $roleNames, true) ||
             in_array('Assistant Director (Microfinance)', $roleNames, true) ||
             in_array('Director Finance and Accounts', $roleNames, true) ||
             in_array('Director Finance and Account', $roleNames, true) ||
@@ -303,24 +329,24 @@ class TraineeWorkflowService
         }
 
         if (
-            in_array('Zonal Manager', $roleNames, true) || 
-            $user->hasDirectPermission('organogram.zonal_manager') || 
+            in_array('Zonal Manager', $roleNames, true) ||
+            $user->hasDirectPermission('organogram.zonal_manager') ||
             OrganogramAccessService::isZonalManager($user)
         ) {
             return 1;
         }
 
         if (
-            in_array('Regional Manager', $roleNames, true) || 
-            $user->hasDirectPermission('organogram.regional_manager') || 
+            in_array('Regional Manager', $roleNames, true) ||
+            $user->hasDirectPermission('organogram.regional_manager') ||
             OrganogramAccessService::isRegionalManager($user)
         ) {
             return 2;
         }
 
         if (
-            in_array('Branch Manager', $roleNames, true) || 
-            $user->hasDirectPermission('branch_manager') || 
+            in_array('Branch Manager', $roleNames, true) ||
+            $user->hasDirectPermission('branch_manager') ||
             $this->isBranchManager($user)
         ) {
             return 3;
@@ -329,6 +355,7 @@ class TraineeWorkflowService
         $user->loadMissing('employee.designation');
         if ($user->employee?->designation) {
             $tier = \App\Support\BranchOrganogram::resolveTier($user->employee->designation->name);
+
             return (int) ($tier['level'] ?? 999);
         }
 
@@ -422,7 +449,7 @@ class TraineeWorkflowService
         };
     }
 
-    private function notifyStakeholders(TraineeEvaluation $evaluation, string $event, string $comments): void
+    protected function notifyStakeholders(TraineeEvaluation $evaluation, string $event, string $comments): void
     {
         try {
             $candidateName = $evaluation->candidate_name ?? 'Candidate';
@@ -449,7 +476,7 @@ class TraineeWorkflowService
                 ));
             }
         } catch (\Throwable $e) {
-            Log::error("Failed to notify stakeholders for TraineeEvaluation #{$evaluation->id}: " . $e->getMessage());
+            Log::error("Failed to notify stakeholders for TraineeEvaluation #{$evaluation->id}: ".$e->getMessage());
         }
     }
 }

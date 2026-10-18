@@ -23,6 +23,7 @@ import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprova
 import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
 import { savedInitiatorGaps, type FieldGap } from '@/lib/appraisal-required';
 import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
+import { AppraisalWorkflowResetDialog } from '@/components/appraisal/AppraisalWorkflowResetDialog';
 import TraineeOfficialFormDocument from './components/TraineeOfficialFormDocument';
 import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 import { TRAINEE_FORM_CONFIGS, calculateTraineeGrade } from './trainee-config';
@@ -165,6 +166,7 @@ export default function TraineeEvaluationShow({
     };
 
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const [resetOpen, setResetOpen] = useState(false);
     const handleDelete = () => {
         setDeleteUrl(`/trainee-evaluations/${evaluation.id}`);
     };
@@ -242,6 +244,18 @@ export default function TraineeEvaluationShow({
                                     <span>{lang === 'bn' ? 'সম্পাদনা' : 'Edit'}</span>
                                 </Button>
                             </Link>
+                        )}
+
+                        {isSuperAdmin && evaluation.status !== 'draft' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setResetOpen(true)}
+                                className="h-9 text-xs gap-1.5 border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>{lang === 'bn' ? 'ওয়ার্কফ্লো রিসেট' : 'Reset workflow'}</span>
+                            </Button>
                         )}
 
                         {/* Delete Button */}
@@ -363,6 +377,12 @@ export default function TraineeEvaluationShow({
                     <TraineeOfficialFormDocument evaluation={evaluation} lang={lang} />
                 </div>
             </PageSurface>
+            <AppraisalWorkflowResetDialog
+                open={resetOpen}
+                onOpenChange={setResetOpen}
+                url={`/trainee-evaluations/${evaluation.id}/reset-workflow`}
+                lang={lang}
+            />
             <AppraisalDeleteDialog
                 open={deleteUrl !== null}
                 onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
