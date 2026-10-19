@@ -365,6 +365,7 @@ class LoanApplicationController extends Controller
             ['value' => 'approved', 'label' => 'Approved'],
             ['value' => 'rejected', 'label' => 'Rejected'],
             ['value' => 'disbursed', 'label' => 'Disbursed'],
+            ['value' => 'cancelled', 'label' => 'Cancelled'],
         ];
     }
 }

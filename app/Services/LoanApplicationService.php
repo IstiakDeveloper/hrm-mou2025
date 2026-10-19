@@ -162,6 +162,22 @@ class LoanApplicationService
         return $application->fresh();
     }
 
+    public function cancelApproved(LoanApplication $application): LoanApplication
+    {
+        if ($application->status !== 'approved' || $application->employee_loan_id) {
+            throw new InvalidArgumentException('Only an approved application that has not been disbursed can be cancelled.');
+        }
+
+        $application->update([
+            'status' => 'cancelled',
+            'rejection_reason' => 'Cancelled before disbursement',
+            'employee_loan_id' => null,
+            'disbursed_at' => null,
+        ]);
+
+        return $application->fresh();
+    }
+
     public function markDisbursed(LoanApplication $application, int $employeeLoanId): LoanApplication
     {
         $application->update([
@@ -194,11 +210,16 @@ class LoanApplicationService
             ->first();
 
         if ($openApplication) {
+            $nextStep = $openApplication->status === 'approved'
+                ? 'Disburse it, or cancel it from Loan Disburse, before starting another.'
+                : 'Complete or reject it before starting another cycle.';
+
             throw new InvalidArgumentException(sprintf(
-                'This employee already has a %s application (%s, %s) for this loan type. Complete or reject it before starting another cycle.',
+                'This employee already has a %s application (%s, %s) for this loan type. %s',
                 $openApplication->status,
                 $openApplication->application_number,
                 LoanCycle::label((int) ($openApplication->loan_cycle ?? 1)),
+                $nextStep,
             ));
         }
     }

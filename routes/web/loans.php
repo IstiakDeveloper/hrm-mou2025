@@ -130,6 +130,7 @@ use Inertia\Inertia;
         Route::prefix('loan-disburse')->name('loan-disburse.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanDisburseController::class, 'index'])->name('index');
             Route::post('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanDisburseController::class, 'disburse'])->name('disburse')->middleware('permission:employee-loan.create');
+            Route::post('/{loan_application}/cancel', [\App\Http\Controllers\EmployeeLoan\LoanDisburseController::class, 'cancel'])->name('cancel')->middleware('permission:employee-loan.edit');
         });
 
         Route::prefix('loan-rollback')->name('loan-rollback.')->group(function () {

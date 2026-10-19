@@ -64,4 +64,17 @@ class LoanDisburseController extends Controller
             ->route('employee-loans.show', $loan)
             ->with('success', 'Loan disbursed from approved application.');
     }
+
+    public function cancel(LoanApplication $loan_application)
+    {
+        try {
+            $this->applicationService->cancelApproved($loan_application);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['application' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', 'Application cancelled. It is no longer waiting to disburse, so a new application can be created.');
+    }
 }

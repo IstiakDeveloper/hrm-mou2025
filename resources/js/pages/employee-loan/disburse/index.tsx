@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { formatTakaWhole } from '@/lib/taka-format';
+import { hasAppPermission } from '@/lib/permissions';
+import type { SharedData } from '@/types';
 
 type Row = {
     id: number;
@@ -20,12 +22,19 @@ type Row = {
 };
 
 export default function LoanDisburseIndex({ applications }: { applications: Row[] }) {
+    const { auth } = usePage<SharedData>().props;
+    const canCancel = hasAppPermission(auth, 'employee-loan.edit');
     const [selected, setSelected] = useState<Row | null>(null);
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
     const disburse = () => {
         if (!selected) return;
         router.post(route('loan-disburse.disburse', selected.id), { disbursement_date: date });
+    };
+
+    const cancelApplication = (row: Row) => {
+        if (!confirm(`Cancel ${row.application_number} without disbursing? It leaves this queue and a new application can be created. The application record stays as cancelled.`)) return;
+        router.post(route('loan-disburse.cancel', row.id));
     };
 
     return (
@@ -53,7 +62,14 @@ export default function LoanDisburseIndex({ applications }: { applications: Row[
                                     <TableCell className="text-xs text-center">{row.total_installments}</TableCell>
                                     <TableCell className="text-xs">{row.approved_at}</TableCell>
                                     <TableCell>
-                                        <Button size="sm" className="h-7 text-[10px] bg-amber-600" onClick={() => setSelected(row)}>Disburse</Button>
+                                        <div className="flex gap-1">
+                                            <Button size="sm" className="h-7 text-[10px] bg-amber-600" onClick={() => setSelected(row)}>Disburse</Button>
+                                            {canCancel && (
+                                                <Button size="sm" variant="outline" className="h-7 text-[10px] text-red-600" onClick={() => cancelApplication(row)}>
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))

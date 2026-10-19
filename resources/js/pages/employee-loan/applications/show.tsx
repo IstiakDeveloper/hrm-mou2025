@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,6 @@ import { ArrowLeft, Pencil } from 'lucide-react';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { hasAppPermission } from '@/lib/permissions';
-import { usePage } from '@inertiajs/react';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -58,6 +57,7 @@ const statusBadge = (status: string) => {
         approved: 'bg-emerald-100 text-emerald-800 border-emerald-200',
         rejected: 'bg-red-100 text-red-800 border-red-200',
         disbursed: 'bg-blue-100 text-blue-800 border-blue-200',
+        cancelled: 'bg-zinc-100 text-zinc-600 border-zinc-200',
     };
     return map[status] ?? 'bg-zinc-100 text-zinc-600';
 };
@@ -65,7 +65,14 @@ const statusBadge = (status: string) => {
 export default function LoanApplicationShow({ application }: { application: Application }) {
     const { auth } = usePage<SharedData>().props;
     const canEdit = hasAppPermission(auth, 'payroll.edit');
+    const canCancel = hasAppPermission(auth, 'employee-loan.edit');
     const editable = ['draft', 'pending'].includes(application.status);
+    const canCancelApplication = canCancel && application.status === 'approved' && !application.employee_loan_id;
+
+    const cancelApplication = () => {
+        if (!confirm(`Cancel ${application.application_number} without disbursing? It leaves the disburse queue and a new application can be created. The record stays as cancelled.`)) return;
+        router.post(route('loan-disburse.cancel', application.id));
+    };
 
     return (
         <EmployeeLoanLayout
@@ -87,6 +94,11 @@ export default function LoanApplicationShow({ application }: { application: Appl
                                 <Pencil className="mr-1 h-3 w-3" /> Edit
                             </Button>
                         </Link>
+                    )}
+                    {canCancelApplication && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-red-600" onClick={cancelApplication}>
+                            Cancel application
+                        </Button>
                     )}
                     {application.employee_loan_id && (
                         <Link href={employeeLoanPath(route('employee-loans.show', application.employee_loan_id))}>
