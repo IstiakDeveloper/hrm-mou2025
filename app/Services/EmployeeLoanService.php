@@ -1523,7 +1523,7 @@ class EmployeeLoanService
 
     public function canRollbackLoan(EmployeeLoan $loan): bool
     {
-        if ($loan->status !== 'active') {
+        if (! in_array($loan->status, ['active', 'cancelled'], true)) {
             return false;
         }
 
@@ -1541,14 +1541,15 @@ class EmployeeLoanService
 
     public function rollbackLoan(EmployeeLoan $loan): void
     {
-        if (! $this->canRollbackLoan($loan)) {
-            throw new InvalidArgumentException(
-                'This loan cannot be rolled back. Payroll or manual payments exist — use Salary Rollback for payroll deductions.'
-            );
-        }
-
         DB::transaction(function () use ($loan) {
             $loan = EmployeeLoan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
+
+            if (! $this->canRollbackLoan($loan)) {
+                throw new InvalidArgumentException(
+                    'This loan cannot be rolled back. Only active or cancelled loans with no collections can be rolled back — use Salary Rollback for payroll deductions.'
+                );
+            }
+
             $migrationId = $loan->loan_migration_id;
             $this->rollbackLoanCore($loan);
             $this->syncMigrationBatchCount($migrationId);

@@ -31,7 +31,7 @@ class LoanRollbackController extends Controller
                 'migration:id,migration_number',
                 'application:id,application_number',
             ])
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'cancelled'])
             ->whereDoesntHave('transactions', function ($q) {
                 $q->whereIn('transaction_type', [
                     'installment',
@@ -62,6 +62,7 @@ class LoanRollbackController extends Controller
             ->map(fn (EmployeeLoan $loan) => [
                 'id' => $loan->id,
                 'loan_number' => $loan->loan_number,
+                'status' => $loan->status,
                 'employee_label' => trim(($loan->employee?->pin ?? '').' — '.($loan->employee?->name_en ?? '')),
                 'branch' => $loan->employee?->branch?->name,
                 'policy_name' => $loan->policy?->name,

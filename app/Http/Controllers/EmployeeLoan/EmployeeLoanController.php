@@ -202,6 +202,8 @@ class EmployeeLoanController extends Controller
                 'first_installment_date' => $employee_loan->first_installment_date?->format('d-m-Y'),
                 'reference_no' => $employee_loan->reference_no,
                 'notes' => $employee_loan->notes,
+                'can_rollback' => (auth()->user()?->hasPermission('employee-loan.edit') ?? false)
+                    && $this->loanService->canRollbackLoan($employee_loan),
                 'employee' => [
                     'id' => $employee_loan->employee->id,
                     'label' => trim(($employee_loan->employee->pin ?? '').' — '.($employee_loan->employee->name_en ?? '')),
@@ -548,6 +550,19 @@ class EmployeeLoanController extends Controller
         return redirect()
             ->route('employee-loans.show', $employee_loan)
             ->with('success', 'Loan restored to active.');
+    }
+
+    public function rollback(EmployeeLoan $employee_loan)
+    {
+        try {
+            $this->loanService->rollbackLoan($employee_loan);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['loan' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('employee-loans.index')
+            ->with('success', 'Loan rolled back. Schedule and ledger were removed.');
     }
 
     /**

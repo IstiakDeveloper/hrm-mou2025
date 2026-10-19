@@ -21,6 +21,7 @@ import type { SharedData } from '@/types';
 type LoanRow = {
     id: number;
     loan_number: string;
+    status: string;
     employee_label: string;
     branch: string | null;
     policy_name: string | null;
@@ -234,6 +235,7 @@ export default function LoanRollbackIndex({ filters: init, loans, migrations, br
                                 </TableHead>
                             )}
                             <TableHead className="text-xs">Loan no</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
                             <TableHead className="text-xs">Employee</TableHead>
                             <TableHead className="text-xs">Source</TableHead>
                             <TableHead className="text-xs text-right">Principal</TableHead>
@@ -245,7 +247,7 @@ export default function LoanRollbackIndex({ filters: init, loans, migrations, br
                     <TableBody>
                         {loans.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={canRollback ? 8 : 7} className="py-10 text-center text-sm text-zinc-500">
+                                <TableCell colSpan={canRollback ? 9 : 8} className="py-10 text-center text-sm text-zinc-500">
                                     No loans eligible for rollback.
                                 </TableCell>
                             </TableRow>
@@ -261,6 +263,7 @@ export default function LoanRollbackIndex({ filters: init, loans, migrations, br
                                         </TableCell>
                                     )}
                                     <TableCell className="text-xs font-mono font-semibold">{loan.loan_number}</TableCell>
+                                    <TableCell className="text-xs capitalize">{loan.status}</TableCell>
                                     <TableCell className="text-xs">
                                         <div className="font-medium">{loan.employee_label}</div>
                                         <div className="text-[10px] text-zinc-400">{loan.branch ?? '—'}</div>

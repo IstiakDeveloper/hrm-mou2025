@@ -53,6 +53,7 @@ type Props = {
         is_legacy_import: boolean;
         legacy_paid_through: string | null;
         legacy_paid_installments: number | null;
+        can_rollback: boolean;
         employee: {
             id: number;
             label: string;
@@ -81,13 +82,18 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
     const canEdit = hasAppPermission(auth, 'payroll.edit');
 
     const cancelLoan = () => {
-        if (!confirm('Cancel this loan? No payments must have been made.')) return;
+        if (!confirm('Cancel this loan? The record stays on the register and can be restored. Use Rollback to delete the loan, schedule, and ledger.')) return;
         router.post(route('employee-loans.cancel', loan.id));
     };
 
     const restoreLoan = () => {
         if (!confirm('Restore this loan back to active? Scheduled installments will be re-activated.')) return;
         router.post(route('employee-loans.restore', loan.id));
+    };
+
+    const rollbackLoan = () => {
+        if (!confirm(`Rollback ${loan.loan_number}? This permanently deletes the loan, its schedule, and its ledger. This cannot be undone.`)) return;
+        router.post(route('employee-loans.rollback', loan.id));
     };
 
     return (
@@ -113,6 +119,11 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                     {canEdit && loan.status === 'cancelled' && (
                         <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-300 hover:bg-emerald-50" onClick={restoreLoan}>
                             <RotateCcw className="mr-1 h-3 w-3" /> Restore loan
+                        </Button>
+                    )}
+                    {loan.status === 'cancelled' && loan.can_rollback && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-red-600" onClick={rollbackLoan}>
+                            <RotateCcw className="mr-1 h-3 w-3" /> Rollback
                         </Button>
                     )}
                 </div>
