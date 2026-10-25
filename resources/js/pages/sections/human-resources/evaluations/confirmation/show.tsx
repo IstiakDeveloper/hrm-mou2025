@@ -180,8 +180,8 @@ export default function ConfirmationEvaluationShow({
             draft: { label: lang === 'bn' ? 'খসড়া' : 'Draft', bg: 'bg-slate-100 text-slate-700' },
             submitted_to_rm: { label: lang === 'bn' ? 'আরএম পর্যালোচনা' : 'RM Review', bg: 'bg-amber-100 text-amber-800 border-amber-300' },
             submitted_to_zm: { label: lang === 'bn' ? 'জেডএম পর্যালোচনা' : 'ZM Review', bg: 'bg-amber-100 text-amber-800 border-amber-300' },
-            submitted_to_director: { label: lang === 'bn' ? 'পরিচালক পর্যালোচনা' : 'Director Review', bg: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
-            submitted_to_director_fa: { label: lang === 'bn' ? 'পরিচালক (অর্থ) পর্যালোচনা' : 'Director FA Review', bg: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+            submitted_to_director: { label: lang === 'bn' ? 'পরিচালক পর্যালোচনা' : 'Director Review', bg: 'bg-teal-100 text-teal-800 border-teal-300' },
+            submitted_to_director_fa: { label: lang === 'bn' ? 'পরিচালক (অর্থ) পর্যালোচনা' : 'Director FA Review', bg: 'bg-teal-100 text-teal-800 border-teal-300' },
             submitted_to_hr: { label: lang === 'bn' ? 'এইচআর যাচাই' : 'HR Verification', bg: 'bg-purple-100 text-purple-800 border-purple-300' },
             submitted_to_ed: { label: lang === 'bn' ? 'ইডি অনুমোদন' : 'ED Approval', bg: 'bg-blue-100 text-blue-800 border-blue-300' },
             approved: { label: lang === 'bn' ? 'চূড়ান্ত অনুমোদিত' : 'Approved', bg: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
@@ -271,14 +271,14 @@ export default function ConfirmationEvaluationShow({
 
                         {/* Edit Button */}
                         {canEdit && (
-                            <Link href={`/confirmation-evaluations/${evaluation.id}/edit`}>
+                            <Link href={`/confirmation-evaluations/${evaluation.id}/edit`} className="flex-1 sm:flex-initial">
                                 <Button 
                                     variant="outline" 
                                     size="sm"
-                                    className="h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 shadow-xs"
+                                    className="w-full h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center justify-center gap-1.5 shadow-xs"
                                 >
                                     <Edit3 className="h-4 w-4 text-amber-700" />
-                                    <span>{lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit'}</span>
+                                    <span>{lang === 'bn' ? 'সম্পাদনা' : 'Edit'}</span>
                                 </Button>
                             </Link>
                         )}
@@ -288,10 +288,10 @@ export default function ConfirmationEvaluationShow({
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setResetOpen(true)}
-                                className="h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 shadow-xs"
+                                className="flex-1 sm:flex-initial h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center justify-center gap-1.5 shadow-xs"
                             >
                                 <RotateCcw className="h-4 w-4" />
-                                <span>{lang === 'bn' ? 'ওয়ার্কফ্লো রিসেট' : 'Reset workflow'}</span>
+                                <span>{lang === 'bn' ? 'রিসেট' : 'Reset'}</span>
                             </Button>
                         )}
 
@@ -301,22 +301,22 @@ export default function ConfirmationEvaluationShow({
                                 variant="outline" 
                                 size="sm"
                                 onClick={handleDelete}
-                                className="h-10 px-3.5 text-xs font-semibold border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center gap-1.5 shadow-xs"
+                                className="flex-1 sm:flex-initial h-10 px-3.5 text-xs font-semibold border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center justify-center gap-1.5 shadow-xs"
                             >
                                 <Trash2 className="h-4 w-4" />
-                                <span>{lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}</span>
+                                <span>{lang === 'bn' ? 'মুছুন' : 'Delete'}</span>
                             </Button>
                         )}
 
                         {/* Print Button */}
-                        <Link href={`/confirmation-evaluations/${evaluation.id}/print`} target="_blank">
+                        <Link href={`/confirmation-evaluations/${evaluation.id}/print`} target="_blank" className="flex-1 sm:flex-initial">
                             <Button 
                                 variant="outline" 
-                                size="sm"
-                                className="h-10 px-4 text-xs font-bold border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-2 shadow-xs"
+                                size="sm" 
+                                className="w-full h-10 px-4 text-xs font-bold border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2 shadow-xs"
                             >
                                 <Printer className="h-4 w-4 text-slate-600" />
-                                <span>{lang === 'bn' ? 'প্রিন্ট / পিডিএফ' : 'Print / PDF'}</span>
+                                <span>{lang === 'bn' ? 'প্রিন্ট' : 'Print'}</span>
                             </Button>
                         </Link>
                     </div>
@@ -404,8 +404,14 @@ export default function ConfirmationEvaluationShow({
                 />
 
                 {/* Printable Official Paper Document Container */}
-                <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">
-                    <ConfirmationOfficialFormDocument evaluation={evaluation} lang={lang} />
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600 shadow-2xs md:hidden">
+                    <span className="font-semibold text-slate-700">📄 অফিশিয়াল ডকুমেন্ট প্রিভিউ (A4 Format)</span>
+                    <span className="text-[11px] font-medium text-blue-700">স্ক্রল করুন 👉</span>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-2 sm:p-6">
+                    <div className="min-w-[760px] sm:min-w-0">
+                        <ConfirmationOfficialFormDocument evaluation={evaluation} lang={lang} />
+                    </div>
                 </div>
             </PageSurface>
             <AppraisalWorkflowResetDialog

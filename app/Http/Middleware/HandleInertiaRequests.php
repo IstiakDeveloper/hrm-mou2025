@@ -3,13 +3,14 @@
 namespace App\Http\Middleware;
 
 use App\Models\LeaveApplication;
-use App\Models\OfficeOpenDate;
 use App\Models\Movement;
 use App\Models\MovementLogBook;
+use App\Models\OfficeOpenDate;
 use App\Models\User;
 use App\Services\Appraisal\AppraisalPendingCountService;
-use App\Services\FinalClearanceService;
 use App\Services\AssetFinancialYearService;
+use App\Services\FinalClearanceService;
+use App\Services\MotorcycleLoanApplicationService;
 use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
 use Illuminate\Foundation\Inspiring;
@@ -143,6 +144,7 @@ class HandleInertiaRequests extends Middleware
             'total' => 0,
         ];
         $pendingFinalClearanceCount = 0;
+        $pendingMotorcycleLoanCount = 0;
         if ($user) {
             $leaveQuery = LeaveApplication::query()->where('status', 'pending');
             OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
@@ -150,6 +152,9 @@ class HandleInertiaRequests extends Middleware
             $pendingAppraisalCounts = app(AppraisalPendingCountService::class)->countsFor($user);
             if (Schema::hasTable('final_clearances')) {
                 $pendingFinalClearanceCount = app(FinalClearanceService::class)->pendingCount($user);
+            }
+            if (Schema::hasTable('loan_applications') && $user->canAccessSection('employee-loan')) {
+                $pendingMotorcycleLoanCount = app(MotorcycleLoanApplicationService::class)->pendingCount($user);
             }
         }
 
@@ -199,6 +204,7 @@ class HandleInertiaRequests extends Middleware
             'pendingLeaveCount' => $pendingLeaveCount,
             'pendingAppraisalCounts' => $pendingAppraisalCounts,
             'pendingFinalClearanceCount' => $pendingFinalClearanceCount,
+            'pendingMotorcycleLoanCount' => $pendingMotorcycleLoanCount,
             'officeOpenDates' => OfficeOpenDate::dateStrings(),
         ];
     }

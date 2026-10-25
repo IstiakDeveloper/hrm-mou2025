@@ -25,6 +25,7 @@ import { type SharedData } from '@/types';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { cn } from '@/lib/utils';
 import { EmployeeLoanEmployeeDashboardView, type EmployeeLoanEmployeeDashboardProps } from '@/pages/sections/employee-loan/employee-dashboard';
+import { employeeLoanEmployeePath } from '@/lib/employee-loan-employee-nav';
 
 const fmt = fmtLoanAmount;
 const fmtInt = fmtLoanAmount;
@@ -109,7 +110,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 export default function EmployeeLoanDashboard({ stats, userRole, showEmployeeTab: showEmployeeTabProp, employeeDashboard }: Props) {
-    const { auth } = usePage<SharedData>().props;
+    const { auth, pendingMotorcycleLoanCount } = usePage<SharedData & { pendingMotorcycleLoanCount?: number }>().props;
+    const pendingForMe = Number(pendingMotorcycleLoanCount ?? 0);
     const showEmployeeTab = Boolean(showEmployeeTabProp && employeeDashboard);
     const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
 
@@ -228,6 +230,17 @@ export default function EmployeeLoanDashboard({ stats, userRole, showEmployeeTab
             <Head title="Employee Loan Dashboard" />
 
             <PageSurface className="max-w-7xl bg-zinc-50/40 px-3 py-4 md:px-4 md:py-5">
+                {pendingForMe > 0 && (
+                    <Link
+                        href={employeeLoanEmployeePath('/employee/loan/applications')}
+                        className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-950"
+                    >
+                        <span className="font-semibold">Motorcycle application waiting for you</span>
+                        <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                            {pendingForMe > 99 ? '99+' : pendingForMe}
+                        </span>
+                    </Link>
+                )}
                 <div className="mb-5 border-b border-emerald-100 pb-4">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">

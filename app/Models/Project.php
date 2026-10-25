@@ -15,4 +15,9 @@ class Project extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function attendanceBranches()
+    {
+        return $this->belongsToMany(Branch::class, 'project_attendance_branches');
+    }
 }

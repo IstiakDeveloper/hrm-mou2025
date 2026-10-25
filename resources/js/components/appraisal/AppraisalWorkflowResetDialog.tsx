@@ -52,7 +52,7 @@ export function AppraisalWorkflowResetDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-[calc(100%-1.5rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-5 sm:p-6">
                 <form onSubmit={submit}>
                     <DialogHeader>
                         <DialogTitle>{bn ? 'ওয়ার্কফ্লো রিসেট' : 'Reset workflow'}</DialogTitle>
@@ -92,11 +92,11 @@ export function AppraisalWorkflowResetDialog({
                         </div>
                         {error && <p className="text-xs text-rose-600">{error}</p>}
                     </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" disabled={processing} onClick={() => onOpenChange(false)}>
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+                        <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={processing} onClick={() => onOpenChange(false)}>
                             {bn ? 'বাতিল' : 'Cancel'}
                         </Button>
-                        <Button type="submit" className="bg-amber-600 text-white hover:bg-amber-700" disabled={processing || password.trim() === '' || reason.trim() === ''}>
+                        <Button type="submit" className="w-full sm:w-auto bg-amber-600 text-white hover:bg-amber-700" disabled={processing || password.trim() === '' || reason.trim() === ''}>
                             {processing ? (bn ? 'রিসেট হচ্ছে…' : 'Resetting…') : (bn ? 'রিসেট করুন' : 'Reset')}
                         </Button>
                     </DialogFooter>

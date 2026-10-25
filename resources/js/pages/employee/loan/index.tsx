@@ -75,6 +75,9 @@ export default function EmployeeLoanIndex({ employee, filters: initialFilters, l
                         <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => setShowFilters((v) => !v)}>
                             <Filter className="mr-1.5 h-3.5 w-3.5" /> Filters
                         </Button>
+                        <Button asChild variant="outline" size="sm" className="h-9 text-xs">
+                            <Link href={employeeLoanEmployeePath('/employee/loan/applications')}>Application</Link>
+                        </Button>
                         <Button asChild size="sm" className="h-9 bg-amber-600 text-xs hover:bg-amber-700">
                             <Link href="/sections/employee-loan">Dashboard</Link>
                         </Button>

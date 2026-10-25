@@ -540,11 +540,16 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                 </Button>
                             </div>
                         </div>
-
-                        <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">
-                            <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">{lang === 'bn' ? 'ফরম লোড হচ্ছে…' : 'Loading form…'}</div>}>
-                                <ConfirmationOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
-                            </Suspense>
+                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600 shadow-2xs md:hidden">
+                            <span className="font-semibold text-slate-700">📄 অফিশিয়াল ডকুমেন্ট প্রিভিউ (A4 Format)</span>
+                            <span className="text-[11px] font-medium text-blue-700">স্ক্রল করুন 👉</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-2 sm:p-6">
+                            <div className="min-w-[760px] sm:min-w-0">
+                                <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">{lang === 'bn' ? 'ফরম লোড হচ্ছে…' : 'Loading form…'}</div>}>
+                                    <ConfirmationOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
+                                </Suspense>
+                            </div>
                         </div>
                     </div>
                 ) : (

@@ -119,6 +119,8 @@ use Inertia\Inertia;
             Route::post('/interest/{interest_run}/rollback', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestRollback'])->name('interest.rollback')->middleware('permission:staff-fund.edit');
             Route::get('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'withdrawalsIndex'])->name('withdrawals.index');
             Route::post('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeWithdrawal'])->name('withdrawals.store')->middleware('permission:staff-fund.edit');
+            Route::get('/transfer', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'transferIndex'])->name('transfer.index');
+            Route::post('/transfer', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'transferStore'])->name('transfer.store')->middleware('permission:staff-fund.edit');
             Route::get('/{employee}/ledger', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'ledger'])->name('ledger');
             Route::post('/opening-balance', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeOpening'])->name('opening.store')->middleware('permission:staff-fund.edit');
             Route::post('/manual', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeManual'])->name('manual.store')->middleware('permission:staff-fund.edit');

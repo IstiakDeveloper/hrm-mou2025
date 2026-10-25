@@ -70,6 +70,10 @@ Route::middleware(['permission:attendance.view'])->prefix('attendance')->name('a
         Route::post('/office-open-dates', [AttendanceSettingController::class, 'storeOfficeOpenDate'])->name('office-open-dates.store');
         Route::delete('/office-open-dates/{officeOpenDate}', [AttendanceSettingController::class, 'destroyOfficeOpenDate'])->name('office-open-dates.destroy');
         Route::post('/devices/{device}/push-missing', [AttendanceSettingController::class, 'pushMissingDeviceUsers'])->name('devices.push-missing');
+        Route::post('/project-branches', [AttendanceSettingController::class, 'saveProjectBranches'])->name('project-branches.store');
+        Route::delete('/project-branches/{project}', [AttendanceSettingController::class, 'destroyProjectBranches'])->name('project-branches.destroy');
+        Route::post('/employee-branches', [AttendanceSettingController::class, 'saveEmployeeBranches'])->name('employee-branches.store');
+        Route::delete('/employee-branches/{employee}', [AttendanceSettingController::class, 'destroyEmployeeBranches'])->name('employee-branches.destroy');
         Route::get('/create', [AttendanceSettingController::class, 'create'])->name('create');
         Route::post('/', [AttendanceSettingController::class, 'store'])->name('store');
         Route::get('/employee-times', [\App\Http\Controllers\Attendance\EmployeeAttendanceTimeController::class, 'index'])->name('employee-times');

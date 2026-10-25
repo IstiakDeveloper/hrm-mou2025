@@ -356,7 +356,7 @@ export default function TraineeEvaluationShow({
                         <Button
                             type="button"
                             onClick={openApproval}
-                            className="h-10 bg-emerald-600 px-5 text-sm font-bold text-white shadow-xs hover:bg-emerald-700"
+                            className="w-full sm:w-auto h-10 bg-emerald-600 px-5 text-sm font-bold text-white shadow-xs hover:bg-emerald-700 flex items-center justify-center"
                         >
                             <CheckCircle2 className="mr-1.5 h-4 w-4" />
                             {lang === 'bn' ? 'অনুমোদন' : 'Approve'}
@@ -373,8 +373,14 @@ export default function TraineeEvaluationShow({
                 />
 
                 {/* Printable Official Paper Document Container */}
-                <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">
-                    <TraineeOfficialFormDocument evaluation={evaluation} lang={lang} />
+                <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200 overflow-x-auto">
+                    <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 mb-3 sm:hidden flex items-center gap-1.5 font-medium">
+                        <span>👉</span>
+                        <span>{lang === 'bn' ? 'বামে-ডানে স্ক্রল করে পুরো ফরমটি দেখতে পারবেন' : 'Scroll horizontally to view the full document'}</span>
+                    </div>
+                    <div className="min-w-[760px] sm:min-w-0">
+                        <TraineeOfficialFormDocument evaluation={evaluation} lang={lang} />
+                    </div>
                 </div>
             </PageSurface>
             <AppraisalWorkflowResetDialog

@@ -288,17 +288,17 @@ export default function TraineeEvaluationIndex({
                 </div>
 
                 {/* Metrics Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     <Card className="border-slate-200/80 shadow-xs">
-                        <CardContent className="p-4 flex items-center gap-4">
-                            <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100">
-                                <GraduationCap className="w-5 h-5" />
+                        <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                            <div className="p-2.5 sm:p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
+                                <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
                             </div>
-                            <div>
-                                <p className="text-xs font-medium text-slate-500">
+                            <div className="min-w-0">
+                                <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">
                                     {lang === 'bn' ? 'সর্বমোট মূল্যায়ন' : 'Total Evaluations'}
                                 </p>
-                                <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 mt-0.5">
                                     {formatNum(metrics.total)}
                                 </h3>
                             </div>
@@ -306,15 +306,15 @@ export default function TraineeEvaluationIndex({
                     </Card>
 
                     <Card className="border-slate-200/80 shadow-xs">
-                        <CardContent className="p-4 flex items-center gap-4">
-                            <div className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100">
-                                <Clock className="w-5 h-5" />
+                        <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                            <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
+                                <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
                             </div>
-                            <div>
-                                <p className="text-xs font-medium text-slate-500">
+                            <div className="min-w-0">
+                                <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">
                                     {lang === 'bn' ? 'অনুমোদন প্রক্রিয়াধীন' : 'Pending Review'}
                                 </p>
-                                <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 mt-0.5">
                                     {formatNum(metrics.pending)}
                                 </h3>
                             </div>
@@ -322,15 +322,15 @@ export default function TraineeEvaluationIndex({
                     </Card>
 
                     <Card className="border-slate-200/80 shadow-xs">
-                        <CardContent className="p-4 flex items-center gap-4">
-                            <div className="p-3 rounded-2xl bg-teal-50 text-teal-600 border border-teal-100">
-                                <TrendingUp className="w-5 h-5" />
+                        <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                            <div className="p-2.5 sm:p-3 rounded-2xl bg-teal-50 text-teal-600 border border-teal-100 shrink-0">
+                                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
                             </div>
-                            <div>
-                                <p className="text-xs font-medium text-slate-500">
+                            <div className="min-w-0">
+                                <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">
                                     {lang === 'bn' ? 'নিয়োগের সুপারিশকৃত' : 'Appointment Recommended'}
                                 </p>
-                                <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 mt-0.5">
                                     {formatNum(metrics.recommended)}
                                 </h3>
                             </div>
@@ -338,15 +338,15 @@ export default function TraineeEvaluationIndex({
                     </Card>
 
                     <Card className="border-slate-200/80 shadow-xs">
-                        <CardContent className="p-4 flex items-center gap-4">
-                            <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                <CheckCircle2 className="w-5 h-5" />
+                        <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                            <div className="p-2.5 sm:p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shrink-0">
+                                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
                             </div>
-                            <div>
-                                <p className="text-xs font-medium text-slate-500">
+                            <div className="min-w-0">
+                                <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">
                                     {lang === 'bn' ? 'চূড়ান্ত অনুমোদিত' : 'Fully Approved'}
                                 </p>
-                                <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 mt-0.5">
                                     {formatNum(metrics.approved)}
                                 </h3>
                             </div>
@@ -433,7 +433,8 @@ export default function TraineeEvaluationIndex({
                 {/* Evaluations Table Card */}
                 <Card className="border-slate-200/80 shadow-xs overflow-hidden">
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
+                        {/* Desktop Table View (>= md) */}
+                        <div className="hidden md:block overflow-x-auto">
                             <Table>
                                 <TableHeader className="bg-slate-50/80 border-b border-slate-200">
                                     <TableRow>
@@ -598,15 +599,169 @@ export default function TraineeEvaluationIndex({
                             </Table>
                         </div>
 
+                        {/* Mobile App Cards View (< md) */}
+                        <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                            {dataList.length === 0 ? (
+                                <div className="p-8 text-center">
+                                    <GraduationCap className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                                    <p className="text-sm font-semibold text-slate-600">
+                                        {lang === 'bn' ? 'কোনো প্রশিক্ষণার্থী মূল্যায়ন পাওয়া যায়নি' : 'No trainee evaluations found'}
+                                    </p>
+                                    <p className="text-xs text-slate-400 mt-0.5">
+                                        {lang === 'bn' ? 'নতুন মূল্যায়ন যুক্ত করুন অথবা ফিল্টার পরিবর্তন করুন।' : 'Create a new evaluation or adjust your filter.'}
+                                    </p>
+                                </div>
+                            ) : (
+                                dataList.map((item: any) => {
+                                    const emp = item.employee || {};
+                                    const candName = item.candidate_name || emp.name_bn || emp.name_en || '-';
+                                    const candPin = item.candidate_pin || emp.pin || '-';
+                                    const candDesig = item.candidate_designation || emp.designation?.name_bn || emp.designation?.name || '-';
+                                    const candBranch = item.candidate_branch || emp.branch?.name || item.branch?.name || '-';
+                                    const canEdit = item.status === 'draft' || isSuperAdmin;
+                                    const canDelete = item.status === 'draft' || isSuperAdmin;
+                                    const canUserApprove = item.can_approve;
+                                    const grade = getGradeBadge(item.total_score || 0);
+
+                                    return (
+                                        <div key={item.id} className="p-4 hover:bg-slate-50/70 transition-colors space-y-3">
+                                            {/* Header: Candidate Name, Form Type & Workflow Status */}
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div>
+                                                    <Link
+                                                        href={`/trainee-evaluations/${item.id}`}
+                                                        className="font-bold text-sm text-slate-900 hover:text-blue-700"
+                                                    >
+                                                        {candName}
+                                                    </Link>
+                                                    <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-1.5">
+                                                        <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">
+                                                            PIN: {candPin}
+                                                        </span>
+                                                        <span>•</span>
+                                                        <span>{candDesig}</span>
+                                                        <span>•</span>
+                                                        <span className="text-slate-600">{candBranch}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                                    {getStatusBadge(item.status)}
+                                                    {getFormTypeBadge(item.form_type)}
+                                                </div>
+                                            </div>
+
+                                            {/* Info Strip: Score & Grade, Recommendation, Period */}
+                                            <div className="bg-slate-50/80 rounded-xl p-2.5 flex items-center justify-between border border-slate-100 text-xs">
+                                                <div>
+                                                    <span className="text-[10px] text-slate-400 block font-medium">
+                                                        {lang === 'bn' ? 'প্রশিক্ষণকাল' : 'Trainee Period'}
+                                                    </span>
+                                                    <span className="font-semibold text-slate-700">
+                                                        {item.evaluation_month ? (
+                                                            formatClosingMonth(item.evaluation_month, lang)
+                                                        ) : item.training_joining_date ? (
+                                                            formatNum(item.training_joining_date)
+                                                        ) : '-'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-center">
+                                                    <span className="text-[10px] text-slate-400 block font-medium">
+                                                        {lang === 'bn' ? 'প্রাপ্ত নম্বর ও গ্রেড' : 'Score & Grade'}
+                                                    </span>
+                                                    <div className="flex items-center gap-1 justify-center mt-0.5">
+                                                        <span className="inline-block px-1.5 py-0.2 rounded font-extrabold text-xs bg-blue-100 text-blue-900 border border-blue-200">
+                                                            {formatNum(item.total_score || 0)} / ১০০
+                                                        </span>
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${grade.color}`}>
+                                                            {lang === 'bn' ? grade.labelBn : grade.labelEn}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-[10px] text-slate-400 block font-medium mb-0.5">
+                                                        {lang === 'bn' ? 'সুপারিশ' : 'Recommendation'}
+                                                    </span>
+                                                    {getRecommendationBadge(item.supervisor_recommendation)}
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons Row */}
+                                            <div className="flex items-center gap-2 pt-1">
+                                                {canUserApprove && (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => openApprovalModal(item)}
+                                                        className="flex-1 h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <UserCheck className="h-3.5 w-3.5" />
+                                                        <span>{lang === 'bn' ? 'পর্যালোচনা' : 'Review'}</span>
+                                                    </Button>
+                                                )}
+
+                                                <Link href={`/trainee-evaluations/${item.id}`} className={canUserApprove ? '' : 'flex-1'}>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className={`h-9 rounded-xl border-slate-300 text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center justify-center gap-1 ${
+                                                            canUserApprove ? 'px-3' : 'w-full font-semibold'
+                                                        }`}
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5" />
+                                                        <span className="text-xs">{lang === 'bn' ? 'বিস্তারিত' : 'View'}</span>
+                                                    </Button>
+                                                </Link>
+
+                                                <Link href={`/trainee-evaluations/${item.id}/print`} target="_blank">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-9 px-3 rounded-xl border-slate-300 text-slate-700 hover:bg-slate-100"
+                                                        title={lang === 'bn' ? 'প্রিন্ট' : 'Print'}
+                                                    >
+                                                        <Printer className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </Link>
+
+                                                {canEdit && (
+                                                    <Link href={`/trainee-evaluations/${item.id}/edit`}>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-9 px-3 rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50"
+                                                            title={lang === 'bn' ? 'সম্পাদনা' : 'Edit'}
+                                                        >
+                                                            <Edit3 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </Link>
+                                                )}
+
+                                                {canDelete && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleDelete(item.id)}
+                                                        className="h-9 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                                                        title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
                         {/* Pagination */}
                         {meta.last_page > 1 && (
-                            <div className="flex items-center justify-between p-4 border-t border-slate-100 text-xs text-slate-500">
-                                <div>
+                            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-4 border-t border-slate-100 text-xs text-slate-500">
+                                <div className="text-center sm:text-left">
                                     {lang === 'bn' 
                                         ? `মোট ${formatNum(meta.total)} টি রেকর্ডের মধ্যে ${formatNum(meta.from || 0)} - ${formatNum(meta.to || 0)} দেখানো হচ্ছে` 
                                         : `Showing ${meta.from || 0} to ${meta.to || 0} of ${meta.total} evaluations`}
                                 </div>
-                                <div className="flex items-center gap-1">
+                                <div className="flex flex-wrap items-center justify-center gap-1">
                                     {meta.links?.map((link: any, lIdx: number) => {
                                         if (!link.url) {
                                             return (

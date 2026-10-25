@@ -59,8 +59,20 @@ class LoanApplicationController extends Controller
             'employeeLoan:id,loan_number',
         ]);
 
+        $motorcycle = app(\App\Services\MotorcycleLoanApplicationService::class);
+        $user = auth()->user();
+
         return Inertia::render('employee-loan/applications/show', [
             'application' => $this->mapApplicationDetail($loan_application),
+            'timeline' => $motorcycle->timeline($loan_application),
+            'review' => $user instanceof \App\Models\User ? [
+                'can_act' => $motorcycle->canReview($user, $loan_application),
+                'has_signature' => $motorcycle->hasSealAndSignature($user),
+                'stage' => $loan_application->workflow_stage,
+                'stage_label' => $loan_application->workflow_stage
+                    ? $motorcycle->stageLabel((string) $loan_application->workflow_stage)
+                    : null,
+            ] : null,
         ]);
     }
 
@@ -311,6 +323,8 @@ class LoanApplicationController extends Controller
                 'name' => $a->policy->name,
             ] : null,
             'committee_name' => $a->committee?->committee_name,
+            'channel' => $a->channel ?: 'admin',
+            'official_form' => is_array($a->form_snapshot) ? $a->form_snapshot : null,
         ];
     }
 

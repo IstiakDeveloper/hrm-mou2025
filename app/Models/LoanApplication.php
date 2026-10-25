@@ -26,7 +26,10 @@ class LoanApplication extends Model
         'service_charge_amount',
         'total_payable',
         'status',
+        'workflow_stage',
+        'channel',
         'notes',
+        'form_snapshot',
         'rejection_reason',
         'approved_by',
         'approved_at',
@@ -47,11 +50,17 @@ class LoanApplication extends Model
         'total_payable' => 'decimal:2',
         'approved_at' => 'datetime',
         'disbursed_at' => 'datetime',
+        'form_snapshot' => 'array',
     ];
 
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function recommendations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LoanApplicationRecommendation::class);
     }
 
     public function policy(): BelongsTo

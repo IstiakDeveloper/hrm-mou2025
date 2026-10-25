@@ -55,6 +55,8 @@ class EmployeeLookupController extends EmployeeController
             'for_gratuity' => ['nullable', 'boolean'],
             'for_pf' => ['nullable', 'boolean'],
             'for_loan' => ['nullable', 'boolean'],
+            'pf_with_ledger' => ['nullable', 'boolean'],
+            'any_status' => ['nullable', 'boolean'],
         ]);
 
         $search = trim((string) ($validated['q'] ?? ''));
@@ -62,12 +64,12 @@ class EmployeeLookupController extends EmployeeController
         $selectedEmployeeId = isset($validated['employee_id']) ? (int) $validated['employee_id'] : null;
         $forPf = $request->boolean('for_pf');
         $forLoan = $request->boolean('for_loan');
+        $pfWithLedger = $request->boolean('pf_with_ledger');
+        $anyStatus = $request->boolean('any_status');
 
         $query = Employee::query()
-            ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance', 'status'])
-            ->when($forPf, fn ($q) => $q->forPf())
-            ->when($forLoan, fn ($q) => $q->forLoan())
-            ->when(! $forPf && ! $forLoan, fn ($q) => $q->where('status', 'active'))
+            ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance', 'status']);
+        $this->applyEmployeeLookupScope($query, $forPf, $forLoan, $pfWithLedger, $anyStatus)
             ->when($validated['branch_id'] ?? null, fn ($q, $branchId) => $q->where('current_branch_id', $branchId))
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
@@ -95,11 +97,9 @@ class EmployeeLookupController extends EmployeeController
         if ($selectedEmployeeId && ! $results->contains('id', $selectedEmployeeId)) {
             $selected = Employee::query()
                 ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance', 'status'])
-                ->where('id', $selectedEmployeeId)
-                ->when($forPf, fn ($q) => $q->forPf())
-                ->when($forLoan, fn ($q) => $q->forLoan())
-                ->when(! $forPf && ! $forLoan, fn ($q) => $q->where('status', 'active'))
-                ->first();
+                ->where('id', $selectedEmployeeId);
+            $this->applyEmployeeLookupScope($selected, $forPf, $forLoan, $pfWithLedger, $anyStatus);
+            $selected = $selected->first();
 
             if ($selected) {
                 $visible = Employee::query()
@@ -124,6 +124,15 @@ class EmployeeLookupController extends EmployeeController
                 'status' => $employee->status,
             ])->values()
         );
+    }
+
+    private function applyEmployeeLookupScope($query, bool $forPf, bool $forLoan, bool $pfWithLedger, bool $anyStatus)
+    {
+        return $query
+            ->when($pfWithLedger, fn ($q) => $q->whereHas('pfTransactions'))
+            ->when($forPf && ! $pfWithLedger, fn ($q) => $q->forPf())
+            ->when($forLoan, fn ($q) => $q->forLoan())
+            ->when(! $forPf && ! $forLoan && ! $pfWithLedger && ! $anyStatus, fn ($q) => $q->where('status', 'active'));
     }
 
     /**

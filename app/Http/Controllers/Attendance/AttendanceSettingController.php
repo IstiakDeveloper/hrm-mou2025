@@ -9,10 +9,13 @@ use App\Models\AttendanceDeviceUser;
 use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Designation;
+use App\Models\Employee;
 use App\Models\GuardShiftSetting;
 use App\Models\OfficeOpenDate;
+use App\Models\Project;
 use App\Models\ZktecoSyncSetting;
 use App\Services\AdmsDeviceCommandService;
+use App\Services\MultiBranchAttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -99,6 +102,7 @@ class AttendanceSettingController extends Controller
             'attlogKeepDays' => ZktecoSyncSetting::attlogKeepDays(),
             'devicePushes' => $this->devicePushRows(),
             'officeOpenDates' => $this->officeOpenDateRows(),
+            'multiBranchPermissions' => $this->multiBranchPermissionsData(),
         ]);
     }
 
@@ -150,6 +154,98 @@ class AttendanceSettingController extends Controller
 
         return redirect()->route('attendance.settings.index')
             ->with('success', 'Office open date removed. That day follows the weekend again.');
+    }
+
+    /**
+     * Save / update multi-branch attendance approval for a project.
+     */
+    public function saveProjectBranches(Request $request, MultiBranchAttendanceService $service)
+    {
+        $data = $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'branch_ids' => 'required|array|min:1',
+            'branch_ids.*' => 'integer|exists:branches,id',
+        ]);
+
+        $project = Project::findOrFail($data['project_id']);
+        $service->syncProjectBranches((int) $data['project_id'], $data['branch_ids']);
+
+        $count = count($data['branch_ids']);
+
+        return redirect()->route('attendance.settings.index')
+            ->with('success', "{$project->name} project staff are now approved for attendance across {$count} branches.");
+    }
+
+    /**
+     * Remove multi-branch attendance permissions for a project.
+     */
+    public function destroyProjectBranches(Project $project, MultiBranchAttendanceService $service)
+    {
+        $service->removeProjectBranches($project->id);
+
+        return redirect()->route('attendance.settings.index')
+            ->with('success', "Multi-branch attendance permissions removed for {$project->name}.");
+    }
+
+    /**
+     * Save / update multi-branch attendance approval for a specific employee.
+     */
+    public function saveEmployeeBranches(Request $request, MultiBranchAttendanceService $service)
+    {
+        $data = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'branch_ids' => 'required|array|min:1',
+            'branch_ids.*' => 'integer|exists:branches,id',
+        ]);
+
+        $employee = Employee::findOrFail($data['employee_id']);
+        $service->syncEmployeeBranches((int) $data['employee_id'], $data['branch_ids']);
+
+        $count = count($data['branch_ids']);
+        $name = trim((string) ($employee->name_en ?: $employee->name_bn ?: $employee->employee_id));
+
+        return redirect()->route('attendance.settings.index')
+            ->with('success', "{$name} is now approved for attendance across {$count} additional branches.");
+    }
+
+    /**
+     * Remove multi-branch attendance permissions for an employee.
+     */
+    public function destroyEmployeeBranches(Employee $employee, MultiBranchAttendanceService $service)
+    {
+        $service->removeEmployeeBranches($employee->id);
+        $name = trim((string) ($employee->name_en ?: $employee->name_bn ?: $employee->employee_id));
+
+        return redirect()->route('attendance.settings.index')
+            ->with('success', "Extra branch attendance permissions removed for {$name}.");
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function multiBranchPermissionsData(): array
+    {
+        $service = app(MultiBranchAttendanceService::class);
+
+        return [
+            'projects' => $service->getProjectPermissionsSummary(),
+            'employees' => $service->getEmployeePermissionsSummary(),
+            'allProjects' => Project::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code'])->all(),
+            'allEmployees' => Employee::query()
+                ->where('status', 'active')
+                ->with('branch:id,name,branch_code')
+                ->orderBy('name_en')
+                ->get(['id', 'employee_id', 'pin', 'name_en', 'name_bn', 'current_branch_id', 'project_id'])
+                ->map(fn ($e) => [
+                    'id' => $e->id,
+                    'employee_code' => $e->employee_id,
+                    'pin' => $e->pin,
+                    'name' => trim((string) ($e->name_en ?: $e->name_bn ?: $e->employee_id)),
+                    'branch_name' => $e->branch?->name,
+                    'branch_id' => $e->current_branch_id,
+                    'project_id' => $e->project_id,
+                ])->values()->all(),
+        ];
     }
 
     /**

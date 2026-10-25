@@ -195,6 +195,18 @@ function appraisalPendingForPath(path: string, counts?: AppraisalPendingCounts |
     return counts?.[key] ?? 0;
 }
 
+function loanPendingForPath(path: string, count = 0): number {
+    const clean = path.split('?')[0];
+    if (clean === '/employee/loan/applications' || clean === '/loan-applications' || clean === '/sections/employee-loan') {
+        return count;
+    }
+    return 0;
+}
+
+function menuPendingCount(path: string, counts?: AppraisalPendingCounts | null, clearanceCount = 0, loanCount = 0): number {
+    return appraisalPendingForPath(path, counts, clearanceCount) + loanPendingForPath(path, loanCount);
+}
+
 function PendingCountBadge({ count, className = '' }: { count: number; className?: string }) {
     if (!count || count <= 0) {
         return null;
@@ -307,11 +319,12 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
-    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount } = page.props as any;
+    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount } = page.props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
     const appraisalCounts = (pendingAppraisalCounts ?? null) as AppraisalPendingCounts | null;
     const pendingAppraisal = appraisalCounts?.total ?? 0;
     const pendingFinalClearance = Number(pendingFinalClearanceCount ?? 0);
+    const pendingMotorcycle = Number(pendingMotorcycleLoanCount ?? 0);
     const inertiaUrl = page.url;
     const { navLayout, setNavLayout, toggleNavLayout, isTopNav, isSidebarNav } = useNavLayout();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -543,6 +556,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 submenu: [
                     { title: 'My Loans', path: '/employee/loan' },
                 ],
+            },
+            {
+                title: 'Application',
+                menuKey: 'loan-my-application',
+                icon: <ClipboardList className="h-5 w-5" />,
+                path: '/employee/loan/applications',
+                hasSubmenu: false,
+                employeeOnly: true,
             },
             {
                 title: 'Employee Management',
@@ -1050,7 +1071,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             !hasPermission('payroll.view') &&
             !hasPermission('admin.access')
         ) {
-            const employeeLoanKeys = ['loan-my-dashboard'];
+            const employeeLoanKeys = ['loan-my-dashboard', 'loan-my-application'];
             return withChangePassword(
                 employeeLoanKeys
                     .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
@@ -1232,6 +1253,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 title: entry.title,
                 href: entry.path,
                 icon: getSubNavIcon(entry.title, entry.path),
+                badge: loanPendingForPath(entry.path, pendingMotorcycle),
             });
         });
 
@@ -1260,7 +1282,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         title: subItem.title,
                         href: subItem.path,
                         icon: getSubNavIcon(subItem.title, subItem.path),
-                        badge: appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance),
+                        badge: menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle),
                     });
                 });
             } else {
@@ -1268,6 +1290,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     title: item.title,
                     href: item.path,
                     icon: getSubNavIcon(item.title, item.path),
+                    badge: loanPendingForPath(item.path, pendingMotorcycle),
                 });
             }
         });
@@ -1279,7 +1302,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             seen.add(clean);
             return true;
         });
-    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts, pendingFinalClearance]);
+    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts, pendingFinalClearance, pendingMotorcycle]);
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
@@ -1327,7 +1350,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             ? pendingAppraisal
             : item.menuKey === 'final-clearance'
                 ? pendingFinalClearance
-                : 0;
+                : item.menuKey === 'el-process'
+                    ? pendingMotorcycle
+                    : 0;
 
         return item.hasSubmenu ? (
             <div className="group relative mb-1">
@@ -1391,7 +1416,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     onClick={closeMobileSidebar}
                                 >
                                     <span className="truncate">{subItem.title}</span>
-                                    <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance)} />
+                                    <PendingCountBadge count={menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle)} />
                                 </Link>
                             ),
                         )}
@@ -1402,7 +1427,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <Link
                 href={item.path}
                 title={!isSidebarOpen && !isMobileSidebarOpen ? item.title : undefined}
-                className={`mb-1 flex items-center text-[13px] font-medium transition-all duration-300 ${
+                className={`relative mb-1 flex items-center text-[13px] font-medium transition-all duration-300 ${
                     isSidebarOpen || isMobileSidebarOpen ? 'w-full gap-3 rounded-lg px-3 py-2.5' : 'mx-auto h-11 w-11 justify-center rounded-xl'
                 } ${isActive(item.path) ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                 onClick={closeMobileSidebar}
@@ -1410,7 +1435,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <div className={`${isActive(item.path) ? 'text-emerald-600' : 'text-slate-500'}`}>
                     {React.cloneElement(item.icon as React.ReactElement, { className: 'w-[18px] h-[18px]' })}
                 </div>
-                {(isSidebarOpen || isMobileSidebarOpen) && <span className="truncate tracking-wide">{item.title}</span>}
+                {(isSidebarOpen || isMobileSidebarOpen) && (
+                    <span className="flex min-w-0 items-center gap-2 tracking-wide">
+                        <span className="truncate">{item.title}</span>
+                        <PendingCountBadge count={loanPendingForPath(item.path, pendingMotorcycle)} />
+                    </span>
+                )}
+                {!isSidebarOpen && !isMobileSidebarOpen && loanPendingForPath(item.path, pendingMotorcycle) > 0 && (
+                    <PendingCountBadge count={loanPendingForPath(item.path, pendingMotorcycle)} className="absolute top-0 right-0 min-w-[16px] px-1 text-[8px]" />
+                )}
             </Link>
         );
     };
@@ -1514,6 +1547,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     {item.menuKey === 'final-clearance' && (
                                         <PendingCountBadge count={pendingFinalClearance} className="min-w-[16px] text-[8px]" />
                                     )}
+                                    {item.menuKey === 'el-process' && (
+                                        <PendingCountBadge count={pendingMotorcycle} className="min-w-[16px] text-[8px]" />
+                                    )}
                                 </span>
                                 <ChevronDown
                                     className={cn(
@@ -1557,8 +1593,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             )}
                                         >
                                             <span>{subItem.title}</span>
-                                            {appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance) > 0 ? (
-                                                <PendingCountBadge count={appraisalPendingForPath(subItem.path, appraisalCounts, pendingFinalClearance)} />
+                                            {menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle) > 0 ? (
+                                                <PendingCountBadge count={menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle)} />
                                             ) : isActive(subItem.path) ? (
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                                             ) : null}
@@ -1586,6 +1622,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     {React.cloneElement(item.icon as React.ReactElement, { className: 'w-3.5 h-3.5' })}
                 </div>
                 <span className="whitespace-nowrap">{item.title}</span>
+                <PendingCountBadge count={loanPendingForPath(item.path, pendingMotorcycle)} className="min-w-[16px] text-[8px]" />
             </Link>
         );
     };
@@ -1698,11 +1735,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         overflow: visible !important;
                     }
                     main > div {
-                        border: none !important;
+                        border: 0 !important;
+                        outline: none !important;
                         box-shadow: none !important;
                         padding: 0 !important;
                         margin: 0 !important;
-                        background: transparent !important;
+                        background: #fff !important;
                         border-radius: 0 !important;
                         height: auto !important;
                         overflow: visible !important;
@@ -1773,7 +1811,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             href={d.path}
                                             title={!isSidebarOpen ? d.title : undefined}
                                             className={cn(
-                                                'flex items-center font-semibold tracking-wide transition-all duration-200',
+                                                'relative flex items-center font-semibold tracking-wide transition-all duration-200',
                                                 isSidebarOpen
                                                     ? 'mx-3 w-[calc(100%-1.5rem)] gap-2 rounded-lg px-3 py-2.5 text-[12px]'
                                                     : 'mx-auto h-11 w-11 justify-center rounded-xl',
@@ -1785,12 +1823,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             {isSidebarOpen ? (
                                                 <>
                                                     <LayoutDashboard className="h-4 w-4 shrink-0 text-emerald-600" />
-                                                    <span className="min-w-0 truncate">{d.title}</span>
+                                                    <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                                                    <PendingCountBadge count={loanPendingForPath(d.path, pendingMotorcycle)} />
                                                 </>
                                             ) : (
-                                                <LayoutDashboard
-                                                    className={cn('h-[18px] w-[18px]', isActive(d.path) ? 'text-emerald-600' : 'text-slate-500')}
-                                                />
+                                                <>
+                                                    <LayoutDashboard
+                                                        className={cn('h-[18px] w-[18px]', isActive(d.path) ? 'text-emerald-600' : 'text-slate-500')}
+                                                    />
+                                                    {loanPendingForPath(d.path, pendingMotorcycle) > 0 && (
+                                                        <PendingCountBadge count={loanPendingForPath(d.path, pendingMotorcycle)} className="absolute top-0 right-0 min-w-[16px] px-1 text-[8px]" />
+                                                    )}
+                                                </>
                                             )}
                                         </Link>
                                     ))}
@@ -1864,7 +1908,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                 )}
                                             >
                                                 <LayoutDashboard className="h-4 w-4 shrink-0 text-emerald-600" />
-                                                <span className="min-w-0 truncate">{d.title}</span>
+                                                <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                                                <PendingCountBadge count={loanPendingForPath(d.path, pendingMotorcycle)} />
                                             </Link>
                                         ))}
                                     </div>
@@ -2104,6 +2149,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     >
                                         <LayoutDashboard className="h-3.5 w-3.5 text-emerald-600" />
                                         <span>{d.title}</span>
+                                        <PendingCountBadge count={loanPendingForPath(d.path, pendingMotorcycle)} className="min-w-[16px] text-[8px]" />
                                     </Link>
                                 ))}
 

@@ -66,6 +66,8 @@ class AdmsDeviceCommandService
         foreach ($this->branchEmployees($device) as $employee) {
             $devicePin = $this->pushPin($employee);
             $pin = $this->displayPin($employee);
+            $isMultiBranch = (int) $employee->current_branch_id !== (int) $device->branch_id;
+            $projectName = $employee->relationLoaded('project') ? $employee->project?->name : null;
 
             $rows[] = [
                 'id' => (int) $employee->id,
@@ -76,6 +78,8 @@ class AdmsDeviceCommandService
                 'on_device' => $devicePin !== null && isset($known[$devicePin]),
                 'queued' => $devicePin !== null && isset($queuedPins[$devicePin]),
                 'can_push' => $devicePin !== null && ! isset($known[$devicePin]),
+                'is_multi_branch' => $isMultiBranch,
+                'project_name' => $projectName,
             ];
         }
 
@@ -593,11 +597,18 @@ class AdmsDeviceCommandService
         if (Schema::hasColumn('employees', 'device_user_id')) {
             $columns[] = 'device_user_id';
         }
+        if (Schema::hasColumn('employees', 'project_id')) {
+            $columns[] = 'project_id';
+        }
 
-        return Employee::query()
-            ->where('current_branch_id', $device->branch_id)
-            ->where('status', 'active')
-            ->get($columns);
+        $query = app(MultiBranchAttendanceService::class)
+            ->getEligibleEmployeesQueryForBranch((int) $device->branch_id);
+
+        if (Schema::hasTable('projects')) {
+            $query->with('project:id,name');
+        }
+
+        return $query->get($columns);
     }
 
     private function safeName(Employee $employee): string

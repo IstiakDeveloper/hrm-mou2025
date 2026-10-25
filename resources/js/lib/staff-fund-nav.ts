@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { FileBarChart2, FileSpreadsheet, Gift, HandCoins, Landmark, List, Percent, Wallet } from 'lucide-react';
+import { ArrowRightLeft, FileBarChart2, FileSpreadsheet, Gift, HandCoins, Landmark, List, Percent, Wallet } from 'lucide-react';
 
 export const STAFF_FUND_SECTION_ID = 'staff-fund' as const;
 
@@ -53,6 +53,11 @@ export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
                 title: 'PF Withdrawal',
                 path: '/provident-fund/withdrawals',
                 description: 'PF payment to employees',
+            },
+            {
+                title: 'PF Transfer',
+                path: '/provident-fund/transfer',
+                description: 'Move a whole PF account to an employee with an empty PF ledger',
             },
         ],
     },
@@ -110,6 +115,7 @@ export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
         { title: 'PF Register', href: '/provident-fund', icon: List },
         { title: 'PF Interest', href: '/provident-fund/interest', icon: Percent },
         { title: 'PF Withdrawal', href: '/provident-fund/withdrawals', icon: Wallet },
+        { title: 'PF Transfer', href: '/provident-fund/transfer', icon: ArrowRightLeft },
     ],
     gratuity: [
         { title: 'Entitlements', href: '/gratuity', icon: Gift },

@@ -1359,7 +1359,26 @@ class AttendanceController extends Controller
         }
 
         if ($request->branch_id) {
-            $employeesQuery->where('current_branch_id', $request->branch_id);
+            $branchId = (int) $request->branch_id;
+            $employeesQuery->where(function ($q) use ($branchId) {
+                $q->where('current_branch_id', $branchId);
+                if (\Illuminate\Support\Facades\Schema::hasTable('project_attendance_branches')) {
+                    $q->orWhereExists(function ($p) use ($branchId) {
+                        $p->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('project_attendance_branches')
+                            ->whereColumn('project_attendance_branches.project_id', 'employees.project_id')
+                            ->where('project_attendance_branches.branch_id', $branchId);
+                    });
+                }
+                if (\Illuminate\Support\Facades\Schema::hasTable('employee_attendance_branches')) {
+                    $q->orWhereExists(function ($e) use ($branchId) {
+                        $e->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('employee_attendance_branches')
+                            ->whereColumn('employee_attendance_branches.employee_id', 'employees.id')
+                            ->where('employee_attendance_branches.branch_id', $branchId);
+                    });
+                }
+            });
         }
         if ($request->department_id) {
             $employeesQuery->where('department_id', $request->department_id);
@@ -2307,7 +2326,12 @@ class AttendanceController extends Controller
 
         // If branch manager, can manage employees in their branch
         if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return $employee->current_branch_id == $user->branch_id;
+            if ($employee->current_branch_id == $user->branch_id) {
+                return true;
+            }
+            if (app(\App\Services\MultiBranchAttendanceService::class)->isEmployeeAllowedForBranch($employee, (int) $user->branch_id)) {
+                return true;
+            }
         }
 
         // If department head (head office), can manage employees in scoped departments

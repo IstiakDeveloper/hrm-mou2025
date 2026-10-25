@@ -431,9 +431,14 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                 </Button>
                             </div>
                         </div>
-
-                        <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">
-                            <OfficialFormDocument evaluation={previewEvaluation} lang={lang} isLivePreview={true} />
+                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600 shadow-2xs md:hidden">
+                            <span className="font-semibold text-slate-700">📄 অফিশিয়াল ডকুমেন্ট প্রিভিউ (A4 Format)</span>
+                            <span className="text-[11px] font-medium text-emerald-700">স্ক্রল করুন 👉</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-2 sm:p-6">
+                            <div className="min-w-[760px] sm:min-w-0">
+                                <OfficialFormDocument evaluation={previewEvaluation} lang={lang} isLivePreview={true} />
+                            </div>
                         </div>
                     </div>
                 ) : (

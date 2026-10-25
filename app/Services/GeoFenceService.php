@@ -131,6 +131,9 @@ class GeoFenceService
             $branchIds->push($ownBranchId);
         }
 
+        $multiBranchIds = app(MultiBranchAttendanceService::class)->getAllowedBranchIdsForEmployee($employee);
+        $branchIds = $branchIds->merge($multiBranchIds);
+
         $branchIds = $branchIds->filter()->map(fn ($id) => (int) $id)->unique()->values();
 
         if ($branchIds->isEmpty()) {

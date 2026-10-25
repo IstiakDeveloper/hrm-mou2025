@@ -4,7 +4,11 @@ import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer } from 'lucide-react';
+import { PfLoanApplicationDocument, type PfLoanFormFields } from '@/components/employee-loan/PfLoanApplicationDocument';
+import { MotorcycleLoanApplicationDocument, type MotorcycleLoanFormFields } from '@/components/employee-loan/MotorcycleLoanApplicationDocument';
+import { LoanWorkflowTimeline, type WorkflowStep } from '@/components/employee-loan/LoanWorkflowTimeline';
+import { MotorcycleLoanReviewBar, type MotorcycleReviewState } from '@/components/employee-loan/MotorcycleLoanReviewBar';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { hasAppPermission } from '@/lib/permissions';
@@ -46,6 +50,8 @@ type Application = {
     };
     policy: { code: string; name: string } | null;
     committee_name: string | null;
+    channel?: string;
+    official_form?: PfLoanFormFields | null;
 };
 
 const fmt = fmtLoanAmount;
@@ -62,7 +68,7 @@ const statusBadge = (status: string) => {
     return map[status] ?? 'bg-zinc-100 text-zinc-600';
 };
 
-export default function LoanApplicationShow({ application }: { application: Application }) {
+export default function LoanApplicationShow({ application, timeline = [], review = null }: { application: Application; timeline?: WorkflowStep[]; review?: MotorcycleReviewState | null }) {
     const { auth } = usePage<SharedData>().props;
     const canEdit = hasAppPermission(auth, 'payroll.edit');
     const canCancel = hasAppPermission(auth, 'employee-loan.edit');
@@ -80,7 +86,7 @@ export default function LoanApplicationShow({ application }: { application: Appl
             activeTab="applications-list"
             description="Loan application details"
         >
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
                 <Link
                     href={employeeLoanPath(route('loan-applications.index'))}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-600 hover:text-amber-700"
@@ -100,6 +106,11 @@ export default function LoanApplicationShow({ application }: { application: Appl
                             Cancel application
                         </Button>
                     )}
+                    {application.official_form && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => window.print()}>
+                            <Printer className="mr-1 h-3 w-3" /> Print form
+                        </Button>
+                    )}
                     {application.employee_loan_id && (
                         <Link href={employeeLoanPath(route('employee-loans.show', application.employee_loan_id))}>
                             <Button size="sm" className="h-7 bg-emerald-600 text-xs hover:bg-emerald-700">
@@ -110,7 +121,7 @@ export default function LoanApplicationShow({ application }: { application: Appl
                 </div>
             </div>
 
-            <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
                 <Badge variant="outline" className={cn('text-[10px] capitalize', statusBadge(application.status))}>
                     {application.status}
                 </Badge>
@@ -126,7 +137,9 @@ export default function LoanApplicationShow({ application }: { application: Appl
                 )}
             </div>
 
-            <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <LoanWorkflowTimeline steps={timeline} />
+
+            <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
                 <Card className="shadow-2xs">
                     <CardContent className="p-3">
                         <p className="text-[10px] font-bold uppercase text-zinc-500">Employee</p>
@@ -165,7 +178,7 @@ export default function LoanApplicationShow({ application }: { application: Appl
                 </Card>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2 print:hidden">
                 <Card className="shadow-2xs">
                     <CardHeader className="py-3 px-4">
                         <CardTitle className="text-sm">Calculation</CardTitle>
@@ -240,6 +253,22 @@ export default function LoanApplicationShow({ application }: { application: Appl
                     </CardContent>
                 </Card>
             </div>
+
+            {application.official_form && (application.official_form as PfLoanFormFields & { form?: string }).form === 'motorcycle' ? (
+                <div className="mt-4">
+                    <MotorcycleLoanReviewBar applicationId={application.id} review={review} appliedAmount={application.applied_amount} />
+                    <div className="overflow-x-auto">
+                        <MotorcycleLoanApplicationDocument fields={application.official_form as unknown as MotorcycleLoanFormFields} />
+                    </div>
+                </div>
+            ) : application.official_form ? (
+                <div className="mt-4 overflow-x-auto">
+                    <PfLoanApplicationDocument fields={application.official_form} />
+                    <p className="mx-auto mt-3 max-w-[210mm] text-xs text-zinc-500 print:hidden">
+                        Trustee board seal and signature are collected on this printed copy. Accounts approval in the system is enough to disburse.
+                    </p>
+                </div>
+            ) : null}
         </EmployeeLoanLayout>
     );
 }

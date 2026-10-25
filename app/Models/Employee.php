@@ -419,6 +419,11 @@ class Employee extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function attendanceBranches()
+    {
+        return $this->belongsToMany(Branch::class, 'employee_attendance_branches');
+    }
+
     public function attendanceTime()
     {
         return $this->hasOne(EmployeeAttendanceTime::class);

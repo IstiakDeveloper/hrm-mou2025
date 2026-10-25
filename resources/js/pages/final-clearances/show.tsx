@@ -168,13 +168,13 @@ export default function FinalClearanceShow({
                             </p>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                         {isSuperAdmin && (
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-10 border-rose-300 bg-rose-50 px-4 text-xs font-bold text-rose-700 shadow-xs hover:bg-rose-100"
+                                className="h-10 flex-1 border-rose-300 bg-rose-50 px-4 text-xs font-bold text-rose-700 shadow-xs hover:bg-rose-100 sm:flex-initial"
                                 onClick={() => setDeleteOpen(true)}
                             >
                                 <Trash2 className="h-4 w-4" />
@@ -184,7 +184,7 @@ export default function FinalClearanceShow({
                         <Button
                             variant="outline"
                             size="sm"
-                            className="h-10 border-slate-300 px-4 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50"
+                            className="h-10 flex-1 border-slate-300 px-4 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 sm:flex-initial"
                             onClick={() => window.open(`/final-clearances/${clearance.id}/print`, '_blank')}
                         >
                             <Printer className="h-4 w-4 text-slate-600" />
@@ -268,9 +268,9 @@ export default function FinalClearanceShow({
                                     <Textarea required className="mt-1 font-normal" rows={3} value={field.data.preparer_comments} onChange={(e) => field.setData('preparer_comments', e.target.value)} />
                                     <FieldError message={field.errors.preparer_comments} />
                                 </label>
-                                <div className="flex flex-wrap gap-2 md:col-span-2">
-                                    <Button type="button" variant="outline" disabled={field.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) field.put(`/final-clearances/${clearance.id}`); }}>Save draft</Button>
-                                    <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={field.processing}>Submit to HR</Button>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:col-span-2">
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={field.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) field.put(`/final-clearances/${clearance.id}`); }}>Save draft</Button>
+                                    <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 sm:w-auto" disabled={field.processing}>Submit to HR</Button>
                                 </div>
                             </form>
                         </CardContent>
@@ -320,10 +320,10 @@ export default function FinalClearanceShow({
                                 <label className="text-xs font-semibold text-slate-700 md:col-span-2">Comment for accounts
                                     <Textarea className="mt-1 font-normal" rows={2} value={hr.data.comments} onChange={(e) => hr.setData('comments', e.target.value)} />
                                 </label>
-                                <div className="flex flex-wrap gap-2 md:col-span-2">
-                                    <Button type="button" variant="outline" disabled={hr.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) hr.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
-                                    <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={hr.processing}>Submit to Accounts</Button>
-                                    <Button type="button" variant="outline" onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:col-span-2">
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={hr.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) hr.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
+                                    <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 sm:w-auto" disabled={hr.processing}>Submit to Accounts</Button>
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
                                 </div>
                                 <label className="text-xs font-semibold text-slate-700 md:col-span-2">Send-back comment<Req />
                                     <Textarea className="mt-1 font-normal" rows={2} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
@@ -365,10 +365,10 @@ export default function FinalClearanceShow({
                                     <Textarea required className="mt-1 font-normal" rows={3} value={accounts.data.accounts_comments} onChange={(e) => accounts.setData('accounts_comments', e.target.value)} />
                                     <FieldError message={accounts.errors.accounts_comments} />
                                 </label>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button type="button" variant="outline" disabled={accounts.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) accounts.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
-                                    <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={accounts.processing}>Submit to Director Finance</Button>
-                                    <Button type="button" variant="outline" onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={accounts.processing} onClick={() => { if (!blockWithoutSignature(userHasSignature)) accounts.put(`/final-clearances/${clearance.id}`); }}>Save</Button>
+                                    <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 sm:w-auto" disabled={accounts.processing}>Submit to Director Finance</Button>
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
                                 </div>
                                 <label className="text-xs font-semibold text-slate-700">Send-back comment<Req />
                                     <Textarea className="mt-1 font-normal" rows={2} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />
@@ -391,20 +391,26 @@ export default function FinalClearanceShow({
                                     <FieldError message={decision.errors.comments} />
                                 </label>
                                 <p className="mt-1 text-xs text-slate-500">Approve, send back, বা reject করতে কমেন্ট লিখতে হবে।</p>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/approve`)}>
+                                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                                    <Button type="button" className="w-full bg-emerald-600 hover:bg-emerald-700 sm:w-auto" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/approve`)}>
                                         {clearance.status === 'submitted_to_ed' ? 'Approve and close' : 'Approve'}
                                     </Button>
-                                    <Button type="button" variant="outline" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
-                                    <Button type="button" variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/reject`)}>Reject</Button>
+                                    <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/send-back`)}>Send back</Button>
+                                    <Button type="button" variant="outline" className="w-full border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 sm:w-auto" disabled={decision.processing} onClick={() => postDecision(`/final-clearances/${clearance.id}/reject`)}>Reject</Button>
                                 </div>
                             </form>
                         </CardContent>
                     </Card>
                 )}
 
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600 shadow-2xs md:hidden">
+                    <span className="font-semibold text-slate-700">📄 অফিশিয়াল ডকুমেন্ট প্রিভিউ (A4 Format)</span>
+                    <span className="text-[11px] font-medium text-emerald-700">স্ক্রল করুন 👉</span>
+                </div>
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-2 sm:p-6">
-                    <ClearanceFormDocument clearance={clearance} />
+                    <div className="min-w-[760px] sm:min-w-0">
+                        <ClearanceFormDocument clearance={clearance} />
+                    </div>
                 </div>
             </div>
             {isSuperAdmin && (

@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\Employee;
 use App\Models\EmployeePfTransaction;
+use App\Models\PfAccountTransfer;
 use App\Models\PfInterestRun;
 use App\Services\EmployeeProvidentFundService;
+use App\Services\PfAccountTransferService;
 use App\Services\PfInterestDistributionService;
 use App\Services\PfReportService;
 use App\Services\SalaryStructureCalculator;
@@ -26,6 +28,7 @@ class ProvidentFundController extends Controller
         protected EmployeeProvidentFundService $pfService,
         protected PfInterestDistributionService $interestService,
         protected PfReportService $reportService,
+        protected PfAccountTransferService $transferService,
     ) {}
 
     public function index(Request $request)
@@ -621,6 +624,104 @@ class ProvidentFundController extends Controller
                 'PF payment of %s recorded for %s.',
                 taka_fmt($amount),
                 trim(($employee->pin ?? '').' — '.($employee->name_en ?? ''))
+            ));
+    }
+
+    public function transferIndex(Request $request)
+    {
+        $fromId = $request->filled('from_employee_id') ? $request->integer('from_employee_id') : null;
+        $toId = $request->filled('to_employee_id') ? $request->integer('to_employee_id') : null;
+        $preview = null;
+
+        if ($fromId && $toId) {
+            $from = Employee::query()->find($fromId);
+            $to = Employee::query()->find($toId);
+            if ($from && $to) {
+                $preview = $this->transferService->describe($from, $to);
+                $labels = $this->transactionTypeLabels();
+                $preview['lines'] = array_map(function (array $line) use ($labels) {
+                    $line['transaction_type_label'] = $labels[$line['transaction_type']] ?? $line['transaction_type'];
+
+                    return $line;
+                }, $preview['lines']);
+            }
+        }
+
+        $history = PfAccountTransfer::query()
+            ->with([
+                'fromEmployee:id,pin,name_en',
+                'toEmployee:id,pin,name_en',
+                'creator:id,name',
+            ])
+            ->latest('id')
+            ->limit(15)
+            ->get()
+            ->map(fn (PfAccountTransfer $transfer) => [
+                'id' => $transfer->id,
+                'transfer_number' => $transfer->transfer_number,
+                'from_employee_id' => $transfer->from_employee_id,
+                'to_employee_id' => $transfer->to_employee_id,
+                'from_label' => trim(($transfer->fromEmployee?->pin ?? '').' — '.($transfer->fromEmployee?->name_en ?? '')),
+                'to_label' => trim(($transfer->toEmployee?->pin ?? '').' — '.($transfer->toEmployee?->name_en ?? '')),
+                'transaction_count' => $transfer->transaction_count,
+                'amount' => SalaryStructureCalculator::roundTaka((float) $transfer->amount),
+                'own_amount' => SalaryStructureCalculator::roundTaka((float) $transfer->own_amount),
+                'org_amount' => SalaryStructureCalculator::roundTaka((float) $transfer->org_amount),
+                'reason' => $transfer->reason,
+                'created_by' => $transfer->creator?->name,
+                'created_at' => $transfer->created_at?->format('d-m-Y H:i'),
+            ]);
+
+        return Inertia::render('payroll/provident-fund/transfer', [
+            'filters' => [
+                'from_employee_id' => $fromId ? (string) $fromId : '',
+                'to_employee_id' => $toId ? (string) $toId : '',
+            ],
+            'preview' => $preview,
+            'history' => $history,
+        ]);
+    }
+
+    public function transferStore(Request $request)
+    {
+        $validated = $request->validate([
+            'from_employee_id' => 'required|exists:employees,id',
+            'to_employee_id' => 'required|exists:employees,id',
+            'reason' => 'required|string|max:2000',
+            'password' => ['required', 'string', 'current_password'],
+        ], [
+            'password.required' => 'ট্রান্সফার নিশ্চিত করতে আপনার পাসওয়ার্ড দিন।',
+            'password.current_password' => 'পাসওয়ার্ড সঠিক নয়।',
+            'reason.required' => 'কেন এই PF সরানো হচ্ছে সেটা লিখুন।',
+        ]);
+
+        $from = Employee::query()->findOrFail($validated['from_employee_id']);
+        $to = Employee::query()->findOrFail($validated['to_employee_id']);
+
+        try {
+            $transfer = $this->transferService->transfer(
+                $from,
+                $to,
+                $validated['reason'],
+                auth()->id()
+            );
+        } catch (\InvalidArgumentException $e) {
+            $field = str_contains(strtolower($e->getMessage()), 'receive')
+                ? 'to_employee_id'
+                : 'from_employee_id';
+
+            throw ValidationException::withMessages([$field => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('provident-fund.transfer.index')
+            ->with('success', sprintf(
+                'PF account %s moved from %s to %s. %d ledger line(s), balance %s. Salary payslips were not changed.',
+                $transfer->transfer_number,
+                trim(($from->pin ?? '').' — '.($from->name_en ?? '')),
+                trim(($to->pin ?? '').' — '.($to->name_en ?? '')),
+                $transfer->transaction_count,
+                taka_fmt($transfer->amount)
             ));
     }
 

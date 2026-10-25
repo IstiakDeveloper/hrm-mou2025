@@ -91,12 +91,13 @@ class LoanApplicationService
     /**
      * @param  array<string, mixed>  $data
      */
-    public function createApplication(array $data, ?int $createdBy = null, bool $submit = false): LoanApplication
+    public function createApplication(array $data, ?int $createdBy = null, bool $submit = false, bool $ignorePolicyMax = false): LoanApplication
     {
         $policy = LoanPolicy::query()->findOrFail($data['loan_policy_id']);
         $this->policyService->validateAgainstPolicy($policy, [
             'principal_amount' => $data['applied_amount'],
             'installment_count' => $policy->total_installments ?? $policy->max_tenure_months,
+            'ignore_max_amount' => $ignorePolicyMax,
         ]);
 
         $this->assertEmployeeCanTakeLoan((int) $data['employee_id'], $policy);
@@ -130,17 +131,29 @@ class LoanApplicationService
         ]);
     }
 
-    public function approve(LoanApplication $application, ?int $approvedBy = null): LoanApplication
+    public function approve(LoanApplication $application, ?int $approvedBy = null, ?float $approvedAmount = null, ?string $disbursementDate = null): LoanApplication
     {
         if ($application->status !== 'pending') {
             throw new InvalidArgumentException('Only pending applications can be approved.');
         }
 
+        $snapshot = is_array($application->form_snapshot) ? $application->form_snapshot : null;
+        if (($snapshot['form'] ?? null) === 'motorcycle') {
+            $approver = \App\Models\User::query()->find($approvedBy ?? auth()->id());
+            if (! $approver) {
+                throw new InvalidArgumentException('অনুমোদনকারী পাওয়া যায়নি।');
+            }
+
+            return app(MotorcycleLoanApplicationService::class)->accountsApprove($application, $approver, $approvedAmount, $disbursementDate);
+        }
+
         $application->update([
             'status' => 'approved',
+            'workflow_stage' => $application->workflow_stage,
             'approved_by' => $approvedBy ?? auth()->id(),
             'approved_at' => now(),
             'rejection_reason' => null,
+            'form_snapshot' => $snapshot,
         ]);
 
         return $application->fresh();
@@ -204,7 +217,7 @@ class LoanApplicationService
 
         $openApplication = LoanApplication::query()
             ->where('employee_id', $employeeId)
-            ->whereIn('status', ['pending', 'approved'])
+            ->whereIn('status', ['in_review', 'pending', 'approved'])
             ->when($ignoreApplicationId, fn ($q) => $q->where('id', '!=', $ignoreApplicationId))
             ->whereHas('policy', fn ($q) => $q->where('loan_type', $policy->loan_type))
             ->first();

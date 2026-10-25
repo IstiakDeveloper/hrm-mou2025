@@ -317,8 +317,12 @@ export default function TraineeEvaluationEdit({
                 </div>
 
                 {viewMode === 'preview' ? (
-                    <div className="bg-slate-100/70 p-4 sm:p-8 rounded-2xl border border-slate-200">
-                        <div className="max-w-4xl mx-auto shadow-md rounded-xl overflow-hidden bg-white">
+                    <div className="bg-slate-100/70 p-2 sm:p-8 rounded-2xl border border-slate-200 overflow-x-auto">
+                        <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 mb-3 sm:hidden flex items-center gap-1.5 font-medium">
+                            <span>👉</span>
+                            <span>{lang === 'bn' ? 'বামে-ডানে স্ক্রল করে পুরো ফরমটি দেখতে পারবেন' : 'Scroll horizontally to view the full document'}</span>
+                        </div>
+                        <div className="min-w-[760px] sm:min-w-0 max-w-4xl mx-auto shadow-md rounded-xl overflow-hidden bg-white">
                             <TraineeOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
                         </div>
                     </div>
@@ -656,12 +660,12 @@ export default function TraineeEvaluationEdit({
                         </Card>
 
                         {/* Save Bar */}
-                        <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-end gap-3 shadow-xs">
+                        <div className="sticky bottom-3 z-20 p-3 bg-white/95 backdrop-blur border border-slate-200 rounded-xl flex items-center justify-between gap-3 shadow-md">
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => setViewMode('preview')}
-                                className="text-xs h-9"
+                                className="text-xs h-9 border-slate-300 hover:bg-slate-50"
                             >
                                 <Eye className="w-3.5 h-3.5 mr-1.5" />
                                 {lang === 'bn' ? 'প্রিভিউ দেখুন' : 'Preview'}
@@ -669,7 +673,7 @@ export default function TraineeEvaluationEdit({
                             <Button
                                 type="submit"
                                 disabled={processing}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-6 font-bold shadow-xs"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-6 font-bold shadow-xs flex-1 sm:flex-none justify-center"
                             >
                                 <Save className="w-3.5 h-3.5 mr-1.5" />
                                 {processing ? (lang === 'bn' ? 'আপডেট হচ্ছে...' : 'Updating...') : (lang === 'bn' ? 'পরিবর্তন সংরক্ষণ করুন' : 'Update Evaluation')}

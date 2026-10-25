@@ -256,14 +256,14 @@ export default function PromotionEvaluationShow({
 
                         {/* Edit Button */}
                         {canEdit && (
-                            <Link href={`/promotion-evaluations/${evaluation.id}/edit`}>
+                            <Link href={`/promotion-evaluations/${evaluation.id}/edit`} className="flex-1 sm:flex-initial">
                                 <Button 
                                     variant="outline" 
                                     size="sm"
-                                    className="h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 shadow-sm"
+                                    className="w-full h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center justify-center gap-1.5 shadow-sm"
                                 >
                                     <Edit3 className="h-4 w-4 text-amber-700" />
-                                    <span>{lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit Draft'}</span>
+                                    <span>{lang === 'bn' ? 'সম্পাদনা' : 'Edit Draft'}</span>
                                 </Button>
                             </Link>
                         )}
@@ -273,10 +273,10 @@ export default function PromotionEvaluationShow({
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setResetOpen(true)}
-                                className="h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 shadow-sm"
+                                className="flex-1 sm:flex-initial h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center justify-center gap-1.5 shadow-sm"
                             >
                                 <RotateCcw className="h-4 w-4" />
-                                <span>{lang === 'bn' ? 'ওয়ার্কফ্লো রিসেট' : 'Reset workflow'}</span>
+                                <span>{lang === 'bn' ? 'রিসেট' : 'Reset'}</span>
                             </Button>
                         )}
 
@@ -286,10 +286,10 @@ export default function PromotionEvaluationShow({
                                 variant="outline" 
                                 size="sm"
                                 onClick={handleDelete}
-                                className="h-10 px-3.5 text-xs font-semibold border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center gap-1.5 shadow-sm"
+                                className="flex-1 sm:flex-initial h-10 px-3.5 text-xs font-semibold border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center justify-center gap-1.5 shadow-sm"
                             >
                                 <Trash2 className="h-4 w-4 text-rose-600" />
-                                <span>{lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}</span>
+                                <span>{lang === 'bn' ? 'মুছুন' : 'Delete'}</span>
                             </Button>
                         )}
 
@@ -297,7 +297,7 @@ export default function PromotionEvaluationShow({
                             variant="outline" 
                             size="sm" 
                             onClick={() => window.open(`/promotion-evaluations/${evaluation.id}/print`, '_blank')}
-                            className="h-10 px-4 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 shadow-sm shrink-0"
+                            className="flex-1 sm:flex-initial h-10 px-4 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center justify-center gap-2 shadow-sm shrink-0"
                         >
                             <Printer className="h-4 w-4 text-slate-500" />
                             <span>{t.printOfficialForm}</span>
@@ -470,13 +470,19 @@ export default function PromotionEvaluationShow({
                 />
 
                 {/* The Central Official Document Preview */}
-                <div className="bg-slate-100/60 p-2 sm:p-6 rounded-2xl border border-slate-200">
-                    <div className="text-center mb-3">
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600 shadow-2xs md:hidden">
+                    <span className="font-semibold text-slate-700">📄 অফিশিয়াল ফরম প্রিভিউ (A4 Format)</span>
+                    <span className="text-[11px] font-medium text-emerald-700">স্ক্রল করুন 👉</span>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-2 sm:p-6">
+                    <div className="text-center mb-3 hidden sm:block">
                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                             {lang === 'bn' ? 'অফিসিয়াল পদোন্নতি মূল্যায়ন ফরম প্রিভিউ' : 'Official Performance Appraisal Form Preview'}
                         </span>
                     </div>
-                    <OfficialFormDocument evaluation={evaluation} lang={lang} />
+                    <div className="min-w-[760px] sm:min-w-0">
+                        <OfficialFormDocument evaluation={evaluation} lang={lang} />
+                    </div>
                 </div>
             </PageSurface>
             <AppraisalDeleteDialog

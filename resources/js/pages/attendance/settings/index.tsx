@@ -41,7 +41,12 @@ import {
   Shield,
   CheckCheck,
   XCircle,
-  HardDrive
+  HardDrive,
+  Briefcase,
+  Network,
+  Layers,
+  Search,
+  Check
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -56,6 +61,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isSuperAdmin } from '@/lib/permissions';
 import { format } from 'date-fns';
 import { PageSurface } from '@/components/page-surface';
@@ -89,6 +95,8 @@ interface DeviceEmployeeRow {
   on_device: boolean;
   queued: boolean;
   can_push?: boolean;
+  is_multi_branch?: boolean;
+  project_name?: string | null;
 }
 
 interface DevicePushRow {
@@ -110,6 +118,40 @@ interface OfficeOpenDateRow {
   note?: string | null;
 }
 
+interface MultiBranchProjectItem {
+  project_id: number;
+  project_name: string;
+  project_code?: string | null;
+  staff_count: number;
+  branches: Array<{ id: number; name: string; branch_code?: string | null }>;
+}
+
+interface MultiBranchEmployeeItem {
+  employee_id: number;
+  employee_code: string;
+  pin?: string | null;
+  name: string;
+  designation?: string | null;
+  primary_branch?: { id: number; name: string } | null;
+  project_name?: string | null;
+  branches: Array<{ id: number; name: string; branch_code?: string | null }>;
+}
+
+interface MultiBranchPermissionsData {
+  projects: MultiBranchProjectItem[];
+  employees: MultiBranchEmployeeItem[];
+  allProjects: Array<{ id: number; name: string; code?: string | null }>;
+  allEmployees: Array<{
+    id: number;
+    employee_code: string;
+    pin?: string | null;
+    name: string;
+    branch_name?: string | null;
+    branch_id?: number | null;
+    project_id?: number | null;
+  }>;
+}
+
 interface AttendanceSettingsIndexProps {
   settings: AttendanceSetting[];
   branches: Branch[];
@@ -119,6 +161,7 @@ interface AttendanceSettingsIndexProps {
   attlogKeepDays?: number;
   devicePushes?: DevicePushRow[];
   officeOpenDates?: OfficeOpenDateRow[];
+  multiBranchPermissions?: MultiBranchPermissionsData;
 }
 
 interface GuardDesignation {
@@ -147,12 +190,122 @@ export default function AttendanceSettingsIndex({
   attlogKeepDays = 15,
   devicePushes = [],
   officeOpenDates = [],
+  multiBranchPermissions = { projects: [], employees: [], allProjects: [], allEmployees: [] },
 }: AttendanceSettingsIndexProps) {
   const { auth } = usePage().props as any;
   const isSuperAdminUser = isSuperAdmin(auth);
 
   const [bulkEnabled, setBulkEnabled] = useState(isBulkAttendanceEnabled);
   const [isUpdatingToggle, setIsUpdatingToggle] = useState(false);
+
+  // Multi-Branch Permissions State
+  const [multiBranchModalOpen, setMultiBranchModalOpen] = useState(false);
+  const [activeMultiBranchTab, setActiveMultiBranchTab] = useState<'project' | 'employee'>('project');
+
+  // Project Form State
+  const [selectedProjectId, setSelectedProjectId] = useState<number | ''>('');
+  const [selectedProjectBranchIds, setSelectedProjectBranchIds] = useState<number[]>([]);
+  const [projectBranchFilter, setProjectBranchFilter] = useState('');
+  const [isSavingProjectBranches, setIsSavingProjectBranches] = useState(false);
+
+  // Employee Form State
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | ''>('');
+  const [selectedEmployeeBranchIds, setSelectedEmployeeBranchIds] = useState<number[]>([]);
+  const [employeeSearchFilter, setEmployeeSearchFilter] = useState('');
+  const [employeeBranchFilter, setEmployeeBranchFilter] = useState('');
+  const [isSavingEmployeeBranches, setIsSavingEmployeeBranches] = useState(false);
+
+  const handleEditProjectBranches = (item: MultiBranchProjectItem) => {
+    setSelectedProjectId(item.project_id);
+    setSelectedProjectBranchIds(item.branches.map((b) => b.id));
+    setActiveMultiBranchTab('project');
+    setMultiBranchModalOpen(true);
+  };
+
+  const handleDeleteProjectBranches = (projectId: number, projectName: string) => {
+    if (confirm(`Are you sure you want to remove multi-branch attendance permissions for ${projectName}?`)) {
+      router.delete(route('attendance.settings.project-branches.destroy', projectId), {
+        preserveScroll: true,
+      });
+    }
+  };
+
+  const handleSaveProjectBranches = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProjectId) {
+      alert('Please select a project');
+      return;
+    }
+    if (selectedProjectBranchIds.length === 0) {
+      alert('Please select at least one branch');
+      return;
+    }
+    setIsSavingProjectBranches(true);
+    router.post(
+      route('attendance.settings.project-branches.store'),
+      {
+        project_id: selectedProjectId,
+        branch_ids: selectedProjectBranchIds,
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setIsSavingProjectBranches(false);
+          setSelectedProjectId('');
+          setSelectedProjectBranchIds([]);
+        },
+        onError: () => {
+          setIsSavingProjectBranches(false);
+        },
+      }
+    );
+  };
+
+  const handleEditEmployeeBranches = (item: MultiBranchEmployeeItem) => {
+    setSelectedEmployeeId(item.employee_id);
+    setSelectedEmployeeBranchIds(item.branches.map((b) => b.id));
+    setActiveMultiBranchTab('employee');
+    setMultiBranchModalOpen(true);
+  };
+
+  const handleDeleteEmployeeBranches = (employeeId: number, employeeName: string) => {
+    if (confirm(`Are you sure you want to remove multi-branch attendance permissions for ${employeeName}?`)) {
+      router.delete(route('attendance.settings.employee-branches.destroy', employeeId), {
+        preserveScroll: true,
+      });
+    }
+  };
+
+  const handleSaveEmployeeBranches = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployeeId) {
+      alert('Please select an employee');
+      return;
+    }
+    if (selectedEmployeeBranchIds.length === 0) {
+      alert('Please select at least one branch');
+      return;
+    }
+    setIsSavingEmployeeBranches(true);
+    router.post(
+      route('attendance.settings.employee-branches.store'),
+      {
+        employee_id: selectedEmployeeId,
+        branch_ids: selectedEmployeeBranchIds,
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setIsSavingEmployeeBranches(false);
+          setSelectedEmployeeId('');
+          setSelectedEmployeeBranchIds([]);
+        },
+        onError: () => {
+          setIsSavingEmployeeBranches(false);
+        },
+      }
+    );
+  };
 
   // Multi-Day Movement Branch Permissions State
   const [branchesList, setBranchesList] = useState<Branch[]>(branches);
@@ -690,6 +843,270 @@ export default function AttendanceSettingsIndex({
           </Card>
         </div>
 
+        {/* Row Grid: Multi-Branch Attendance Approval & Office open on a weekend (2 columns on desktop) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-stretch">
+          {/* Card: Multi-Branch Attendance Permissions */}
+          <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200/80 shrink-0">
+                      <Network className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm font-semibold text-slate-800 leading-snug">
+                        Multi-Branch Attendance Approval (মাল্টি-ব্রাঞ্চ হাজিরা অনুমোদন)
+                      </CardTitle>
+                      <CardDescription className="text-xs text-slate-500 line-clamp-1">
+                        Allow staff from specific projects or employees to attend across multiple branches
+                      </CardDescription>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px]">
+                      {multiBranchPermissions.projects.length} Projects
+                    </Badge>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                      {multiBranchPermissions.employees.length} Staff
+                    </Badge>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMultiBranchModalOpen(true)}
+                    className="h-7 text-xs text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 border-indigo-200 font-medium px-2.5"
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Manage Permissions
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 flex flex-col">
+              <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                <Table className="min-w-[460px]">
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/80 border-b border-slate-200 sticky top-0 z-10 backdrop-blur">
+                      <TableHead className="h-9 pl-3 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Scope</TableHead>
+                      <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Name</TableHead>
+                      <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Approved Branches</TableHead>
+                      <TableHead className="h-9 text-[10px] font-semibold uppercase tracking-wider text-slate-700">Staff / Base</TableHead>
+                      <TableHead className="h-9 pr-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-700">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {multiBranchPermissions.projects.length === 0 && multiBranchPermissions.employees.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-10 text-center text-xs text-slate-400">
+                          No multi-branch attendance permissions configured yet. Click <strong>"Manage Permissions"</strong> to configure projects (like ECCCP-Drought) or individual employees.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <>
+                        {multiBranchPermissions.projects.map((item) => (
+                          <TableRow key={`proj-${item.project_id}`} className="border-b border-slate-100 hover:bg-slate-50">
+                            <TableCell className="py-2.5 pl-3">
+                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-medium gap-1">
+                                <Briefcase className="h-3 w-3" />
+                                Project
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-slate-800">
+                              {item.project_name}
+                              {item.project_code && <span className="text-[10px] text-slate-400 ml-1">({item.project_code})</span>}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="flex flex-wrap gap-1">
+                                {item.branches.map((b) => (
+                                  <Badge key={b.id} variant="secondary" className="bg-slate-100 text-slate-700 border-slate-200 text-[10px]">
+                                    {b.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-slate-600 font-medium">
+                              {item.staff_count} Staff
+                            </TableCell>
+                            <TableCell className="pr-3 text-right space-x-1 whitespace-nowrap">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditProjectBranches(item)}
+                                className="h-7 text-xs text-indigo-700 hover:bg-indigo-50 px-1.5"
+                                title="Edit Branches"
+                              >
+                                <Edit className="h-3.5 w-3.5 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteProjectBranches(item.project_id, item.project_name)}
+                                className="h-7 text-xs text-rose-600 hover:bg-rose-50 px-1.5"
+                                title="Remove Project Permissions"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {multiBranchPermissions.employees.map((item) => (
+                          <TableRow key={`emp-${item.employee_id}`} className="border-b border-slate-100 hover:bg-slate-50">
+                            <TableCell className="py-2.5 pl-3">
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-medium gap-1">
+                                <User className="h-3 w-3" />
+                                Staff
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="font-semibold text-slate-800">{item.name}</div>
+                              <div className="text-[10px] text-slate-500">PIN: {item.pin || item.employee_code} {item.designation ? `• ${item.designation}` : ''}</div>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="flex flex-wrap gap-1">
+                                {item.branches.map((b) => (
+                                  <Badge key={b.id} variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                                    {b.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-slate-500">
+                              {item.primary_branch?.name || 'N/A'}
+                            </TableCell>
+                            <TableCell className="pr-3 text-right space-x-1 whitespace-nowrap">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditEmployeeBranches(item)}
+                                className="h-7 text-xs text-indigo-700 hover:bg-indigo-50 px-1.5"
+                                title="Edit Branches"
+                              >
+                                <Edit className="h-3.5 w-3.5 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteEmployeeBranches(item.employee_id, item.name)}
+                                className="h-7 text-xs text-rose-600 hover:bg-rose-50 px-1.5"
+                                title="Remove Employee Permissions"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card: Office open on a weekend */}
+          <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200/80 shrink-0">
+                  <CalendarDays className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-semibold text-slate-800 leading-snug">
+                    Office open on a weekend
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500 line-clamp-1">
+                    Friday & Saturday stay weekends. Add open date only; attendance & movement work that day.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-3.5">
+                {saturdayMissing && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Saturday is missing from weekend days. Put Saturday back in branch attendance settings, then add only the open date here. Otherwise every past Saturday shows as absent.
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2.5 sm:items-end">
+                  <div className="space-y-1">
+                    <Label htmlFor="office-open-date" className="text-xs text-slate-500">Date</Label>
+                    <Input
+                      id="office-open-date"
+                      type="date"
+                      value={openDate}
+                      onChange={(event) => setOpenDate(event.target.value)}
+                      className="h-8 w-full sm:w-36 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <Label htmlFor="office-open-note" className="text-xs text-slate-500">Note</Label>
+                    <Input
+                      id="office-open-note"
+                      value={openNote}
+                      onChange={(event) => setOpenNote(event.target.value)}
+                      placeholder="e.g. Office open / Special work"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={saveOfficeOpenDate}
+                    disabled={!openDate || savingOpenDate}
+                    className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 shrink-0"
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {savingOpenDate ? 'Saving...' : 'Add date'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Configured Open Dates
+                  </span>
+                  <Badge variant="outline" className="bg-slate-50 text-slate-600 text-[10px]">
+                    {officeOpenDates.length} Dates
+                  </Badge>
+                </div>
+                {officeOpenDates.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+                    {officeOpenDates.map((row) => (
+                      <div key={row.id} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
+                        <span className="font-medium text-slate-800">{format(new Date(row.date + 'T00:00:00'), 'dd MMM yyyy')}</span>
+                        {row.note ? <span className="text-[11px] text-slate-500">({row.note})</span> : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-red-600 hover:bg-red-50 hover:text-red-700 ml-1"
+                          onClick={() => removeOfficeOpenDate(row.id)}
+                          title="Remove date"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No extra working dates added yet.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <Dialog open={deviceModalOpen} onOpenChange={setDeviceModalOpen}>
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -827,7 +1244,14 @@ export default function AttendanceSettingsIndex({
                               />
                             </TableCell>
                             <TableCell className="py-2">
-                              <div className="text-xs font-semibold text-slate-800">{employee.name}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-semibold text-slate-800">{employee.name}</span>
+                                {employee.is_multi_branch && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-indigo-200 bg-indigo-50 text-indigo-700 font-normal">
+                                    {employee.project_name ? `${employee.project_name} (Multi-Branch)` : 'Multi-Branch'}
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-[10px] text-slate-500">{employee.employee_code}</div>
                             </TableCell>
                             <TableCell className="text-xs text-slate-700">{employee.pin}</TableCell>
@@ -1097,74 +1521,329 @@ export default function AttendanceSettingsIndex({
           </DialogContent>
         </Dialog>
 
-        <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white mb-6">
-          <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
-            <CardTitle className="text-lg font-semibold text-slate-800">Office open on a weekend</CardTitle>
-            <CardDescription className="text-xs">
-              Friday and Saturday stay weekends. Add only the date the office is open. Attendance and movement work that day. Older Fridays and Saturdays stay weekend, not absent.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-5 space-y-4">
-            {saturdayMissing && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Saturday is missing from weekend days. Put Saturday back in branch attendance settings, then add only the open date here. Otherwise every past Saturday shows as absent.
+        {/* Multi-Branch Attendance Approval Modal */}
+        <Dialog open={multiBranchModalOpen} onOpenChange={setMultiBranchModalOpen}>
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="p-5 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200/80">
+                  <Network className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-slate-900">
+                    Multi-Branch Attendance Permissions (মাল্টি-ব্রাঞ্চ হাজিরা অনুমতি)
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                    Configure which projects (e.g. ECCCP-Drought) or individual staff can record attendance across multiple branches.
+                  </DialogDescription>
+                </div>
               </div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-              <div className="space-y-1">
-                <Label htmlFor="office-open-date" className="text-xs text-slate-500">Date</Label>
-                <Input
-                  id="office-open-date"
-                  type="date"
-                  value={openDate}
-                  onChange={(event) => setOpenDate(event.target.value)}
-                  className="h-9 w-full sm:w-44"
-                />
+            </DialogHeader>
+
+            <Tabs value={activeMultiBranchTab} onValueChange={(val) => setActiveMultiBranchTab(val as any)} className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-5 pt-3 border-b border-slate-100 bg-slate-50/50">
+                <TabsList className="bg-slate-200/70 p-1">
+                  <TabsTrigger value="project" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-xs">
+                    <Briefcase className="w-3.5 h-3.5" />
+                    Project Permissions (প্রকল্প ভিত্তিক)
+                  </TabsTrigger>
+                  <TabsTrigger value="employee" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-xs">
+                    <User className="w-3.5 h-3.5" />
+                    Employee Permissions (কর্মী ভিত্তিক)
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <div className="space-y-1 flex-1">
-                <Label htmlFor="office-open-note" className="text-xs text-slate-500">Note</Label>
-                <Input
-                  id="office-open-note"
-                  value={openNote}
-                  onChange={(event) => setOpenNote(event.target.value)}
-                  placeholder="Office open"
-                  className="h-9"
-                />
-              </div>
-              <Button
-                type="button"
-                onClick={saveOfficeOpenDate}
-                disabled={!openDate || savingOpenDate}
-                className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                {savingOpenDate ? 'Saving...' : 'Add date'}
-              </Button>
-            </div>
-            {officeOpenDates.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {officeOpenDates.map((row) => (
-                  <div key={row.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                    <span className="text-xs font-medium text-slate-800">{format(new Date(row.date + 'T00:00:00'), 'dd MMM yyyy')}</span>
-                    {row.note ? <span className="text-[11px] text-slate-500">{row.note}</span> : null}
+
+              <div className="flex-1 overflow-y-auto p-5">
+                <TabsContent value="project" className="m-0 space-y-4">
+                  <form onSubmit={handleSaveProjectBranches} className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">
+                          {selectedProjectId ? 'Edit Project Allowed Branches' : 'Add Multi-Branch Approval for a Project'}
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          All active staff under this project will automatically be permitted to give attendance at all selected branches.
+                        </p>
+                      </div>
+                      {selectedProjectId && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedProjectId('');
+                            setSelectedProjectBranchIds([]);
+                          }}
+                          className="h-7 text-[11px] text-slate-500 hover:text-slate-700"
+                        >
+                          Cancel Edit
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="project-select" className="text-xs font-semibold text-slate-700">
+                        Select Project (প্রকল্প নির্বাচন করুন) <span className="text-rose-500">*</span>
+                      </Label>
+                      <select
+                        id="project-select"
+                        value={selectedProjectId}
+                        onChange={(e) => {
+                          const pId = Number(e.target.value) || '';
+                          setSelectedProjectId(pId);
+                          if (pId) {
+                            const existing = multiBranchPermissions.projects.find((p) => p.project_id === pId);
+                            if (existing) {
+                              setSelectedProjectBranchIds(existing.branches.map((b) => b.id));
+                            }
+                          }
+                        }}
+                        className="w-full h-9 text-xs rounded-md border border-slate-200 bg-white px-3 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                      >
+                        <option value="">-- Choose a Project (e.g. ECCCP-Drought) --</option>
+                        {multiBranchPermissions.allProjects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.code ? `(${p.code})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <Label className="text-xs font-semibold text-slate-700">
+                          Select Allowed Branches (অনুমোদিত শাখাসমূহ নির্বাচন করুন) <span className="text-rose-500">*</span>
+                        </Label>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedProjectBranchIds(branches.map((b) => b.id))}
+                            className="h-6 text-[10px] px-2 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                          >
+                            Select All
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedProjectBranchIds([])}
+                            className="h-6 text-[10px] px-2 text-slate-600 hover:bg-slate-100"
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Input
+                        placeholder="Filter branches by name..."
+                        value={projectBranchFilter}
+                        onChange={(e) => setProjectBranchFilter(e.target.value)}
+                        className="h-8 text-xs bg-white"
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-white rounded-lg border border-slate-200">
+                        {branches
+                          .filter((b) => b.name.toLowerCase().includes(projectBranchFilter.trim().toLowerCase()))
+                          .map((branch) => {
+                            const isChecked = selectedProjectBranchIds.includes(branch.id);
+                            return (
+                              <label
+                                key={branch.id}
+                                className={`flex items-center gap-2 p-2 rounded-md border text-xs cursor-pointer transition-colors ${
+                                  isChecked ? 'bg-indigo-50/70 border-indigo-300 text-indigo-900 font-medium' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                                }`}
+                              >
+                                <Checkbox
+                                  checked={isChecked}
+                                  onCheckedChange={(checked) => {
+                                    setSelectedProjectBranchIds((prev) =>
+                                      checked === true ? [...prev, branch.id] : prev.filter((id) => id !== branch.id)
+                                    );
+                                  }}
+                                />
+                                <span className="truncate">{branch.name}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Selected: <strong>{selectedProjectBranchIds.length}</strong> of {branches.length} branches
+                      </p>
+                    </div>
+
                     <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => removeOfficeOpenDate(row.id)}
-                      title="Remove date"
+                      type="submit"
+                      disabled={!selectedProjectId || selectedProjectBranchIds.length === 0 || isSavingProjectBranches}
+                      className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {isSavingProjectBranches ? 'Saving...' : 'Save Project Branches (সংরক্ষণ করুন)'}
                     </Button>
-                  </div>
-                ))}
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="employee" className="m-0 space-y-4">
+                  <form onSubmit={handleSaveEmployeeBranches} className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">
+                          {selectedEmployeeId ? 'Edit Employee Extra Branches' : 'Add Multi-Branch Approval for Specific Staff'}
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          Allow this individual employee to give attendance at these additional branches.
+                        </p>
+                      </div>
+                      {selectedEmployeeId && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedEmployeeId('');
+                            setSelectedEmployeeBranchIds([]);
+                          }}
+                          className="h-7 text-[11px] text-slate-500 hover:text-slate-700"
+                        >
+                          Cancel Edit
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="employee-select" className="text-xs font-semibold text-slate-700">
+                        Select Employee (কর্মী নির্বাচন করুন) <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        placeholder="Type to filter employees by name or PIN..."
+                        value={employeeSearchFilter}
+                        onChange={(e) => setEmployeeSearchFilter(e.target.value)}
+                        className="h-8 text-xs bg-white mb-1.5"
+                      />
+                      <select
+                        id="employee-select"
+                        value={selectedEmployeeId}
+                        onChange={(e) => {
+                          const eId = Number(e.target.value) || '';
+                          setSelectedEmployeeId(eId);
+                          if (eId) {
+                            const existing = multiBranchPermissions.employees.find((x) => x.employee_id === eId);
+                            if (existing) {
+                              setSelectedEmployeeBranchIds(existing.branches.map((b) => b.id));
+                            }
+                          }
+                        }}
+                        className="w-full h-9 text-xs rounded-md border border-slate-200 bg-white px-3 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                      >
+                        <option value="">-- Choose Employee --</option>
+                        {multiBranchPermissions.allEmployees
+                          .filter((e) => {
+                            if (!employeeSearchFilter) return true;
+                            const term = employeeSearchFilter.toLowerCase();
+                            return (
+                              e.name.toLowerCase().includes(term) ||
+                              e.employee_code.toLowerCase().includes(term) ||
+                              (e.pin && e.pin.toLowerCase().includes(term))
+                            );
+                          })
+                          .slice(0, 100)
+                          .map((e) => (
+                            <option key={e.id} value={e.id}>
+                              {e.name} (PIN: {e.pin || e.employee_code}) - Base: {e.branch_name || 'N/A'}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <Label className="text-xs font-semibold text-slate-700">
+                          Select Allowed Extra Branches (অনুমোদিত অতিরিক্ত শাখাসমূহ) <span className="text-rose-500">*</span>
+                        </Label>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedEmployeeBranchIds(branches.map((b) => b.id))}
+                            className="h-6 text-[10px] px-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                          >
+                            Select All
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedEmployeeBranchIds([])}
+                            className="h-6 text-[10px] px-2 text-slate-600 hover:bg-slate-100"
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Input
+                        placeholder="Filter branches by name..."
+                        value={employeeBranchFilter}
+                        onChange={(e) => setEmployeeBranchFilter(e.target.value)}
+                        className="h-8 text-xs bg-white"
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-white rounded-lg border border-slate-200">
+                        {branches
+                          .filter((b) => b.name.toLowerCase().includes(employeeBranchFilter.trim().toLowerCase()))
+                          .map((branch) => {
+                            const isChecked = selectedEmployeeBranchIds.includes(branch.id);
+                            return (
+                              <label
+                                key={branch.id}
+                                className={`flex items-center gap-2 p-2 rounded-md border text-xs cursor-pointer transition-colors ${
+                                  isChecked ? 'bg-emerald-50/70 border-emerald-300 text-emerald-900 font-medium' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                                }`}
+                              >
+                                <Checkbox
+                                  checked={isChecked}
+                                  onCheckedChange={(checked) => {
+                                    setSelectedEmployeeBranchIds((prev) =>
+                                      checked === true ? [...prev, branch.id] : prev.filter((id) => id !== branch.id)
+                                    );
+                                  }}
+                                />
+                                <span className="truncate">{branch.name}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Selected: <strong>{selectedEmployeeBranchIds.length}</strong> branches
+                      </p>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={!selectedEmployeeId || selectedEmployeeBranchIds.length === 0 || isSavingEmployeeBranches}
+                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4"
+                    >
+                      {isSavingEmployeeBranches ? 'Saving...' : 'Save Employee Branches (সংরক্ষণ করুন)'}
+                    </Button>
+                  </form>
+                </TabsContent>
               </div>
-            ) : (
-              <p className="text-xs text-slate-500">No extra working dates yet.</p>
-            )}
-          </CardContent>
-        </Card>
+
+              <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50/50">
+                <Button
+                  type="button"
+                  onClick={() => setMultiBranchModalOpen(false)}
+                  className="bg-slate-800 hover:bg-slate-900 text-white h-8 text-xs font-medium px-4"
+                >
+                  Done
+                </Button>
+              </DialogFooter>
+            </Tabs>
+          </DialogContent>
+        </Dialog>
+
 
         {/* Settings Table */}
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">

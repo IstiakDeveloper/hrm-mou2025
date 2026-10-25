@@ -53,7 +53,7 @@ export function AppraisalDeleteDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-[calc(100%-1.5rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-5 sm:p-6">
                 <form onSubmit={submit}>
                     <DialogHeader>
                         <DialogTitle>{bn ? 'মুছে ফেলুন' : 'Delete'}</DialogTitle>
@@ -78,11 +78,11 @@ export function AppraisalDeleteDialog({
                         />
                         {error && <p className="mt-1.5 text-xs text-rose-600">{error}</p>}
                     </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" disabled={processing} onClick={() => onOpenChange(false)}>
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+                        <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={processing} onClick={() => onOpenChange(false)}>
                             {bn ? 'বাতিল' : 'Cancel'}
                         </Button>
-                        <Button type="submit" className="bg-rose-600 text-white hover:bg-rose-700" disabled={processing || password.trim() === ''}>
+                        <Button type="submit" className="w-full sm:w-auto bg-rose-600 text-white hover:bg-rose-700" disabled={processing || password.trim() === ''}>
                             {processing ? (bn ? 'মুছে ফেলা হচ্ছে…' : 'Deleting…') : (bn ? 'মুছুন' : 'Delete')}
                         </Button>
                     </DialogFooter>

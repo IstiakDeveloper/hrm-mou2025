@@ -131,6 +131,16 @@ class Branch extends Model
         return $this->hasMany(User::class);
     }
 
+    public function projectAttendance()
+    {
+        return $this->belongsToMany(Project::class, 'project_attendance_branches');
+    }
+
+    public function employeeAttendance()
+    {
+        return $this->belongsToMany(Employee::class, 'employee_attendance_branches');
+    }
+
     public function branchUser()
     {
         return $this->belongsTo(User::class, 'branch_user_id');

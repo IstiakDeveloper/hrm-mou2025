@@ -104,8 +104,21 @@ export function EmployeeLoanEmployeeDashboardView({
 }: ViewProps) {
     const { auth } = usePage().props as { auth?: { user?: { name?: string } } };
 
+    const pendingForMe = Number((usePage().props as { pendingMotorcycleLoanCount?: number }).pendingMotorcycleLoanCount ?? 0);
+
     const dashboardBody = (
         <>
+            {pendingForMe > 0 && (
+                <Link
+                    href={employeeLoanEmployeePath('/employee/loan/applications')}
+                    className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-950"
+                >
+                    <span className="font-semibold">Motorcycle application waiting for your recommendation</span>
+                    <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                        {pendingForMe > 99 ? '99+' : pendingForMe}
+                    </span>
+                </Link>
+            )}
             <Card className="overflow-hidden border-zinc-200/90 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_35%),linear-gradient(to_bottom,_#ffffff,_#fffaf1)] shadow-sm">
                 <CardContent className="space-y-5 p-4 sm:p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -131,6 +144,9 @@ export function EmployeeLoanEmployeeDashboardView({
                         <div className="flex shrink-0 gap-2 w-full lg:w-auto">
                             <Button asChild variant="outline" size="sm" className="h-9 px-3 text-xs flex-1 lg:flex-none justify-center">
                                 <Link href="/sections">Sections</Link>
+                            </Button>
+                            <Button asChild variant="outline" size="sm" className="h-9 px-3 text-xs flex-1 lg:flex-none justify-center">
+                                <Link href={employeeLoanEmployeePath('/employee/loan/applications')}>Application</Link>
                             </Button>
                             <Button asChild size="sm" className="h-9 bg-amber-600 px-3 text-xs hover:bg-amber-700 flex-1 lg:flex-none justify-center">
                                 <Link href={employeeLoanEmployeePath('/employee/loan')}>My loans</Link>

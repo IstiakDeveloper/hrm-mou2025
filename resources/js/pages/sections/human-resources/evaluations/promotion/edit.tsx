@@ -1082,8 +1082,8 @@ export default function PromotionEvaluationEdit({
                                 </Badge>
                             </div>
 
-                            <div className="flex items-center gap-2 justify-end">
-                                <Link href={`/promotion-evaluations/${evaluation.id}`}>
+                            <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
+                                <Link href={`/promotion-evaluations/${evaluation.id}`} className="hidden sm:inline-block">
                                     <Button 
                                         type="button" 
                                         variant="outline" 
@@ -1100,13 +1100,13 @@ export default function PromotionEvaluationEdit({
                                     size="sm"
                                     onClick={() => handleSave(false)} 
                                     disabled={processing} 
-                                    className="h-9 px-3.5 border-slate-300 text-slate-800 bg-white hover:bg-slate-50 text-xs font-semibold shadow-xs flex items-center gap-1.5"
+                                    className="h-9 flex-1 sm:flex-initial px-3.5 border-slate-300 text-slate-800 bg-white hover:bg-slate-50 text-xs font-semibold shadow-xs flex items-center justify-center gap-1.5"
                                 >
                                     <Save className="h-3.5 w-3.5 text-slate-600" />
                                     <span>
                                         {isReviewerEdit
-                                            ? (lang === 'bn' ? 'সংরক্ষণ' : 'Save Changes')
-                                            : (lang === 'bn' ? 'খসড়া সংরক্ষণ' : 'Save Draft')}
+                                            ? (lang === 'bn' ? 'সংরক্ষণ' : 'Save')
+                                            : (lang === 'bn' ? 'খসড়া' : 'Draft')}
                                     </span>
                                 </Button>
 
@@ -1115,13 +1115,13 @@ export default function PromotionEvaluationEdit({
                                     size="sm"
                                     onClick={() => handleSave(true)} 
                                     disabled={processing} 
-                                    className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5"
+                                    className="h-9 flex-1 sm:flex-initial px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5"
                                 >
                                     <CheckCircle2 className="h-3.5 w-3.5" />
                                     <span>
                                         {isReviewerEdit
-                                            ? (lang === 'bn' ? 'অনুমোদন করুন' : 'Approve')
-                                            : (lang === 'bn' ? 'দাখিল করুন' : 'Submit')}
+                                            ? (lang === 'bn' ? 'অনুমোদন' : 'Approve')
+                                            : (lang === 'bn' ? 'দাখিল' : 'Submit')}
                                     </span>
                                 </Button>
                             </div>

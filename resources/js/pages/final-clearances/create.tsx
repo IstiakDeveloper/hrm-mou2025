@@ -70,15 +70,15 @@ export default function FinalClearanceCreate({ userHasSignature = false }: { use
                         </div>
 
                         {picked && (
-                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-                                <div>
-                                    <div className="text-sm font-semibold text-slate-900">{picked.name_bn || picked.name_en}</div>
-                                    <div className="text-[11px] text-slate-600">
-                                        {picked.pin} · {picked.designation?.name || '—'} · {picked.branch?.name || '—'}
+                            <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="space-y-0.5">
+                                    <div className="text-sm font-bold text-slate-900">{picked.name_bn || picked.name_en}</div>
+                                    <div className="text-xs text-slate-600">
+                                        <span className="font-semibold text-emerald-800">PIN: {picked.pin}</span> · {picked.designation?.name || '—'} · {picked.branch?.name || '—'}
                                     </div>
                                 </div>
                                 <Button
-                                    className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-semibold hover:bg-emerald-700"
+                                    className="h-10 w-full rounded-lg bg-emerald-600 px-4 text-xs font-bold hover:bg-emerald-700 sm:h-9 sm:w-auto"
                                     disabled={submitting || !employeeId}
                                     onClick={() => {
                                         if (!employeeId) return;
@@ -93,7 +93,7 @@ export default function FinalClearanceCreate({ userHasSignature = false }: { use
                                         });
                                     }}
                                 >
-                                    Create draft
+                                    {submitting ? 'Creating...' : 'Create draft'}
                                 </Button>
                             </div>
                         )}

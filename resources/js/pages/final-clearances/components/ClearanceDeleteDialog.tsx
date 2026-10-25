@@ -69,9 +69,9 @@ export default function ClearanceDeleteDialog({
                         />
                         {error && <p className="mt-1.5 text-xs text-rose-600">{error}</p>}
                     </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" disabled={processing} onClick={() => onOpenChange(false)}>Cancel</Button>
-                        <Button type="submit" className="bg-rose-600 text-white hover:bg-rose-700" disabled={processing || password.trim() === ''}>
+                    <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+                        <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={processing} onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="submit" className="w-full sm:w-auto bg-rose-600 text-white hover:bg-rose-700" disabled={processing || password.trim() === ''}>
                             {processing ? 'Deleting…' : 'Delete'}
                         </Button>
                     </DialogFooter>

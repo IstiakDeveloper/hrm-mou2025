@@ -21,6 +21,7 @@ export default function StaffFundLayout({ children, title, description, activeTa
                 { id: 'pf-register', label: 'Register', href: '/provident-fund' },
                 { id: 'pf-interest', label: 'Interest', href: '/provident-fund/interest' },
                 { id: 'pf-withdrawal', label: 'Withdrawal', href: '/provident-fund/withdrawals' },
+                { id: 'pf-transfer', label: 'Transfer', href: '/provident-fund/transfer' },
             ],
         },
         {

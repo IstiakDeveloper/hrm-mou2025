@@ -18,6 +18,25 @@ return [
         ),
     ],
 
+    /*
+    | Employee self-service PF loan. Service age is counted from confirmation
+    | date. The cap is a share of the employee's current PF balance.
+    */
+    'pf_self_service' => [
+        'min_years_from_confirmation' => 2,
+        'max_balance_percent' => 90,
+    ],
+
+    /*
+    | Motorcycle self-service. Officer, Accountant and other staff below ABM
+    | use the standard cap. ABM, Branch Manager and everyone above use the
+    | senior cap. Recommendation then follows the printed form.
+    */
+    'motorcycle_self_service' => [
+        'standard_max_amount' => 150000,
+        'senior_max_amount' => 200000,
+    ],
+
     'loan_types' => [
         'pf_loan' => [
             'label' => 'PF Loan',

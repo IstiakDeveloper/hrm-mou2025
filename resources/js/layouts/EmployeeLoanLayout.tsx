@@ -18,7 +18,7 @@ export default function EmployeeLoanLayout({ children, title, description, activ
         <Layout>
             <Head title={title} />
             <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6">
-                <div className="mb-5 flex flex-col gap-3 border-b border-zinc-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="mb-5 flex flex-col gap-3 border-b border-zinc-200 pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
                     <div>
                         <div className="mb-1 flex items-center gap-1.5 text-xs text-zinc-500">
                             <Link href={employeeLoanPath('/sections/employee-loan')} className="hover:text-zinc-800">
@@ -45,7 +45,7 @@ export default function EmployeeLoanLayout({ children, title, description, activ
                     </Link>
                 </div>
 
-                <div className="mb-5 space-y-2 rounded-lg border border-zinc-200/90 bg-white p-2 shadow-sm">
+                <div className="mb-5 space-y-2 rounded-lg border border-zinc-200/90 bg-white p-2 shadow-sm print:hidden">
                     {EMPLOYEE_LOAN_LAYOUT_SECTIONS.map((section) => (
                         <div key={section.label} className="flex flex-wrap items-center gap-1.5">
                             <span className="w-16 shrink-0 px-1 text-[10px] font-bold uppercase tracking-wide text-zinc-400">

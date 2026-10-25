@@ -507,10 +507,16 @@ export default function ProbationIncrementEvaluationCreate({
                                 </Button>
                             </div>
                         </div>
-                        <div className="bg-slate-100/70 p-2 sm:p-6 rounded-xl border border-slate-200 print:bg-white print:p-0 print:border-0 print:rounded-none">
-                            <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">{lang === 'bn' ? 'ফরম লোড হচ্ছে…' : 'Loading form…'}</div>}>
-                                <ProbationIncrementOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
-                            </Suspense>
+                        <div className="bg-slate-100/70 p-2 sm:p-6 rounded-xl border border-slate-200 print:bg-white print:p-0 print:border-0 print:rounded-none overflow-x-auto">
+                            <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 mb-3 sm:hidden flex items-center gap-1.5 font-medium">
+                                <span>👉</span>
+                                <span>{lang === 'bn' ? 'বামে-ডানে স্ক্রল করে পুরো ফরমটি দেখতে পারবেন' : 'Scroll horizontally to view the full document'}</span>
+                            </div>
+                            <div className="min-w-[760px] sm:min-w-0">
+                                <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">{lang === 'bn' ? 'ফরম লোড হচ্ছে…' : 'Loading form…'}</div>}>
+                                    <ProbationIncrementOfficialFormDocument evaluation={previewEvaluation} lang={lang} />
+                                </Suspense>
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -1013,19 +1019,19 @@ export default function ProbationIncrementEvaluationCreate({
                         </Card>
 
                         {/* Sticky Bottom Action & Status Bar */}
-                        <div className="sticky bottom-3 z-20 p-3 bg-white/95 backdrop-blur border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
-                            <div className="flex items-center gap-3">
+                        <div className="sticky bottom-3 z-20 p-3 bg-white/95 backdrop-blur border border-slate-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-md">
+                            <div className="flex items-center justify-between sm:justify-start gap-3">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-600">মোট প্রাপ্ত নম্বর:</span>
+                                    <span className="text-xs font-bold text-slate-600">{lang === 'bn' ? 'মোট প্রাপ্ত নম্বর:' : 'Total Score:'}</span>
                                     <span className="text-base font-extrabold text-emerald-700">{data.total_score} / ১০০</span>
                                     <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${currentGrade.badgeVariant}`}>
                                         {currentGrade.labelBn}
                                     </span>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <Link href="/probation-increment-evaluations">
-                                    <Button type="button" variant="outline" className="text-xs h-8.5 border-slate-300 hover:bg-slate-50">
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <Link href="/probation-increment-evaluations" className="hidden sm:inline-block">
+                                    <Button type="button" variant="outline" className="text-xs h-9 border-slate-300 hover:bg-slate-50">
                                         {lang === 'bn' ? 'তালিকায় ফিরুন' : 'Back'}
                                     </Button>
                                 </Link>
@@ -1033,7 +1039,7 @@ export default function ProbationIncrementEvaluationCreate({
                                     type="button"
                                     variant="outline"
                                     onClick={() => setViewMode('preview')}
-                                    className="text-xs h-8.5 border-slate-300 hover:bg-slate-50"
+                                    className="flex-1 sm:flex-none text-xs h-9 border-slate-300 hover:bg-slate-50"
                                 >
                                     <Eye className="w-3.5 h-3.5 mr-1.5" />
                                     {lang === 'bn' ? 'প্রিভিউ দেখুন' : 'Preview'}
@@ -1041,7 +1047,7 @@ export default function ProbationIncrementEvaluationCreate({
                                 <Button 
                                     type="submit" 
                                     disabled={processing}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8.5 px-5 font-bold shadow-xs"
+                                    className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-5 font-bold shadow-xs"
                                 >
                                     <Send className="w-3.5 h-3.5 mr-1.5" />
                                     {processing 

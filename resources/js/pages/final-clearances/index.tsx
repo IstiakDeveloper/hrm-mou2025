@@ -188,7 +188,7 @@ export default function FinalClearanceIndex({
                     ))}
                 </div>
 
-                <div className="flex flex-col items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 shadow-2xs sm:flex-row">
+                <div className="flex flex-col items-stretch gap-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs sm:flex-row sm:items-center">
                     <div className="relative w-full sm:flex-1">
                         <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                         <Input
@@ -196,10 +196,10 @@ export default function FinalClearanceIndex({
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                             onKeyDown={(event) => event.key === 'Enter' && apply()}
-                            className="h-8 rounded-md border-slate-200 bg-slate-50/50 pl-8 text-xs placeholder:text-slate-400"
+                            className="h-9 rounded-lg border-slate-200 bg-slate-50/50 pl-8 text-xs placeholder:text-slate-400"
                         />
                     </div>
-                    <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
                         <Select
                             value={status}
                             onValueChange={(value) => {
@@ -207,7 +207,7 @@ export default function FinalClearanceIndex({
                                 apply({ status: value });
                             }}
                         >
-                            <SelectTrigger className="h-8 w-full border-slate-200 bg-slate-50/50 text-[11px] sm:w-56">
+                            <SelectTrigger className="h-9 flex-1 sm:w-56 border-slate-200 bg-slate-50/50 text-[11px] rounded-lg">
                                 <SelectValue placeholder="All stages" />
                             </SelectTrigger>
                             <SelectContent>
@@ -217,104 +217,212 @@ export default function FinalClearanceIndex({
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button variant="outline" size="sm" onClick={() => apply()} className="h-8 border-slate-200 bg-white px-2.5 text-slate-700 hover:bg-slate-50">
+                        <Button variant="outline" size="sm" onClick={() => apply()} className="h-9 rounded-lg border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50">
                             <Search className="h-3.5 w-3.5" />
                         </Button>
                         {(search || status !== 'all') && (
-                            <Button variant="ghost" size="sm" onClick={reset} className="h-8 px-2 text-slate-500 hover:text-slate-800" title="Reset filters">
+                            <Button variant="ghost" size="sm" onClick={reset} className="h-9 rounded-lg px-2 text-slate-500 hover:text-slate-800" title="Reset filters">
                                 <RotateCcw className="h-3.5 w-3.5" />
                             </Button>
                         )}
                     </div>
                 </div>
 
-                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
-                    <Table>
-                        <TableHeader className="border-b border-slate-200 bg-slate-50/80">
-                            <TableRow className="text-[11px] font-semibold text-slate-600 hover:bg-transparent">
-                                <TableHead className="px-3 py-2">Date</TableHead>
-                                <TableHead className="px-3 py-2">Staff</TableHead>
-                                <TableHead className="px-3 py-2">Designation & workplace</TableHead>
-                                <TableHead className="px-3 py-2">Stage</TableHead>
-                                <TableHead className="px-3 py-2 text-right">Net</TableHead>
-                                <TableHead className="px-3 py-2 text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {clearances.data.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-500">No clearance cases.</TableCell>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
+                    {/* Desktop Table View (>= md) */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                            <TableHeader className="border-b border-slate-200 bg-slate-50/80">
+                                <TableRow className="text-[11px] font-semibold text-slate-600 hover:bg-transparent">
+                                    <TableHead className="px-3 py-2">Date</TableHead>
+                                    <TableHead className="px-3 py-2">Staff</TableHead>
+                                    <TableHead className="px-3 py-2">Designation & workplace</TableHead>
+                                    <TableHead className="px-3 py-2">Stage</TableHead>
+                                    <TableHead className="px-3 py-2 text-right">Net</TableHead>
+                                    <TableHead className="px-3 py-2 text-right">Actions</TableHead>
                                 </TableRow>
-                            ) : clearances.data.map((row) => (
-                                <TableRow key={row.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
-                                    <TableCell className="px-3 py-2 text-[11px] font-medium whitespace-nowrap text-slate-500">
-                                        <div className="flex items-center gap-1">
-                                            <Calendar className="h-3 w-3 shrink-0 text-slate-400" />
-                                            <span>{row.created_at || '—'}</span>
+                            </TableHeader>
+                            <TableBody>
+                                {clearances.data.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-500">No clearance cases.</TableCell>
+                                    </TableRow>
+                                ) : clearances.data.map((row) => (
+                                    <TableRow key={row.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
+                                        <TableCell className="px-3 py-2 text-[11px] font-medium whitespace-nowrap text-slate-500">
+                                            <div className="flex items-center gap-1">
+                                                <Calendar className="h-3 w-3 shrink-0 text-slate-400" />
+                                                <span>{row.created_at || '—'}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="px-3 py-2">
+                                            <Link href={`/final-clearances/${row.id}`} className="text-xs leading-tight font-bold text-slate-900 hover:text-emerald-700">
+                                                {row.employee_name || '—'}
+                                            </Link>
+                                            <div className="mt-0.5">
+                                                <span className="rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 font-mono text-[10px] font-semibold text-emerald-800">
+                                                    {row.staff_id || '—'}
+                                                </span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="px-3 py-2">
+                                            <div className="text-xs leading-tight font-semibold text-slate-800">{row.designation_name || '—'}</div>
+                                            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-500">
+                                                <Building2 className="h-3 w-3 shrink-0 text-slate-400" />
+                                                <span>{row.workplace || '—'}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="px-3 py-2">
+                                            <div className="flex flex-col items-start gap-0.5">
+                                                {statusBadge(row.status, row.status_label)}
+                                                {row.status === 'draft' && row.sent_back_reason && (
+                                                    <span className="inline-flex items-center gap-0.5 rounded border border-rose-200 bg-rose-50 px-1 py-0.5 text-[9px] font-bold whitespace-nowrap text-rose-700" title={row.sent_back_reason}>
+                                                        <RotateCcw className="h-2.5 w-2.5 shrink-0" />
+                                                        Needs revision
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-800">{money(row.net_payable)}</TableCell>
+                                        <TableCell className="px-3 py-2 text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {row.can_act && (row.status === 'submitted_to_director_fa' || row.status === 'submitted_to_ed') && (
+                                                    <Button size="sm" className="h-7 rounded bg-emerald-600 px-2 text-[11px] font-semibold text-white shadow-2xs hover:bg-emerald-700" onClick={() => router.visit(`/final-clearances/${row.id}`)}>
+                                                        <CheckCircle2 className="h-3 w-3" />
+                                                        Approve
+                                                    </Button>
+                                                )}
+                                                {row.can_act && row.status !== 'submitted_to_director_fa' && row.status !== 'submitted_to_ed' && (
+                                                    <Button size="sm" className="h-7 rounded bg-emerald-600 px-2 text-[11px] font-semibold text-white shadow-2xs hover:bg-emerald-700" onClick={() => router.visit(`/final-clearances/${row.id}`)}>
+                                                        Open
+                                                    </Button>
+                                                )}
+                                                <Button variant="outline" size="sm" className="h-7 w-7 border-slate-200 p-0 text-slate-700 hover:bg-slate-50" title="View" onClick={() => router.visit(`/final-clearances/${row.id}`)}>
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Button variant="outline" size="sm" className="h-7 w-7 border-slate-200 p-0 text-slate-700 hover:bg-slate-50" title="Print" onClick={() => window.open(`/final-clearances/${row.id}/print`, '_blank')}>
+                                                    <Printer className="h-3.5 w-3.5" />
+                                                </Button>
+                                                {isSuperAdmin && (
+                                                    <Button variant="outline" size="sm" className="h-7 w-7 border-rose-200 p-0 text-rose-700 hover:bg-rose-50" title="Delete" onClick={() => setDeleteTarget(row)}>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* Mobile App Cards View (< md) */}
+                    <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                        {clearances.data.length === 0 ? (
+                            <div className="p-8 text-center text-sm text-slate-500">
+                                <HandCoins className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                                <p className="font-semibold text-slate-600">No clearance cases found</p>
+                            </div>
+                        ) : (
+                            clearances.data.map((row) => (
+                                <div key={row.id} className="p-4 hover:bg-slate-50/70 transition-colors space-y-3">
+                                    {/* Header: Name, Staff ID & Stage */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                            <Link href={`/final-clearances/${row.id}`} className="font-bold text-sm text-slate-900 hover:text-emerald-700">
+                                                {row.employee_name || '—'}
+                                            </Link>
+                                            <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-1.5">
+                                                <span className="font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] border border-emerald-200">
+                                                    PIN: {row.staff_id || '—'}
+                                                </span>
+                                                <span>•</span>
+                                                <span>{row.designation_name || '—'}</span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-1">
+                                                <Building2 className="h-3 w-3 shrink-0 text-slate-400" />
+                                                <span>{row.workplace || '—'}</span>
+                                            </div>
                                         </div>
-                                    </TableCell>
-                                    <TableCell className="px-3 py-2">
-                                        <Link href={`/final-clearances/${row.id}`} className="text-xs leading-tight font-bold text-slate-900 hover:text-emerald-700">
-                                            {row.employee_name || '—'}
-                                        </Link>
-                                        <div className="mt-0.5">
-                                            <span className="rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 font-mono text-[10px] font-semibold text-emerald-800">
-                                                {row.staff_id || '—'}
-                                            </span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="px-3 py-2">
-                                        <div className="text-xs leading-tight font-semibold text-slate-800">{row.designation_name || '—'}</div>
-                                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-500">
-                                            <Building2 className="h-3 w-3 shrink-0 text-slate-400" />
-                                            <span>{row.workplace || '—'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="px-3 py-2">
-                                        <div className="flex flex-col items-start gap-0.5">
+                                        <div className="flex flex-col items-end gap-1 shrink-0">
                                             {statusBadge(row.status, row.status_label)}
                                             {row.status === 'draft' && row.sent_back_reason && (
-                                                <span className="inline-flex items-center gap-0.5 rounded border border-rose-200 bg-rose-50 px-1 py-0.5 text-[9px] font-bold whitespace-nowrap text-rose-700" title={row.sent_back_reason}>
+                                                <span className="inline-flex items-center gap-0.5 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">
                                                     <RotateCcw className="h-2.5 w-2.5 shrink-0" />
                                                     Needs revision
                                                 </span>
                                             )}
                                         </div>
-                                    </TableCell>
-                                    <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-800">{money(row.net_payable)}</TableCell>
-                                    <TableCell className="px-3 py-2 text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            {row.can_act && (row.status === 'submitted_to_director_fa' || row.status === 'submitted_to_ed') && (
-                                                <Button size="sm" className="h-7 rounded bg-emerald-600 px-2 text-[11px] font-semibold text-white shadow-2xs hover:bg-emerald-700" onClick={() => router.visit(`/final-clearances/${row.id}`)}>
-                                                    <CheckCircle2 className="h-3 w-3" />
-                                                    Approve
-                                                </Button>
-                                            )}
-                                            {row.can_act && row.status !== 'submitted_to_director_fa' && row.status !== 'submitted_to_ed' && (
-                                                <Button size="sm" className="h-7 rounded bg-emerald-600 px-2 text-[11px] font-semibold text-white shadow-2xs hover:bg-emerald-700" onClick={() => router.visit(`/final-clearances/${row.id}`)}>
-                                                    Open
-                                                </Button>
-                                            )}
-                                            <Button variant="outline" size="sm" className="h-7 w-7 border-slate-200 p-0 text-slate-700 hover:bg-slate-50" title="View" onClick={() => router.visit(`/final-clearances/${row.id}`)}>
-                                                <Eye className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button variant="outline" size="sm" className="h-7 w-7 border-slate-200 p-0 text-slate-700 hover:bg-slate-50" title="Print" onClick={() => window.open(`/final-clearances/${row.id}/print`, '_blank')}>
-                                                <Printer className="h-3.5 w-3.5" />
-                                            </Button>
-                                            {isSuperAdmin && (
-                                                <Button variant="outline" size="sm" className="h-7 w-7 border-rose-200 p-0 text-rose-700 hover:bg-rose-50" title="Delete" onClick={() => setDeleteTarget(row)}>
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                                    </div>
 
-                    <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 sm:flex-row">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                    {/* Info Strip: Date & Net Payable */}
+                                    <div className="bg-slate-50/80 rounded-xl p-2.5 flex items-center justify-between border border-slate-100 text-xs">
+                                        <div className="flex items-center gap-1.5 text-slate-500">
+                                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                            <span>{row.created_at || '—'}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-[10px] text-slate-400 block font-medium">Net Payable</span>
+                                            <span className="font-mono font-extrabold text-sm text-emerald-700">
+                                                ৳ {money(row.net_payable)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions Row */}
+                                    <div className="flex items-center gap-2 pt-1">
+                                        {row.can_act && (
+                                            <Button
+                                                size="sm"
+                                                className="flex-1 h-9 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 flex items-center justify-center gap-1"
+                                                onClick={() => router.visit(`/final-clearances/${row.id}`)}
+                                            >
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                <span>{row.status === 'submitted_to_director_fa' || row.status === 'submitted_to_ed' ? 'Approve' : 'Open'}</span>
+                                            </Button>
+                                        )}
+
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className={`h-9 rounded-xl border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-1 ${
+                                                row.can_act ? 'px-3' : 'flex-1 font-semibold'
+                                            }`}
+                                            onClick={() => router.visit(`/final-clearances/${row.id}`)}
+                                        >
+                                            <Eye className="h-3.5 w-3.5" />
+                                            <span>View</span>
+                                        </Button>
+
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 px-3 rounded-xl border-slate-300 text-slate-700 hover:bg-slate-100"
+                                            title="Print"
+                                            onClick={() => window.open(`/final-clearances/${row.id}/print`, '_blank')}
+                                        >
+                                            <Printer className="h-3.5 w-3.5" />
+                                        </Button>
+
+                                        {isSuperAdmin && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-9 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                                                title="Delete"
+                                                onClick={() => setDeleteTarget(row)}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 p-3 sm:flex-row">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-[11px] text-slate-500">
                             <span>Rows per page:</span>
                             <Select value={perPage} onValueChange={(value) => { setPerPage(value); apply({ per_page: value }); }}>
                                 <SelectTrigger className="h-7 w-[68px] border-slate-200 bg-white text-xs"><SelectValue /></SelectTrigger>
@@ -348,11 +456,10 @@ export default function FinalClearanceIndex({
                                             key={index}
                                             href={link.url}
                                             preserveState
-                                            className={`inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1.5 text-xs font-bold transition-all ${
-                                                link.active
+                                            className={`inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1.5 text-xs font-bold transition-all ${link.active
                                                     ? 'bg-emerald-600 text-white shadow-xs'
                                                     : 'border border-slate-200 bg-white text-slate-700 shadow-2xs hover:border-emerald-300 hover:text-emerald-600'
-                                            }`}
+                                                }`}
                                         >
                                             {isArrow ? (index === 0 ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />) : label}
                                         </Link>

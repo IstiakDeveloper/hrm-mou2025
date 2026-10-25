@@ -69,7 +69,25 @@ final class EmployeeNameMatcher
 
         $query = Employee::query()->where('status', 'active');
         if ($branchId !== null) {
-            $query->where('current_branch_id', $branchId);
+            $query->where(function ($sub) use ($branchId) {
+                $sub->where('current_branch_id', $branchId);
+                if (\Illuminate\Support\Facades\Schema::hasTable('project_attendance_branches')) {
+                    $sub->orWhereExists(function ($p) use ($branchId) {
+                        $p->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('project_attendance_branches')
+                            ->whereColumn('project_attendance_branches.project_id', 'employees.project_id')
+                            ->where('project_attendance_branches.branch_id', $branchId);
+                    });
+                }
+                if (\Illuminate\Support\Facades\Schema::hasTable('employee_attendance_branches')) {
+                    $sub->orWhereExists(function ($e) use ($branchId) {
+                        $e->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('employee_attendance_branches')
+                            ->whereColumn('employee_attendance_branches.employee_id', 'employees.id')
+                            ->where('employee_attendance_branches.branch_id', $branchId);
+                    });
+                }
+            });
         }
 
         $best = null;
@@ -100,7 +118,25 @@ final class EmployeeNameMatcher
 
         $query = Employee::query()->where('status', 'active');
         if ($branchId !== null) {
-            $query->where('current_branch_id', $branchId);
+            $query->where(function ($sub) use ($branchId) {
+                $sub->where('current_branch_id', $branchId);
+                if (\Illuminate\Support\Facades\Schema::hasTable('project_attendance_branches')) {
+                    $sub->orWhereExists(function ($p) use ($branchId) {
+                        $p->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('project_attendance_branches')
+                            ->whereColumn('project_attendance_branches.project_id', 'employees.project_id')
+                            ->where('project_attendance_branches.branch_id', $branchId);
+                    });
+                }
+                if (\Illuminate\Support\Facades\Schema::hasTable('employee_attendance_branches')) {
+                    $sub->orWhereExists(function ($e) use ($branchId) {
+                        $e->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('employee_attendance_branches')
+                            ->whereColumn('employee_attendance_branches.employee_id', 'employees.id')
+                            ->where('employee_attendance_branches.branch_id', $branchId);
+                    });
+                }
+            });
         }
 
         $best = null;

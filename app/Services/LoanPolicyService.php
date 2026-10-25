@@ -38,7 +38,7 @@ class LoanPolicyService
             ));
         }
 
-        if ($principal > (float) $policy->max_amount) {
+        if (empty($data['ignore_max_amount']) && $principal > (float) $policy->max_amount) {
             throw new InvalidArgumentException(sprintf(
                 'Loan amount cannot exceed %s under policy "%s".',
                 taka_fmt($policy->max_amount, 2),

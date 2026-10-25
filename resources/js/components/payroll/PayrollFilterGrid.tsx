@@ -156,6 +156,8 @@ export function PayrollEmployeeSelect({
     forGratuity = false,
     forPf = false,
     forLoan = false,
+    pfWithLedger = false,
+    anyStatus = false,
 }: {
     label?: string;
     value: string;
@@ -173,6 +175,8 @@ export function PayrollEmployeeSelect({
     forGratuity?: boolean;
     forPf?: boolean;
     forLoan?: boolean;
+    pfWithLedger?: boolean;
+    anyStatus?: boolean;
 }) {
     const useLookup = employees.length === 0;
     const [searchQuery, setSearchQuery] = useState('');
@@ -185,6 +189,8 @@ export function PayrollEmployeeSelect({
         forGratuity,
         forPf,
         forLoan,
+        pfWithLedger,
+        anyStatus,
     });
     const employeeSource = useLookup ? lookup.employees : employees;
 

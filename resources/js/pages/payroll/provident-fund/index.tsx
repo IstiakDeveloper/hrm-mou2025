@@ -23,7 +23,7 @@ import {
     PayrollMonthSelect,
     PayrollYearSelect,
 } from '@/components/payroll/PayrollFilterGrid';
-import { BookOpen, Filter, PenLine, Plus, Save, Search, Wallet, X } from 'lucide-react';
+import { ArrowRightLeft, BookOpen, Filter, PenLine, Plus, Save, Search, Wallet, X } from 'lucide-react';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import { hasAppPermission } from '@/lib/permissions';
 import type { SharedData } from '@/types';
@@ -273,6 +273,12 @@ export default function ProvidentFundIndex({
 
                 {canEdit && (
                     <div className="flex items-center gap-1 w-full sm:w-auto justify-end">
+                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs border-zinc-200 bg-white hover:bg-zinc-50 rounded" asChild>
+                            <Link href={staffFundPath('/provident-fund/transfer')}>
+                                <ArrowRightLeft className="mr-1 h-3.5 w-3.5 text-zinc-500" />
+                                Transfer account
+                            </Link>
+                        </Button>
                         <Button type="button" variant="outline" size="sm" className="h-8 text-xs border-zinc-200 bg-white hover:bg-zinc-50 rounded" onClick={() => openManualModal()}>
                             <PenLine className="mr-1 h-3.5 w-3.5 text-zinc-500" />
                             Manual PF
@@ -427,6 +433,19 @@ export default function ProvidentFundIndex({
                                                             title="Edit initial PF"
                                                         >
                                                             <PenLine className="h-3 w-3" />
+                                                        </Button>
+                                                    )}
+                                                    {canEdit && e.pf_balance > 0 && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 text-zinc-500 hover:bg-emerald-50 hover:text-emerald-700 rounded border border-transparent hover:border-emerald-100"
+                                                            asChild
+                                                            title="Transfer whole PF account"
+                                                        >
+                                                            <Link href={staffFundPath(`/provident-fund/transfer?from_employee_id=${e.id}`)}>
+                                                                <ArrowRightLeft className="h-3 w-3" />
+                                                            </Link>
                                                         </Button>
                                                     )}
                                                     {canEdit && e.pf_balance > 0 && (

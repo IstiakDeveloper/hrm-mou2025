@@ -341,20 +341,20 @@ export default function PromotionEvaluationIndex({
                     </Card>
                 </div>
 
-                {/* Filter and Search Bar - Compact Single Row */}
-                <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center gap-2">
-                    <div className="relative w-full sm:flex-1">
+                {/* Filter and Search Bar - Responsive */}
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-2">
+                    <div className="relative w-full md:flex-1">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                         <Input 
                             placeholder={t.searchPlaceholder}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleFilter(search)}
-                            className="pl-8 bg-slate-50/50 border-slate-200 h-8 rounded-md text-xs placeholder:text-slate-400"
+                            className="pl-8 bg-slate-50/50 border-slate-200 h-9 md:h-8 rounded-md text-xs placeholder:text-slate-400"
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto shrink-0">
                         <Select 
                             value={status} 
                             onValueChange={(val) => {
@@ -362,7 +362,7 @@ export default function PromotionEvaluationIndex({
                                 handleFilter(undefined, val, undefined);
                             }}
                         >
-                            <SelectTrigger className="w-full sm:w-40 h-8 border-slate-200 bg-slate-50/50 text-[11px]">
+                            <SelectTrigger className="w-full sm:w-40 h-9 md:h-8 border-slate-200 bg-slate-50/50 text-[11px]">
                                 <SelectValue placeholder={t.allStatuses} />
                             </SelectTrigger>
                             <SelectContent>
@@ -386,7 +386,7 @@ export default function PromotionEvaluationIndex({
                                 handleFilter(undefined, undefined, val);
                             }}
                         >
-                            <SelectTrigger className="w-full sm:w-36 h-8 border-slate-200 bg-slate-50/50 text-[11px]">
+                            <SelectTrigger className="w-full sm:w-36 h-9 md:h-8 border-slate-200 bg-slate-50/50 text-[11px]">
                                 <SelectValue placeholder={t.allFormTypes} />
                             </SelectTrigger>
                             <SelectContent>
@@ -397,229 +397,371 @@ export default function PromotionEvaluationIndex({
                             </SelectContent>
                         </Select>
 
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleFilter(search)}
-                            className="h-8 px-2.5 border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
-                        >
-                            <Search className="h-3.5 w-3.5" />
-                        </Button>
-
-                        {(search || status !== 'all' || formType !== 'all') && (
+                        <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 justify-end">
                             <Button 
-                                variant="ghost" 
+                                variant="outline" 
                                 size="sm" 
-                                onClick={handleReset}
-                                className="h-8 px-2 text-slate-500 hover:text-slate-800"
-                                title="Reset filters"
+                                onClick={() => handleFilter(search)}
+                                className="h-9 md:h-8 flex-1 sm:flex-initial px-3 border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
                             >
-                                <RotateCcw className="h-3.5 w-3.5" />
+                                <Search className="h-3.5 w-3.5 mr-1 sm:mr-0" />
+                                <span className="sm:hidden text-xs">{lang === 'bn' ? 'অনুসন্ধান' : 'Search'}</span>
                             </Button>
-                        )}
+
+                            {(search || status !== 'all' || formType !== 'all') && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={handleReset}
+                                    className="h-9 md:h-8 px-2 text-slate-500 hover:text-slate-800"
+                                    title="Reset filters"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Table Content - Professional, Compact, Zero Horizontal Scroll */}
                 <div className="rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden">
-                    <Table className="w-full table-fixed">
-                        <TableHeader className="bg-slate-50/80 border-b border-slate-200">
-                            <TableRow className="text-[11px] font-semibold text-slate-600 hover:bg-transparent">
-                                <TableHead className="w-[10%] py-2 px-3">{t.dateCol}</TableHead>
-                                <TableHead className="w-[24%] py-2 px-3">{t.staffDetailsCol}</TableHead>
-                                <TableHead className="w-[20%] py-2 px-3">{t.designationBranchCol}</TableHead>
-                                <TableHead className="w-[11%] py-2 px-3">{t.formTypeCol}</TableHead>
-                                <TableHead className="w-[11%] py-2 px-3 text-center">{t.scoreCol}</TableHead>
-                                <TableHead className="w-[12%] py-2 px-3">{t.statusCol}</TableHead>
-                                <TableHead className="w-[12%] py-2 px-3 text-right">{t.actionsCol}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {evaluations.data && evaluations.data.length > 0 ? (
-                                evaluations.data.map((ev: any) => {
-                                    const employeeName = lang === 'bn' 
-                                        ? (ev.employee?.name_bn || ev.employee?.name_en) 
-                                        : (ev.employee?.name_en || ev.employee?.name_bn);
-                                    
-                                    const designationName = lang === 'bn'
-                                        ? (ev.employee?.designation?.name_bn || ev.employee?.designation?.name || ev.employee?.designation?.title || t.notAvailable)
-                                        : (ev.employee?.designation?.name_en || ev.employee?.designation?.name || ev.employee?.designation?.title || t.notAvailable);
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block">
+                        <Table className="w-full table-fixed">
+                            <TableHeader className="bg-slate-50/80 border-b border-slate-200">
+                                <TableRow className="text-[11px] font-semibold text-slate-600 hover:bg-transparent">
+                                    <TableHead className="w-[10%] py-2 px-3">{t.dateCol}</TableHead>
+                                    <TableHead className="w-[24%] py-2 px-3">{t.staffDetailsCol}</TableHead>
+                                    <TableHead className="w-[20%] py-2 px-3">{t.designationBranchCol}</TableHead>
+                                    <TableHead className="w-[11%] py-2 px-3">{t.formTypeCol}</TableHead>
+                                    <TableHead className="w-[11%] py-2 px-3 text-center">{t.scoreCol}</TableHead>
+                                    <TableHead className="w-[12%] py-2 px-3">{t.statusCol}</TableHead>
+                                    <TableHead className="w-[12%] py-2 px-3 text-right">{t.actionsCol}</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {evaluations.data && evaluations.data.length > 0 ? (
+                                    evaluations.data.map((ev: any) => {
+                                        const employeeName = lang === 'bn' 
+                                            ? (ev.employee?.name_bn || ev.employee?.name_en) 
+                                            : (ev.employee?.name_en || ev.employee?.name_bn);
+                                        
+                                        const designationName = lang === 'bn'
+                                            ? (ev.employee?.designation?.name_bn || ev.employee?.designation?.name || ev.employee?.designation?.title || t.notAvailable)
+                                            : (ev.employee?.designation?.name_en || ev.employee?.designation?.name || ev.employee?.designation?.title || t.notAvailable);
 
-                                    const branchName = lang === 'bn'
-                                        ? (ev.employee?.branch?.name_bn || ev.employee?.branch?.name || t.notAvailable)
-                                        : (ev.employee?.branch?.name_en || ev.employee?.branch?.name || t.notAvailable);
+                                        const branchName = lang === 'bn'
+                                            ? (ev.employee?.branch?.name_bn || ev.employee?.branch?.name || t.notAvailable)
+                                            : (ev.employee?.branch?.name_en || ev.employee?.branch?.name || t.notAvailable);
 
-                                    return (
-                                        <TableRow key={ev.id} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
-                                            {/* Date */}
-                                            <TableCell className="py-2 px-3 text-[11px] text-slate-500 font-medium whitespace-nowrap">
-                                                <div className="flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
-                                                    <span>{format(new Date(ev.created_at), 'dd/MM/yyyy')}</span>
-                                                </div>
-                                                {ev.closing_month && (
-                                                    <div className="text-[10px] text-slate-400 truncate">
-                                                        {formatClosingMonth(ev.closing_month, lang)}
+                                        return (
+                                            <TableRow key={ev.id} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
+                                                {/* Date */}
+                                                <TableCell className="py-2 px-3 text-[11px] text-slate-500 font-medium whitespace-nowrap">
+                                                    <div className="flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                                        <span>{format(new Date(ev.created_at), 'dd/MM/yyyy')}</span>
                                                     </div>
-                                                )}
-                                            </TableCell>
+                                                    {ev.closing_month && (
+                                                        <div className="text-[10px] text-slate-400 truncate">
+                                                            {formatClosingMonth(ev.closing_month, lang)}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Employee Name & PIN */}
-                                            <TableCell className="py-2 px-3">
-                                                <div className="font-bold text-xs text-slate-900 truncate leading-tight">
-                                                    {employeeName}
-                                                </div>
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className="font-mono text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                                                        PIN: {ev.employee?.pin}
-                                                    </span>
-                                                </div>
-                                            </TableCell>
-
-                                            {/* Designation & Branch */}
-                                            <TableCell className="py-2 px-3">
-                                                <div className="text-xs font-semibold text-slate-800 truncate leading-tight">
-                                                    {designationName}
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                                                    <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
-                                                    <span className="truncate">{branchName}</span>
-                                                </div>
-                                            </TableCell>
-
-                                            {/* Form Type */}
-                                            <TableCell className="py-2 px-3">
-                                                {getFormTypeBadge(ev.form_type)}
-                                            </TableCell>
-
-                                            {/* Combined Score & Grade */}
-                                            <TableCell className="py-2 px-3 text-center">
-                                                <div className="flex items-center justify-center gap-1.5">
-                                                    <span className="font-bold text-xs text-slate-900">
-                                                        {Number(ev.total_score || 0)}
-                                                    </span>
-                                                    {getGradeBadge(ev.calculated_grade)}
-                                                </div>
-                                            </TableCell>
-
-                                            {/* Status */}
-                                            <TableCell className="py-2 px-3">
-                                                <div className="flex flex-col gap-0.5 items-start">
-                                                    {getStatusBadge(ev.status)}
-                                                    {ev.status === 'draft' && ev.sent_back_reason && (
-                                                        <span 
-                                                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap"
-                                                            title={`ফেরত পাঠানোর কারণ: ${ev.sent_back_reason}`}
-                                                        >
-                                                            <RotateCcw className="h-2.5 w-2.5 shrink-0" />
-                                                            {lang === 'bn' ? 'সংশোধন প্রয়োজন' : 'Needs Revision'}
+                                                {/* Employee Name & PIN */}
+                                                <TableCell className="py-2 px-3">
+                                                    <div className="font-bold text-xs text-slate-900 truncate leading-tight">
+                                                        {employeeName}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="font-mono text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                                                            PIN: {ev.employee?.pin}
                                                         </span>
-                                                    )}
-                                                    {ev.has_user_signed && !ev.can_approve && !['approved', 'rejected'].includes(ev.status) && (
-                                                        <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 whitespace-nowrap">
-                                                            <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
-                                                            {lang === 'bn' ? 'স্বাক্ষর সম্পন্ন' : 'Signed'}
+                                                    </div>
+                                                </TableCell>
+
+                                                {/* Designation & Branch */}
+                                                <TableCell className="py-2 px-3">
+                                                    <div className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                                                        {designationName}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                                                        <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
+                                                        <span className="truncate">{branchName}</span>
+                                                    </div>
+                                                </TableCell>
+
+                                                {/* Form Type */}
+                                                <TableCell className="py-2 px-3">
+                                                    {getFormTypeBadge(ev.form_type)}
+                                                </TableCell>
+
+                                                {/* Combined Score & Grade */}
+                                                <TableCell className="py-2 px-3 text-center">
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        <span className="font-bold text-xs text-slate-900">
+                                                            {Number(ev.total_score || 0)}
                                                         </span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
+                                                        {getGradeBadge(ev.calculated_grade)}
+                                                    </div>
+                                                </TableCell>
 
-                                            {/* Actions */}
-                                            <TableCell className="py-2 px-3 text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    {/* Strict Approve Button: only visible if user is the assigned reviewer for this exact stage */}
-                                                    {ev.can_approve && (
-                                                        <Button 
-                                                            size="sm" 
-                                                            onClick={() => openApprovalModal(ev)}
-                                                            className="h-6.5 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded shadow-2xs flex items-center gap-1"
-                                                            title={lang === 'bn' ? 'অনুমোদন ও অগ্রবর্তী করুন' : 'Approve & Forward'}
-                                                        >
-                                                            <CheckCircle2 className="h-3 w-3" />
-                                                            <span>{lang === 'bn' ? 'অনুমোদন' : 'Approve'}</span>
-                                                        </Button>
-                                                    )}
+                                                {/* Status */}
+                                                <TableCell className="py-2 px-3">
+                                                    <div className="flex flex-col gap-0.5 items-start">
+                                                        {getStatusBadge(ev.status)}
+                                                        {ev.status === 'draft' && ev.sent_back_reason && (
+                                                            <span 
+                                                                className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap"
+                                                                title={`ফেরত পাঠানোর কারণ: ${ev.sent_back_reason}`}
+                                                            >
+                                                                <RotateCcw className="h-2.5 w-2.5 shrink-0" />
+                                                                {lang === 'bn' ? 'সংশোধন প্রয়োজন' : 'Needs Revision'}
+                                                            </span>
+                                                        )}
+                                                        {ev.has_user_signed && !ev.can_approve && !['approved', 'rejected'].includes(ev.status) && (
+                                                            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 whitespace-nowrap">
+                                                                <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
+                                                                {lang === 'bn' ? 'স্বাক্ষর সম্পন্ন' : 'Signed'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
 
-                                                    <Link href={`/promotion-evaluations/${ev.id}`}>
-                                                        <Button 
-                                                            variant="outline" 
-                                                            size="sm" 
-                                                            className="h-6.5 w-6.5 p-0 border-slate-200 hover:bg-slate-50 text-slate-700"
-                                                            title={t.viewAction}
-                                                        >
-                                                            <Eye className="h-3.5 w-3.5 text-slate-600" />
-                                                        </Button>
-                                                    </Link>
+                                                {/* Actions */}
+                                                <TableCell className="py-2 px-3 text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        {ev.can_approve && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                onClick={() => openApprovalModal(ev)}
+                                                                className="h-6.5 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded shadow-2xs flex items-center gap-1"
+                                                                title={lang === 'bn' ? 'অনুমোদন ও অগ্রবর্তী করুন' : 'Approve & Forward'}
+                                                            >
+                                                                <CheckCircle2 className="h-3 w-3" />
+                                                                <span>{lang === 'bn' ? 'অনুমোদন' : 'Approve'}</span>
+                                                            </Button>
+                                                        )}
 
-                                                    {ev.can_edit && (
-                                                        <Link href={`/promotion-evaluations/${ev.id}/edit`}>
+                                                        <Link href={`/promotion-evaluations/${ev.id}`}>
                                                             <Button 
                                                                 variant="outline" 
                                                                 size="sm" 
-                                                                className="h-6.5 w-6.5 p-0 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
-                                                                title={lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit Evaluation'}
+                                                                className="h-6.5 w-6.5 p-0 border-slate-200 hover:bg-slate-50 text-slate-700"
+                                                                title={t.viewAction}
                                                             >
-                                                                <Edit3 className="h-3.5 w-3.5 text-amber-700" />
+                                                                <Eye className="h-3.5 w-3.5 text-slate-600" />
                                                             </Button>
                                                         </Link>
-                                                    )}
 
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        onClick={() => window.open(`/promotion-evaluations/${ev.id}/print`, '_blank')}
-                                                        className="h-6.5 w-6.5 p-0 border-slate-200 hover:bg-slate-50 text-slate-700"
-                                                        title={t.printOfficialForm}
-                                                    >
-                                                        <Printer className="h-3.5 w-3.5 text-slate-600" />
-                                                    </Button>
+                                                        {ev.can_edit && (
+                                                            <Link href={`/promotion-evaluations/${ev.id}/edit`}>
+                                                                <Button 
+                                                                    variant="outline" 
+                                                                    size="sm" 
+                                                                    className="h-6.5 w-6.5 p-0 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
+                                                                    title={lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit Evaluation'}
+                                                                >
+                                                                    <Edit3 className="h-3.5 w-3.5 text-amber-700" />
+                                                                </Button>
+                                                            </Link>
+                                                        )}
 
-                                                    {ev.can_delete && (
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
-                                                            onClick={() => handleDelete(ev.id)}
-                                                            className="h-6.5 w-6.5 p-0 border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700"
-                                                            title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
+                                                            onClick={() => window.open(`/promotion-evaluations/${ev.id}/print`, '_blank')}
+                                                            className="h-6.5 w-6.5 p-0 border-slate-200 hover:bg-slate-50 text-slate-700"
+                                                            title={t.printOfficialForm}
                                                         >
-                                                            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                                                            <Printer className="h-3.5 w-3.5 text-slate-600" />
                                                         </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="py-12 text-center">
-                                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 mb-3 ring-1 ring-emerald-600/10">
-                                                <Award className="h-6 w-6" />
-                                            </div>
-                                            <h3 className="text-sm font-bold text-slate-900">{lang === 'bn' ? 'কোনো মূল্যায়ন পাওয়া যায়নি' : 'No evaluations found'}</h3>
-                                            <p className="text-[11px] text-slate-500 mt-1 text-center">
-                                                {search || status !== 'all' || formType !== 'all' 
-                                                    ? (lang === 'bn' ? 'আপনার অনুসন্ধানের সাথে কোনো মূল্যায়ন মেলেনি।' : 'No promotion evaluations matched your search filters.')
-                                                    : (lang === 'bn' ? 'আপনার আওতায় এখনও কোনো পদোন্নতি মূল্যায়ন শুরু করা হয়নি।' : 'No promotion evaluations have been initiated yet in your jurisdiction.')}
-                                            </p>
 
-                                            {canCreate && (
-                                                <div className="mt-4">
-                                                    <Link href="/promotion-evaluations/create">
-                                                        <Button className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-2xs">
-                                                            <Plus className="h-3.5 w-3.5 mr-1" />
-                                                            {t.startEvaluationBtn}
-                                                        </Button>
-                                                    </Link>
+                                                        {ev.can_delete && (
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="sm" 
+                                                                onClick={() => handleDelete(ev.id)}
+                                                                className="h-6.5 w-6.5 p-0 border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700"
+                                                                title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 mb-3 ring-1 ring-emerald-600/10">
+                                                    <Award className="h-6 w-6" />
                                                 </div>
+                                                <h3 className="text-sm font-bold text-slate-900">{lang === 'bn' ? 'কোনো মূল্যায়ন পাওয়া যায়নি' : 'No evaluations found'}</h3>
+                                                <p className="text-[11px] text-slate-500 mt-1 text-center">
+                                                    {search || status !== 'all' || formType !== 'all' 
+                                                        ? (lang === 'bn' ? 'আপনার অনুসন্ধানের সাথে কোনো মূল্যায়ন মেলেনি।' : 'No promotion evaluations matched your search filters.')
+                                                        : (lang === 'bn' ? 'আপনার আওতায় এখনও কোনো পদোন্নতি মূল্যায়ন শুরু করা হয়নি।' : 'No promotion evaluations have been initiated yet in your jurisdiction.')}
+                                                </p>
+
+                                                {canCreate && (
+                                                    <div className="mt-4">
+                                                        <Link href="/promotion-evaluations/create">
+                                                            <Button className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-2xs">
+                                                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                                                {t.startEvaluationBtn}
+                                                            </Button>
+                                                        </Link>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* Mobile App Cards View */}
+                    <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                        {evaluations.data && evaluations.data.length > 0 ? (
+                            evaluations.data.map((ev: any) => {
+                                const employeeName = lang === 'bn' 
+                                    ? (ev.employee?.name_bn || ev.employee?.name_en) 
+                                    : (ev.employee?.name_en || ev.employee?.name_bn);
+                                
+                                const designationName = lang === 'bn'
+                                    ? (ev.employee?.designation?.name_bn || ev.employee?.designation?.name || ev.employee?.designation?.title || t.notAvailable)
+                                    : (ev.employee?.designation?.name_en || ev.employee?.designation?.name || ev.employee?.designation?.title || t.notAvailable);
+
+                                const branchName = lang === 'bn'
+                                    ? (ev.employee?.branch?.name_bn || ev.employee?.branch?.name || t.notAvailable)
+                                    : (ev.employee?.branch?.name_en || ev.employee?.branch?.name || t.notAvailable);
+
+                                return (
+                                    <div key={ev.id} className="p-3.5 space-y-2.5">
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {getFormTypeBadge(ev.form_type)}
+                                                {getGradeBadge(ev.calculated_grade)}
+                                            </div>
+                                            {getStatusBadge(ev.status)}
+                                        </div>
+
+                                        <div>
+                                            <div className="font-bold text-sm text-slate-900 leading-snug">
+                                                {employeeName}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs text-slate-600">
+                                                <span className="font-mono text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                    PIN: {ev.employee?.pin}
+                                                </span>
+                                                <span>·</span>
+                                                <span className="font-medium text-slate-800">{designationName}</span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-1">
+                                                <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
+                                                <span className="truncate">{branchName}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between bg-slate-50/80 rounded-lg p-2 border border-slate-100 text-xs">
+                                            <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                                <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                                <span>{format(new Date(ev.created_at), 'dd/MM/yyyy')}</span>
+                                                {ev.closing_month && (
+                                                    <span className="text-slate-400">({formatClosingMonth(ev.closing_month, lang)})</span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1 font-bold text-slate-900">
+                                                <span className="text-[11px] font-semibold text-slate-500">{lang === 'bn' ? 'নম্বর:' : 'Score:'}</span>
+                                                <span className="text-sm text-emerald-700">{Number(ev.total_score || 0)}</span>
+                                                <span className="text-[10px] text-slate-400 font-normal">/ 100</span>
+                                            </div>
+                                        </div>
+
+                                        {ev.status === 'draft' && ev.sent_back_reason && (
+                                            <div className="flex items-start gap-1.5 p-2 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 font-medium">
+                                                <RotateCcw className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                                <span>{lang === 'bn' ? `সংশোধন প্রয়োজন: ${ev.sent_back_reason}` : `Needs Revision: ${ev.sent_back_reason}`}</span>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-1.5 pt-1">
+                                            {ev.can_approve && (
+                                                <Button 
+                                                    size="sm" 
+                                                    onClick={() => openApprovalModal(ev)}
+                                                    className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-2xs flex items-center justify-center gap-1"
+                                                >
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    <span>{lang === 'bn' ? 'অনুমোদন' : 'Approve'}</span>
+                                                </Button>
+                                            )}
+                                            <Link href={`/promotion-evaluations/${ev.id}`} className="flex-1">
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="w-full h-8 text-xs border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center justify-center gap-1"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5 text-slate-600" />
+                                                    <span>{lang === 'bn' ? 'বিস্তারিত' : 'View'}</span>
+                                                </Button>
+                                            </Link>
+                                            {ev.can_edit && (
+                                                <Link href={`/promotion-evaluations/${ev.id}/edit`}>
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="h-8 px-2.5 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg"
+                                                        title={lang === 'bn' ? 'সম্পাদনা' : 'Edit'}
+                                                    >
+                                                        <Edit3 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </Link>
+                                            )}
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={() => window.open(`/promotion-evaluations/${ev.id}/print`, '_blank')}
+                                                className="h-8 px-2.5 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg"
+                                                title={t.printOfficialForm}
+                                            >
+                                                <Printer className="h-3.5 w-3.5 text-slate-600" />
+                                            </Button>
+                                            {ev.can_delete && (
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => handleDelete(ev.id)}
+                                                    className="h-8 px-2.5 border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg"
+                                                    title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
                                             )}
                                         </div>
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="py-10 text-center px-4">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 mx-auto mb-3 ring-1 ring-emerald-600/10">
+                                    <Award className="h-6 w-6" />
+                                </div>
+                                <h3 className="text-sm font-bold text-slate-900">{lang === 'bn' ? 'কোনো মূল্যায়ন পাওয়া যায়নি' : 'No evaluations found'}</h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    {search || status !== 'all' || formType !== 'all' 
+                                        ? (lang === 'bn' ? 'আপনার অনুসন্ধানের সাথে কোনো মূল্যায়ন মেলেনি।' : 'No promotion evaluations matched your search filters.')
+                                        : (lang === 'bn' ? 'আপনার আওতায় এখনও কোনো পদোন্নতি মূল্যায়ন শুরু করা হয়নি।' : 'No promotion evaluations have been initiated yet in your jurisdiction.')}
+                                </p>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Pagination and per-page footer (as like Employee Index) */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-200/80 dark:border-slate-800 p-3 sm:p-4 bg-slate-50/50 dark:bg-slate-900/50 text-xs text-slate-500 dark:text-slate-400">
