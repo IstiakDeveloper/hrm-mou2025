@@ -62,6 +62,7 @@ class AppraisalListQuery
             'signatures.user:id,name,employee_id,signature',
             'signatures.user.employee:id,name_en,name_bn,designation_id,signature',
             'signatures.user.employee.designation:id,name',
+            'signatures.commentEditor:id,name',
         ];
     }
 

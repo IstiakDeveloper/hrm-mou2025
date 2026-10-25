@@ -199,7 +199,12 @@ export default function FinalClearanceShow({
                     </div>
                 )}
 
-                <ClearanceWorkflowStepper status={clearance.status} signatures={clearance.signatures} />
+                <ClearanceWorkflowStepper
+                    status={clearance.status}
+                    signatures={clearance.signatures}
+                    canCorrectComment={isSuperAdmin}
+                    clearanceId={clearance.id}
+                />
 
                 {canAct && !userHasSignature && (
                     <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-xs sm:flex-row sm:items-center">

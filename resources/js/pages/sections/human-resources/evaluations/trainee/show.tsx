@@ -307,7 +307,7 @@ export default function TraineeEvaluationShow({
                 )}
 
                 {/* Workflow Stepper */}
-                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} />
+                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} canCorrectComment={isSuperAdmin} />
 
                 {canSubmit && (
                     <Card className="border-2 border-emerald-400 bg-emerald-50/20 shadow-sm">

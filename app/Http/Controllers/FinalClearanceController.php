@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\CorrectsWorkflowComments;
 use App\Models\Employee;
 use App\Models\FinalClearance;
+use App\Models\FinalClearanceSignature;
 use App\Services\FinalClearanceService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -11,6 +13,8 @@ use Inertia\Inertia;
 
 class FinalClearanceController extends Controller
 {
+    use CorrectsWorkflowComments;
+
     public function __construct(private readonly FinalClearanceService $clearances) {}
 
     public function index(Request $request)
@@ -151,7 +155,7 @@ class FinalClearanceController extends Controller
         $user = $request->user();
         $this->authorizeRecord($user, $finalClearance);
 
-        $finalClearance->load(['signatures.user.employee', 'initiator:id,name']);
+        $finalClearance->load(['signatures.user.employee', 'signatures.commentEditor:id,name', 'initiator:id,name']);
         $user->loadMissing('employee');
 
         return Inertia::render('final-clearances/show', [
@@ -166,7 +170,7 @@ class FinalClearanceController extends Controller
     {
         $user = $request->user();
         $this->authorizeRecord($user, $finalClearance);
-        $finalClearance->load(['signatures.user.employee', 'initiator:id,name']);
+        $finalClearance->load(['signatures.user.employee', 'signatures.commentEditor:id,name', 'initiator:id,name']);
 
         return Inertia::render('final-clearances/print', [
             'clearance' => $this->payload($finalClearance),
@@ -498,9 +502,11 @@ class FinalClearanceController extends Controller
             $path = $sig->user?->signature ?: $sig->user?->employee?->signature;
 
             return [
+                'id' => $sig->id,
                 'stage' => $sig->stage,
                 'action' => $sig->action,
                 'comments' => $sig->comments,
+                'comment_updated_by_name' => $sig->comment_updated_by_name,
                 'signed_at' => optional($sig->signed_at)->toDateString(),
                 'user_name' => $sig->user?->name,
                 'signature' => $path,
@@ -549,5 +555,24 @@ class FinalClearanceController extends Controller
         if (! $this->clearances->canAct($user, $clearance)) {
             abort(403);
         }
+    }
+
+    public function correctComment(Request $request, FinalClearance $finalClearance, FinalClearanceSignature $signature)
+    {
+        return $this->correctSignatureComment(
+            $request,
+            $signature,
+            (int) $finalClearance->id,
+            'final_clearance_id',
+            function (FinalClearanceSignature $saved) use ($finalClearance) {
+                if ($saved->stage === 'field') {
+                    $finalClearance->preparer_comments = $saved->comments;
+                    $finalClearance->save();
+                } elseif ($saved->stage === 'accounts') {
+                    $finalClearance->accounts_comments = $saved->comments;
+                    $finalClearance->save();
+                }
+            }
+        );
     }
 }

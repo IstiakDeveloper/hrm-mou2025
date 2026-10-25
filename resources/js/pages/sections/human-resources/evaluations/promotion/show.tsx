@@ -306,7 +306,7 @@ export default function PromotionEvaluationShow({
                 </div>
 
                 {/* Visual Workflow Timeline Stepper */}
-                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} />
+                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} canCorrectComment={isSuperAdmin} />
 
                 {/* Sent Back Alert (If Returned to Creator) */}
                 {evaluation.status === 'draft' && sentBackReason && (

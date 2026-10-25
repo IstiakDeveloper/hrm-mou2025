@@ -334,7 +334,7 @@ export default function ConfirmationEvaluationShow({
                 )}
 
                 {/* Workflow Stepper */}
-                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} />
+                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} canCorrectComment={isSuperAdmin} />
 
                 {canSubmit && (
                     <Card className="border-2 border-blue-400 bg-blue-50/20 shadow-sm">

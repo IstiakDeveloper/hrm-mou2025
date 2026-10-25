@@ -1,3 +1,4 @@
+import { WorkflowStepComment } from '@/components/appraisal/WorkflowStepComment';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
@@ -5,9 +6,11 @@ import { AlertTriangle, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
 import React from 'react';
 
 type Signature = {
+    id?: number;
     stage: string;
     action: string;
     comments?: string | null;
+    comment_updated_by_name?: string | null;
     signed_at?: string | null;
     user_name?: string | null;
 };
@@ -31,15 +34,20 @@ const STEPS: Step[] = [
 export default function ClearanceWorkflowStepper({
     status,
     signatures = [],
+    canCorrectComment = false,
+    clearanceId,
 }: {
     status: string;
     signatures?: Signature[];
+    canCorrectComment?: boolean;
+    clearanceId?: number;
 }) {
     const currentStepIndex = status === 'approved' || status === 'rejected'
         ? STEPS.length
         : Math.max(0, STEPS.findIndex((step) => step.key === status));
 
     const sentBack = [...signatures].reverse().find((sig) => sig.action === 'sent_back');
+    const commentUrl = (signatureId: number) => `/final-clearances/${clearanceId}/signatures/${signatureId}/comment`;
 
     return (
         <div className="w-full space-y-4 print:hidden">
@@ -61,6 +69,12 @@ export default function ClearanceWorkflowStepper({
                         {sentBack.comments && (
                             <p className="mt-0.5 rounded-lg border border-amber-200 bg-white/70 p-2.5 text-slate-700 italic">"{sentBack.comments}"</p>
                         )}
+                        <WorkflowStepComment
+                            signature={sentBack}
+                            url={sentBack.id ? commentUrl(sentBack.id) : null}
+                            canEdit={canCorrectComment}
+                            showText={false}
+                        />
                     </div>
                 </div>
             )}
@@ -116,6 +130,12 @@ export default function ClearanceWorkflowStepper({
                                                 <div className="mt-1.5 rounded border border-slate-200/60 bg-slate-100/70 p-1 text-[10px] text-slate-600">
                                                     <p className="truncate font-semibold">{signature.user_name}</p>
                                                     <p className="text-[9px] text-slate-500">{signature.signed_at ? format(new Date(signature.signed_at), 'dd/MM/yy') : ''}</p>
+                                                    <WorkflowStepComment
+                                                        signature={signature}
+                                                        url={signature.id ? commentUrl(signature.id) : null}
+                                                        canEdit={canCorrectComment}
+                                                        compact
+                                                    />
                                                 </div>
                                             ) : isCurrent ? (
                                                 <div className="mt-1.5">
@@ -150,7 +170,17 @@ export default function ClearanceWorkflowStepper({
                                             {isCurrent ? <Badge className="bg-amber-500 px-1.5 py-0 text-[10px] text-white">Pending</Badge> : isPassed ? <Badge className="bg-blue-600 px-1.5 py-0 text-[10px] text-white">Done</Badge> : null}
                                         </div>
                                         <p className="text-[11px] text-slate-500">{step.role}</p>
-                                        {signature && <p className="mt-1 text-[11px] font-semibold text-slate-600">{signature.user_name}</p>}
+                                        {signature && (
+                                            <>
+                                                <p className="mt-1 text-[11px] font-semibold text-slate-600">{signature.user_name}</p>
+                                                <WorkflowStepComment
+                                                    signature={signature}
+                                                    url={signature.id ? commentUrl(signature.id) : null}
+                                                    canEdit={canCorrectComment}
+                                                    compact
+                                                />
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             );

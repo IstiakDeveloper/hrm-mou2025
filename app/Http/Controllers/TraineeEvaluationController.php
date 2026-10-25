@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\CorrectsWorkflowComments;
 use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
 use App\Models\Branch;
 use App\Models\TraineeEvaluation;
+use App\Models\TraineeEvaluationSignature;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\Appraisal\AppraisalEmployeeLookup;
@@ -20,6 +22,7 @@ use Inertia\Response;
 
 class TraineeEvaluationController extends Controller
 {
+    use CorrectsWorkflowComments;
     use ResetsAppraisalWorkflow;
 
     public function __construct(
@@ -661,5 +664,10 @@ class TraineeEvaluationController extends Controller
 
         return redirect()->route('trainee-evaluations.index')
             ->with('success', 'মূল্যায়ন রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।');
+    }
+
+    public function correctComment(Request $request, TraineeEvaluation $evaluation, TraineeEvaluationSignature $signature)
+    {
+        return $this->correctSignatureComment($request, $signature, (int) $evaluation->id, 'trainee_evaluation_id');
     }
 }

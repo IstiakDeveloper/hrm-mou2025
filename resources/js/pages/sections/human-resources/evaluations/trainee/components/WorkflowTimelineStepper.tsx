@@ -6,12 +6,14 @@ import {
     AlertTriangle, 
     ShieldCheck
 } from 'lucide-react';
+import { WorkflowStepComment } from '@/components/appraisal/WorkflowStepComment';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface WorkflowTimelineStepperProps {
     evaluation: any;
     lang?: 'bn' | 'en';
+    canCorrectComment?: boolean;
 }
 
 interface StepConfig {
@@ -27,10 +29,12 @@ interface StepConfig {
 export default function WorkflowTimelineStepper({
     evaluation,
     lang = 'bn',
+    canCorrectComment = false,
 }: WorkflowTimelineStepperProps) {
     const formType = evaluation?.form_type;
     const currentStatus = evaluation?.status || 'draft';
     const signatures = evaluation?.signatures || [];
+    const commentUrl = (signatureId: number) => `/trainee-evaluations/${evaluation.id}/signatures/${signatureId}/comment`;
 
     // Define steps sequence based on form type
     const steps: StepConfig[] = React.useMemo(() => {
@@ -240,6 +244,12 @@ export default function WorkflowTimelineStepper({
                                                     {format(new Date(sig.signed_at), 'dd MMM yyyy, p')}
                                                 </div>
                                             )}
+                                            <WorkflowStepComment
+                                                signature={sig}
+                                                url={sig.id ? commentUrl(sig.id) : null}
+                                                canEdit={canCorrectComment}
+                                                compact
+                                            />
                                         </div>
                                     )}
                                 </div>

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\CorrectsWorkflowComments;
 use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
 use App\Models\ConfirmationEvaluation;
+use App\Models\ConfirmationEvaluationSignature;
 use App\Models\Employee;
 use App\Services\Appraisal\AppraisalEmployeeLookup;
 use App\Services\Appraisal\AppraisalListQuery;
@@ -19,6 +21,7 @@ use Inertia\Inertia;
 
 class ConfirmationEvaluationController extends Controller
 {
+    use CorrectsWorkflowComments;
     use ResetsAppraisalWorkflow;
 
     public function __construct(private readonly ConfirmationEvaluationWorkflowService $workflowService) {}
@@ -867,5 +870,10 @@ class ConfirmationEvaluationController extends Controller
         $this->workflowService->edApprove($evaluation, $user, trim((string) $request->input('comments')), $request->boolean('is_approved'));
 
         return redirect()->back()->with('success', $request->boolean('is_approved') ? 'স্থায়ীকরণ মূল্যায়নটি সফলভাবে চূড়ান্ত অনুমোদন দেওয়া হয়েছে।' : 'স্থায়ীকরণ মূল্যায়নটি নামঞ্জুর করা হয়েছে।');
+    }
+
+    public function correctComment(Request $request, ConfirmationEvaluation $evaluation, ConfirmationEvaluationSignature $signature)
+    {
+        return $this->correctSignatureComment($request, $signature, (int) $evaluation->id, 'confirmation_evaluation_id');
     }
 }

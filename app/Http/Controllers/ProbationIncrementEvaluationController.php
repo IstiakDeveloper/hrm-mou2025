@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\CorrectsWorkflowComments;
 use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\ProbationIncrementEvaluation;
+use App\Models\ProbationIncrementEvaluationSignature;
 use App\Models\Zone;
 use App\Services\Appraisal\AppraisalEmployeeLookup;
 use App\Services\Appraisal\AppraisalListQuery;
@@ -19,6 +21,7 @@ use Inertia\Inertia;
 
 class ProbationIncrementEvaluationController extends Controller
 {
+    use CorrectsWorkflowComments;
     use ResetsAppraisalWorkflow;
 
     protected ProbationIncrementWorkflowService $workflowService;
@@ -845,5 +848,10 @@ class ProbationIncrementEvaluationController extends Controller
         }
 
         return back()->with('success', 'দ্রুত অনুমোদন / ফরোয়ার্ড সম্পন্ন হয়েছে।');
+    }
+
+    public function correctComment(Request $request, ProbationIncrementEvaluation $evaluation, ProbationIncrementEvaluationSignature $signature)
+    {
+        return $this->correctSignatureComment($request, $signature, (int) $evaluation->id, 'probation_increment_evaluation_id');
     }
 }

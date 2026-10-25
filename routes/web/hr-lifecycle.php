@@ -191,6 +191,7 @@ Route::middleware(['permission:promotion-evaluations.view'])->prefix('promotion-
 
     Route::post('/{evaluation}/forward', [\App\Http\Controllers\PromotionEvaluationController::class, 'forward'])->name('forward');
     Route::post('/{evaluation}/send-back', [\App\Http\Controllers\PromotionEvaluationController::class, 'sendBack'])->name('sendBack');
+    Route::put('/{evaluation}/signatures/{signature}/comment', [\App\Http\Controllers\PromotionEvaluationController::class, 'correctComment'])->name('signatures.comment');
 
     Route::middleware(['permission:promotion-evaluations.hr_verify'])->group(function () {
         Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\PromotionEvaluationController::class, 'hrVerify'])->name('hrVerify');
@@ -221,6 +222,7 @@ Route::middleware(['permission:confirmation-evaluations.view'])->prefix('confirm
 
     Route::post('/{evaluation}/forward', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'forward'])->name('forward');
     Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'sendBack'])->name('sendBack');
+    Route::put('/{evaluation}/signatures/{signature}/comment', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'correctComment'])->name('signatures.comment');
 
     Route::middleware(['permission:confirmation-evaluations.hr_verify'])->group(function () {
         Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'hrVerify'])->name('hrVerify');
@@ -251,6 +253,7 @@ Route::middleware(['permission:probation-increment-evaluations.view'])->prefix('
 
     Route::post('/{evaluation}/forward', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'forward'])->name('forward');
     Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'sendBack'])->name('sendBack');
+    Route::put('/{evaluation}/signatures/{signature}/comment', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'correctComment'])->name('signatures.comment');
     Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'quickApprove'])->name('quickApprove');
 
     Route::middleware(['permission:probation-increment-evaluations.hr_verify'])->group(function () {
@@ -282,6 +285,7 @@ Route::middleware(['permission:trainee-evaluations.view'])->prefix('trainee-eval
 
     Route::post('/{evaluation}/forward', [\App\Http\Controllers\TraineeEvaluationController::class, 'forward'])->name('forward');
     Route::post('/{evaluation}/send-back', [\App\Http\Controllers\TraineeEvaluationController::class, 'sendBack'])->name('sendBack');
+    Route::put('/{evaluation}/signatures/{signature}/comment', [\App\Http\Controllers\TraineeEvaluationController::class, 'correctComment'])->name('signatures.comment');
     Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'quickApprove'])->name('quickApprove');
 
     Route::middleware(['permission:trainee-evaluations.hr_verify'])->group(function () {
@@ -307,4 +311,5 @@ Route::prefix('final-clearances')->name('final-clearances.')->group(function () 
     Route::post('/{finalClearance}/send-back', [\App\Http\Controllers\FinalClearanceController::class, 'sendBack'])->name('send-back');
     Route::post('/{finalClearance}/approve', [\App\Http\Controllers\FinalClearanceController::class, 'approve'])->name('approve');
     Route::post('/{finalClearance}/reject', [\App\Http\Controllers\FinalClearanceController::class, 'reject'])->name('reject');
+    Route::put('/{finalClearance}/signatures/{signature}/comment', [\App\Http\Controllers\FinalClearanceController::class, 'correctComment'])->name('signatures.comment');
 });

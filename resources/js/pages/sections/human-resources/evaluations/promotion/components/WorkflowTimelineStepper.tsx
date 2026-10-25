@@ -12,12 +12,14 @@ import {
     ChevronRight,
     MessageSquareQuote
 } from 'lucide-react';
+import { WorkflowStepComment } from '@/components/appraisal/WorkflowStepComment';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface WorkflowTimelineStepperProps {
     evaluation: any;
     lang?: 'bn' | 'en';
+    canCorrectComment?: boolean;
 }
 
 interface StepConfig {
@@ -33,10 +35,12 @@ interface StepConfig {
 export default function WorkflowTimelineStepper({
     evaluation,
     lang = 'bn',
+    canCorrectComment = false,
 }: WorkflowTimelineStepperProps) {
     const formType = evaluation?.form_type;
     const currentStatus = evaluation?.status || 'draft';
     const signatures = evaluation?.signatures || [];
+    const commentUrl = (signatureId: number) => `/promotion-evaluations/${evaluation.id}/signatures/${signatureId}/comment`;
 
     // Define steps sequence based on form type
     const steps: StepConfig[] = React.useMemo(() => {
@@ -246,6 +250,12 @@ export default function WorkflowTimelineStepper({
                         <p className="mt-0.5 italic text-slate-700 dark:text-slate-300 bg-white/70 dark:bg-slate-900/60 p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
                             "{sentBackSignature.comments}"
                         </p>
+                        <WorkflowStepComment
+                            signature={sentBackSignature}
+                            url={sentBackSignature.id ? commentUrl(sentBackSignature.id) : null}
+                            canEdit={canCorrectComment}
+                            showText={false}
+                        />
                         <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                             {lang === 'bn' 
                                 ? 'অনুগ্রহ করে উপরের মন্তব্য অনুযায়ী মূল্যায়ন ফরমটি সংশোধন করুন এবং পুনরায় দাখিল করুন।' 
@@ -357,6 +367,12 @@ export default function WorkflowTimelineStepper({
                                                     <p className="text-[9px] text-slate-500 dark:text-slate-400">
                                                         {signature.signed_at ? format(new Date(signature.signed_at), 'dd/MM/yy') : ''}
                                                     </p>
+                                                    <WorkflowStepComment
+                                                        signature={signature}
+                                                        url={signature.id ? commentUrl(signature.id) : null}
+                                                        canEdit={canCorrectComment}
+                                                        compact
+                                                    />
                                                 </div>
                                             ) : isCurrent ? (
                                                 <div className="mt-1.5">
@@ -448,11 +464,12 @@ export default function WorkflowTimelineStepper({
                                                         ({format(new Date(signature.signed_at), 'dd/MM/yyyy')})
                                                     </span>
                                                 )}
-                                                {signature.comments && (
-                                                    <p className="mt-0.5 text-[10px] italic text-slate-500 dark:text-slate-400 line-clamp-1">
-                                                        "{signature.comments}"
-                                                    </p>
-                                                )}
+                                                <WorkflowStepComment
+                                                    signature={signature}
+                                                    url={signature.id ? commentUrl(signature.id) : null}
+                                                    canEdit={canCorrectComment}
+                                                    compact
+                                                />
                                             </div>
                                         )}
                                     </div>

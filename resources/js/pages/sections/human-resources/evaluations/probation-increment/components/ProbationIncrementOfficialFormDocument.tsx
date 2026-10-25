@@ -1,3 +1,4 @@
+import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
@@ -540,6 +541,7 @@ export default function ProbationIncrementOfficialFormDocument({
         <div className="border border-black p-1.5 mb-1.5 break-inside-avoid">
             <div className="font-bold text-[11px]">{title}</div>
             {body ? <p className="mt-0.5 whitespace-pre-wrap">{body}</p> : <div className="min-h-[16px]" />}
+            <UpdatedByLine name={sig?.comment_updated_by_name} />
             {signLine(sig, fallbackUser)}
         </div>
     );

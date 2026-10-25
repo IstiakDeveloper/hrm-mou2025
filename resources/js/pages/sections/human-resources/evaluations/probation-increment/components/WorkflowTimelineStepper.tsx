@@ -6,12 +6,14 @@ import {
     AlertTriangle, 
     ShieldCheck
 } from 'lucide-react';
+import { WorkflowStepComment } from '@/components/appraisal/WorkflowStepComment';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface WorkflowTimelineStepperProps {
     evaluation: any;
     lang?: 'bn' | 'en';
+    canCorrectComment?: boolean;
 }
 
 interface StepConfig {
@@ -27,10 +29,12 @@ interface StepConfig {
 export default function WorkflowTimelineStepper({
     evaluation,
     lang = 'bn',
+    canCorrectComment = false,
 }: WorkflowTimelineStepperProps) {
     const formType = evaluation?.form_type;
     const currentStatus = evaluation?.status || 'draft';
     const signatures = evaluation?.signatures || [];
+    const commentUrl = (signatureId: number) => `/probation-increment-evaluations/${evaluation.id}/signatures/${signatureId}/comment`;
 
     // Define steps sequence based on form type
     const steps: StepConfig[] = React.useMemo(() => {
@@ -321,11 +325,12 @@ export default function WorkflowTimelineStepper({
                                                     ? format(new Date(matchedSig.signed_at), 'dd MMM yyyy, hh:mm a')
                                                     : '-'}
                                             </p>
-                                            {matchedSig.comments && (
-                                                <p className="text-[10px] text-slate-600 italic line-clamp-2 mt-1 bg-white/70 dark:bg-slate-800/80 p-1 rounded border border-slate-100 dark:border-slate-700">
-                                                    &ldquo;{matchedSig.comments}&rdquo;
-                                                </p>
-                                            )}
+                                            <WorkflowStepComment
+                                                signature={matchedSig}
+                                                url={matchedSig.id ? commentUrl(matchedSig.id) : null}
+                                                canEdit={canCorrectComment}
+                                                compact
+                                            />
                                         </div>
                                     ) : (
                                         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10.5px] text-slate-400 italic">

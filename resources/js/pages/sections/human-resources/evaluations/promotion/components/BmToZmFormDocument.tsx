@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
+import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
@@ -675,6 +676,7 @@ export default function BmToZmFormDocument({
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
                                         {rmSig?.comments ? `"${rmSig.comments}"` : (lang === 'bn' ? 'সম্মত ও অগ্রবর্তী করা হলো।' : 'Agreed and forwarded.')}
+                                        <UpdatedByLine name={rmSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
                                 <div className="flex justify-between items-end pt-1 text-[9.5px]">
@@ -695,6 +697,7 @@ export default function BmToZmFormDocument({
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
                                         {zmSig?.comments ? `"${zmSig.comments}"` : (lang === 'bn' ? 'সুপারিশ করা হলো।' : 'Recommended.')}
+                                        <UpdatedByLine name={zmSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
                                 <div className="flex justify-between items-end pt-1 text-[9.5px]">
@@ -718,6 +721,7 @@ export default function BmToZmFormDocument({
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
                                         {directorSig?.comments ? `"${directorSig.comments}"` : (lang === 'bn' ? 'পর্যালোচনাপূর্বক অনুমোদন সুপারিশ করা হলো।' : 'Reviewed and recommended.')}
+                                        <UpdatedByLine name={directorSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
                                 <div className="flex justify-between items-end pt-1 text-[9.5px]">
@@ -738,6 +742,7 @@ export default function BmToZmFormDocument({
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
                                         {hrSig?.comments ? `"${hrSig.comments}"` : (lang === 'bn' ? 'যাচাই সম্পন্ন ও পদোন্নতির জন্য সুপারিশ করা হলো।' : 'Verified and recommended.')}
+                                        <UpdatedByLine name={hrSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
                                 <div className="flex justify-between items-end pt-1 text-[9.5px]">
@@ -765,6 +770,7 @@ export default function BmToZmFormDocument({
                             </div>
                             <p className="italic text-gray-800 text-[10px] mb-1">
                                 "{edSig?.comments || (evaluation.status === 'approved' ? (lang === 'bn' ? 'অনুমোদন করা হলো।' : 'Approved.') : (evaluation.status === 'rejected' ? (lang === 'bn' ? 'প্রত্যাখ্যাত হলো।' : 'Rejected.') : (lang === 'bn' ? 'চূড়ান্ত অনুমোদন অপেক্ষমাণ।' : 'Pending approval.')))}"
+                                <UpdatedByLine name={edSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[9.5px]">
                                 <div>

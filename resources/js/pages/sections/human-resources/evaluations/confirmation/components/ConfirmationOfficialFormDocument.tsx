@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
+import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
@@ -618,6 +619,7 @@ export default function ConfirmationOfficialFormDocument({
                         <div className="flex-1">
                             <b>আঞ্চলিক ব্যবস্থাপকের মন্তব্য ও সুপারিশ:</b>
                             <p className="mt-0.5 italic">{rmSig?.comments || '____________________________________________________________'}</p>
+                            <UpdatedByLine name={rmSig?.comment_updated_by_name} />
                         </div>
                         <div className="text-center w-48 shrink-0">
                             {renderSignatureImage(rmSig)}
@@ -635,6 +637,7 @@ export default function ConfirmationOfficialFormDocument({
                         <div className="flex-1">
                             <b>জোনাল ম্যানেজারের মন্তব্য ও সুপারিশ:</b>
                             <p className="mt-0.5 italic">{zmSig?.comments || '____________________________________________________________'}</p>
+                            <UpdatedByLine name={zmSig?.comment_updated_by_name} />
                         </div>
                         <div className="text-center w-48 shrink-0">
                             {renderSignatureImage(zmSig)}
@@ -652,6 +655,7 @@ export default function ConfirmationOfficialFormDocument({
                         <div className="flex-1">
                             <b>{formType === 'accountant' ? 'অর্থ ও হিসাব বিভাগের মন্তব্য ও সুপারিশ:' : 'মাইক্রোফাইন্যান্স বিভাগের মন্তব্য ও সুপারিশ:'}</b>
                             <p className="mt-0.5 italic">{directorSig?.comments || '____________________________________________________________'}</p>
+                            <UpdatedByLine name={directorSig?.comment_updated_by_name} />
                         </div>
                         <div className="text-center w-48 shrink-0">
                             {renderSignatureImage(directorSig)}
@@ -669,6 +673,7 @@ export default function ConfirmationOfficialFormDocument({
                         <div className="flex-1">
                             <b>মানবসম্পদ বিভাগের মন্তব্য ও সুপারিশ:</b>
                             <p className="mt-0.5 italic">{hrSig?.comments || '____________________________________________________________'}</p>
+                            <UpdatedByLine name={hrSig?.comment_updated_by_name} />
                         </div>
                         <div className="text-center w-48 shrink-0">
                             {renderSignatureImage(hrSig)}
@@ -686,6 +691,7 @@ export default function ConfirmationOfficialFormDocument({
                         <div className="flex-1">
                             <b>নির্বাহী পরিচালক কর্তৃক মন্তব্য ও অনুমোদন:</b>
                             <p className="mt-0.5 italic">{edSig?.comments || '____________________________________________________________'}</p>
+                            <UpdatedByLine name={edSig?.comment_updated_by_name} />
                         </div>
                         <div className="text-center w-48 shrink-0">
                             {renderSignatureImage(edSig)}

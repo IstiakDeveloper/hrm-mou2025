@@ -1,4 +1,5 @@
 import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
+import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
 import { takaInWords } from '@/lib/taka-in-words';
 import React from 'react';
 
@@ -6,6 +7,7 @@ type Signature = {
     stage: string;
     action: string;
     comments?: string | null;
+    comment_updated_by_name?: string | null;
     signed_at?: string | null;
     user_name?: string | null;
     signature?: string | null;
@@ -147,6 +149,9 @@ function CommentWithSignature({ title, comment, sig }: { title: string; comment?
         <>
             <div className={label}>{title}</div>
             <div className="min-h-[16px] whitespace-pre-wrap">{text(comment)}</div>
+            {(sig?.stage === 'field' || sig?.stage === 'accounts') && (
+                <UpdatedByLine name={sig.comment_updated_by_name} />
+            )}
             {sig ? (
                 <div className="mt-1 flex flex-col items-end leading-none">
                     {sig.signature ? (

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\CorrectsWorkflowComments;
 use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
 use App\Models\Employee;
 use App\Models\PromotionEvaluation;
+use App\Models\PromotionEvaluationSignature;
 use App\Services\Appraisal\AppraisalEmployeeLookup;
 use App\Services\Appraisal\AppraisalListQuery;
 use App\Services\Appraisal\AppraisalTemplateCache;
@@ -17,6 +19,7 @@ use Inertia\Inertia;
 
 class PromotionEvaluationController extends Controller
 {
+    use CorrectsWorkflowComments;
     use ResetsAppraisalWorkflow;
 
     public function __construct(private readonly PromotionEvaluationWorkflowService $workflowService) {}
@@ -763,5 +766,10 @@ class PromotionEvaluationController extends Controller
         $this->workflowService->edApprove($evaluation, $user, trim((string) $request->input('comments')), $request->boolean('is_approved'));
 
         return redirect()->back()->with('success', $request->boolean('is_approved') ? 'পদোন্নতি মূল্যায়নটি সফলভাবে চূড়ান্ত অনুমোদন দেওয়া হয়েছে।' : 'পদোন্নতি মূল্যায়নটি নামঞ্জুর করা হয়েছে।');
+    }
+
+    public function correctComment(Request $request, PromotionEvaluation $evaluation, PromotionEvaluationSignature $signature)
+    {
+        return $this->correctSignatureComment($request, $signature, (int) $evaluation->id, 'promotion_evaluation_id');
     }
 }

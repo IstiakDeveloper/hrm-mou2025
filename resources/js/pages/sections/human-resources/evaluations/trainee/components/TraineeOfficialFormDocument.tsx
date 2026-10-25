@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
+import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
 import {
     TRAINEE_FORM_CONFIGS,
     QUALITATIVE_RATING_OPTIONS,
@@ -366,6 +367,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </div>
                         <div className="min-h-[35px] text-[11px] italic px-1 whitespace-pre-wrap">
                             {getSignature('rm')?.comments || '—'}
+                            <UpdatedByLine name={getSignature('rm')?.comment_updated_by_name} />
                         </div>
                         <div className="flex justify-end pt-1">
                             <div className="w-64 text-center">
@@ -384,6 +386,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </div>
                         <div className="min-h-[35px] text-[11px] italic px-1 whitespace-pre-wrap">
                             {getSignature('zm')?.comments || '—'}
+                            <UpdatedByLine name={getSignature('zm')?.comment_updated_by_name} />
                         </div>
                         <div className="flex justify-end pt-1">
                             <div className="w-64 text-center">
@@ -402,6 +405,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </div>
                         <div className="min-h-[35px] text-[11px] italic px-1 whitespace-pre-wrap">
                             {(formType === 'accountant' ? getSignature('director_fa')?.comments : getSignature('director')?.comments) || '—'}
+                            <UpdatedByLine name={(formType === 'accountant' ? getSignature('director_fa') : getSignature('director'))?.comment_updated_by_name} />
                         </div>
                         <div className="flex justify-end pt-1">
                             <div className="w-64 text-center">
@@ -423,6 +427,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </div>
                         <div className="min-h-[35px] text-[11px] italic px-1 whitespace-pre-wrap">
                             {getSignature('hr')?.comments || '—'}
+                            <UpdatedByLine name={getSignature('hr')?.comment_updated_by_name} />
                         </div>
                         <div className="flex justify-end pt-1">
                             <div className="w-64 text-center">
@@ -441,6 +446,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                         </div>
                         <div className="min-h-[35px] text-[11px] italic px-1 whitespace-pre-wrap">
                             {getSignature('ed')?.comments || '—'}
+                            <UpdatedByLine name={getSignature('ed')?.comment_updated_by_name} />
                         </div>
                         <div className="flex justify-end pt-1">
                             <div className="w-64 text-center">
