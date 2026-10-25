@@ -195,6 +195,40 @@ class OrganogramAccessService
     }
 
     /**
+     * Head assigned on the Finance and Accounts department.
+     * Accountant appraisals at the director stage go to this person only.
+     */
+    public static function isFinanceAndAccountsDepartmentHead(User $user): bool
+    {
+        $employeeId = (int) ($user->employee_id ?? 0);
+        if ($employeeId <= 0) {
+            return false;
+        }
+
+        return Department::query()
+            ->where('name', 'Finance and Accounts')
+            ->where('head_employee_id', $employeeId)
+            ->exists();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public static function financeAndAccountsDepartmentHeadUsers(): \Illuminate\Support\Collection
+    {
+        $employeeIds = Department::query()
+            ->where('name', 'Finance and Accounts')
+            ->whereNotNull('head_employee_id')
+            ->pluck('head_employee_id');
+
+        if ($employeeIds->isEmpty()) {
+            return collect();
+        }
+
+        return User::query()->whereIn('employee_id', $employeeIds)->get();
+    }
+
+    /**
      * HR / leave-desk users who may see all leave applications (not organogram-limited).
      * Branch terminal accounts stay locked to their own branch even if payroll.view
      * aliases to employees.view.

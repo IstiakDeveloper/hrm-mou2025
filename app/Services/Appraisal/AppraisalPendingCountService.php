@@ -155,7 +155,7 @@ class AppraisalPendingCountService
             $stages[] = ['status' => 'submitted_to_director', 'column' => null, 'ids' => []];
         }
 
-        if (! $isExecutiveDirector && $this->isDirectorFinance($roleNames)) {
+        if (! $isExecutiveDirector && $this->isDirectorFinance($user, $roleNames)) {
             $stages[] = ['status' => 'submitted_to_director_fa', 'column' => null, 'ids' => []];
         }
 
@@ -234,11 +234,12 @@ class AppraisalPendingCountService
     /**
      * @param  list<string>  $roleNames
      */
-    private function isDirectorFinance(array $roleNames): bool
+    private function isDirectorFinance(User $user, array $roleNames): bool
     {
         return in_array('Director Finance and Accounts', $roleNames, true)
             || in_array('Director Finance and Account', $roleNames, true)
-            || in_array('Director (Finance & Accounts)', $roleNames, true);
+            || in_array('Director (Finance & Accounts)', $roleNames, true)
+            || OrganogramAccessService::isFinanceAndAccountsDepartmentHead($user);
     }
 
     /**

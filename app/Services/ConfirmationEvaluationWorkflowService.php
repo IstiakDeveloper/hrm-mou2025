@@ -412,7 +412,8 @@ class ConfirmationEvaluationWorkflowService
 
         return in_array('Director Finance and Accounts', $roleNames, true)
             || in_array('Director Finance and Account', $roleNames, true)
-            || in_array('Director (Finance & Accounts)', $roleNames, true);
+            || in_array('Director (Finance & Accounts)', $roleNames, true)
+            || OrganogramAccessService::isFinanceAndAccountsDepartmentHead($user);
     }
 
     private function isUserAuthorizedForHr(User $user, array $roleNames): bool
@@ -630,6 +631,7 @@ class ConfirmationEvaluationWorkflowService
                     ->orWhereHas('roles', fn ($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
                     ->get();
                 $users = $users->merge($directorsFa);
+                $users = $users->merge(OrganogramAccessService::financeAndAccountsDepartmentHeadUsers());
                 break;
 
             case 'submitted_to_hr':

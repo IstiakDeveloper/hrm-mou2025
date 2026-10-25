@@ -279,7 +279,8 @@ class TraineeWorkflowService
 
         return in_array('Director Finance and Accounts', $roleNames, true) ||
             in_array('Director Finance and Account', $roleNames, true) ||
-            in_array('Finance Director', $roleNames, true);
+            in_array('Finance Director', $roleNames, true) ||
+            OrganogramAccessService::isFinanceAndAccountsDepartmentHead($user);
     }
 
     private function isUserAuthorizedForHr(User $user, array $roleNames): bool
