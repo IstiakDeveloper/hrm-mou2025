@@ -46,6 +46,36 @@ export default function PromotionEvaluationShow({
     const [approvalOpen, setApprovalOpen] = useState(false);
     const [draftGaps, setDraftGaps] = useState<FieldGap[]>([]);
 
+    const candidateDesig = evaluation?.employee?.designation?.name || '';
+    const initiatorDesig = evaluation?.initiator?.employee?.designation?.name || '';
+    const isCandidateRm = /regional manager|আঞ্চলিক ব্যবস্থাপক/i.test(candidateDesig);
+    const isInitiatorZm = /zonal manager|জোনাল ম্যানেজার/i.test(initiatorDesig)
+        || evaluation?.initiator?.roles?.some((r: any) => r.name === 'Zonal Manager');
+
+    const getDraftHelpText = () => {
+        if (evaluation.status === 'submitted_to_rm') {
+            return lang === 'bn'
+                ? 'এই মূল্যায়নটি শাখা ব্যবস্থাপকের জন্য তৈরি করা হয়েছে। সবকিছু ঠিক থাকলে পরবর্তী পর্যালোচনার জন্য জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
+                : 'This evaluation is for Branch Manager. When ready, submit it to the Zonal Manager (ZM).';
+        }
+
+        if (isCandidateRm || isInitiatorZm) {
+            return lang === 'bn'
+                ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় রয়েছে। সবকিছু ঠিক থাকলে পরিচালক (মাইক্রোফাইন্যান্স) বরাবর দাখিল করুন।'
+                : 'This evaluation is currently in draft. When ready, submit it to Director (Microfinance).';
+        }
+
+        if (evaluation.form_type === 'bm_and_above') {
+            return lang === 'bn'
+                ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় রয়েছে। সবকিছু ঠিক থাকলে জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
+                : 'This evaluation is currently in draft. When ready, submit it to the Zonal Manager.';
+        }
+
+        return lang === 'bn'
+            ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় সংরক্ষিত আছে। আপনি চাইলে এখনো এটি সম্পাদনা বা মুছে ফেলতে পারেন। সবকিছু ঠিক থাকলে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করুন।'
+            : 'This evaluation is currently saved as a draft. You can still edit or delete it. When ready, submit it to the Regional Manager.';
+    };
+
     useEffect(() => {
         if (evaluation.status === 'draft' || canSubmit) {
             const gaps = savedInitiatorGaps('promotion', evaluation, lang);
@@ -125,10 +155,14 @@ export default function PromotionEvaluationShow({
             }
         }
 
-        const isBmorRmStuck = evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm';
-        const defaultSubmitComment = isBmorRmStuck
-            ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
-            : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।';
+        let defaultSubmitComment = 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।';
+        if (isCandidateRm || isInitiatorZm) {
+            defaultSubmitComment = evaluation.form_type === 'accountant'
+                ? 'মূল্যায়নটি পরিচালক (অর্থ ও হিসাব) বরাবর দাখিল করা হয়েছে।'
+                : 'মূল্যায়নটি পরিচালক (মাইক্রোফাইন্যান্স) বরাবর দাখিল করা হয়েছে।';
+        } else if (evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm') {
+            defaultSubmitComment = 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।';
+        }
 
         const payload: any = {
             ...data,
@@ -394,17 +428,7 @@ export default function PromotionEvaluationShow({
                         <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <p className="text-xs text-amber-900 font-medium">
-                                    {evaluation.status === 'submitted_to_rm'
-                                        ? (lang === 'bn'
-                                            ? 'এই মূল্যায়নটি শাখা ব্যবস্থাপকের জন্য তৈরি করা হয়েছে। সবকিছু ঠিক থাকলে পরবর্তী পর্যালোচনার জন্য জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
-                                            : 'This evaluation is for Branch Manager. When ready, submit it to the Zonal Manager (ZM).')
-                                        : (lang === 'bn'
-                                            ? (evaluation.form_type === 'bm_and_above'
-                                                ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় রয়েছে। সবকিছু ঠিক থাকলে জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
-                                                : 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় সংরক্ষিত আছে। আপনি চাইলে এখনো এটি সম্পাদনা বা মুছে ফেলতে পারেন। সবকিছু ঠিক থাকলে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করুন।')
-                                            : (evaluation.form_type === 'bm_and_above'
-                                                ? 'This evaluation is currently in draft. When ready, submit it to the Zonal Manager.'
-                                                : 'This evaluation is currently saved as a draft. You can still edit or delete it. When ready, submit it to the Regional Manager.'))}
+                                    {getDraftHelpText()}
                                 </p>
                                 <p className="text-[11px] text-amber-700 mt-1 italic">
                                     {lang === 'bn' 

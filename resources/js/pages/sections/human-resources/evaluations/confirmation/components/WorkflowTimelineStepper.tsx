@@ -38,7 +38,89 @@ export default function WorkflowTimelineStepper({
 
     // Define steps sequence based on form type
     const steps: StepConfig[] = React.useMemo(() => {
+        const candidateDesig = evaluation?.employee?.designation?.name || '';
+        const initiatorDesig = evaluation?.initiator?.employee?.designation?.name || '';
+        const isCandidateRm = /regional manager|আঞ্চলিক ব্যবস্থাপক/i.test(candidateDesig);
+        const isCandidateZm = /zonal manager|জোনাল ম্যানেজার/i.test(candidateDesig);
+        const isInitiatorZm = /zonal manager|জোনাল ম্যানেজার/i.test(initiatorDesig)
+            || evaluation?.initiator?.roles?.some((r: any) => r.name === 'Zonal Manager');
+        const isInitiatorDirector = /director|পরিচালক/i.test(initiatorDesig)
+            || evaluation?.initiator?.roles?.some((r: any) => r.name?.includes('Director'));
+
         if (formType === 'bm_and_above' || formType === 'bm_above') {
+            if (isCandidateRm || isInitiatorZm) {
+                return [
+                    {
+                        id: 'initiator',
+                        key: 'draft',
+                        stageMatch: ['initiator'],
+                        title_bn: 'দাখিলকারী (ZM)',
+                        title_en: 'Initiator (ZM)',
+                        role_bn: 'জোনাল ম্যানেজার',
+                        role_en: 'Zonal Manager',
+                    },
+                    {
+                        id: 'director',
+                        key: 'submitted_to_director',
+                        stageMatch: ['director', 'submitted_to_director', 'director_mf'],
+                        title_bn: 'পরিচালক পর্যালোচনা',
+                        title_en: 'Director Review',
+                        role_bn: 'পরিচালক (মাইক্রোফাইন্যান্স)',
+                        role_en: 'Director (Microfinance)',
+                    },
+                    {
+                        id: 'hr',
+                        key: 'submitted_to_hr',
+                        stageMatch: ['hr', 'submitted_to_hr'],
+                        title_bn: 'এইচআর যাচাইকরণ',
+                        title_en: 'HR Verification',
+                        role_bn: 'মানবসম্পদ বিভাগ',
+                        role_en: 'Human Resources',
+                    },
+                    {
+                        id: 'ed',
+                        key: 'submitted_to_ed',
+                        stageMatch: ['ed', 'submitted_to_ed', 'approved'],
+                        title_bn: 'চূড়ান্ত অনুমোদন (ED)',
+                        title_en: 'Final Approval (ED)',
+                        role_bn: 'নির্বাহী পরিচালক',
+                        role_en: 'Executive Director',
+                    },
+                ];
+            }
+
+            if (isCandidateZm || isInitiatorDirector) {
+                return [
+                    {
+                        id: 'initiator',
+                        key: 'draft',
+                        stageMatch: ['initiator'],
+                        title_bn: 'দাখিলকারী (পরিচালক)',
+                        title_en: 'Initiator (Director)',
+                        role_bn: 'পরিচালক (মাইক্রোফাইন্যান্স)',
+                        role_en: 'Director (Microfinance)',
+                    },
+                    {
+                        id: 'hr',
+                        key: 'submitted_to_hr',
+                        stageMatch: ['hr', 'submitted_to_hr'],
+                        title_bn: 'এইচআর যাচাইকরণ',
+                        title_en: 'HR Verification',
+                        role_bn: 'মানবসম্পদ বিভাগ',
+                        role_en: 'Human Resources',
+                    },
+                    {
+                        id: 'ed',
+                        key: 'submitted_to_ed',
+                        stageMatch: ['ed', 'submitted_to_ed', 'approved'],
+                        title_bn: 'চূড়ান্ত অনুমোদন (ED)',
+                        title_en: 'Final Approval (ED)',
+                        role_bn: 'নির্বাহী পরিচালক',
+                        role_en: 'Executive Director',
+                    },
+                ];
+            }
+
             return [
                 {
                     id: 'initiator',
@@ -204,7 +286,7 @@ export default function WorkflowTimelineStepper({
                 role_en: 'Executive Director',
             },
         ];
-    }, [formType]);
+    }, [formType, evaluation]);
 
     // Find if there is a sent-back event
     const sentBackSignature = signatures.slice().reverse().find((s: any) => s.action === 'sent_back');
@@ -293,7 +375,7 @@ export default function WorkflowTimelineStepper({
 
                     {/* Desktop / Tablet Stepper (Horizontal) */}
                     <div className="hidden md:block">
-                        <div className="grid grid-cols-6 gap-2 relative">
+                        <div className="grid gap-2 relative" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
                             {steps.map((step, idx) => {
                                 const isPassed = currentStatus === 'approved' || idx < currentStepIndex;
                                 const isCurrent = currentStatus !== 'approved' && currentStatus !== 'rejected' && idx === currentStepIndex;

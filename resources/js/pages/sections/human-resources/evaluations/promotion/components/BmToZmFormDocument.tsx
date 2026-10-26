@@ -93,6 +93,8 @@ export default function BmToZmFormDocument({
         ? (employee.designation?.name_bn || employee.designation?.name || employee.designation?.title || '-')
         : (employee.designation?.name_en || employee.designation?.name || employee.designation?.title || '-');
 
+    const isCandidateRm = /regional manager|আঞ্চলিক ব্যবস্থাপক/i.test(employee.designation?.name || employee.designation?.name_bn || employee.designation?.title || '');
+
     const getSafeText = (val: any): string => {
         if (!val) return '';
         if (typeof val === 'string') return val;
@@ -674,16 +676,22 @@ export default function BmToZmFormDocument({
                                     <div className="font-bold text-[10.5px] mb-0.5">
                                         {lang === 'bn' ? 'আঞ্চলিক ব্যবস্থাপকের মন্তব্য ও সুপারিশ:' : 'Regional Manager Review:'}
                                     </div>
-                                    <p className="italic text-gray-800 text-[10px]">
-                                        {rmSig?.comments ? `"${rmSig.comments}"` : (lang === 'bn' ? 'সম্মত ও অগ্রবর্তী করা হলো।' : 'Agreed and forwarded.')}
-                                        <UpdatedByLine name={rmSig?.comment_updated_by_name} />
-                                    </p>
+                                    {isCandidateRm ? (
+                                        <p className="italic text-gray-500 text-[10px]">
+                                            {lang === 'bn' ? 'প্রযোজ্য নয় (মূল্যায়নাধীন কর্মকর্তা নিজে আঞ্চলিক ব্যবস্থাপক)' : 'N/A (Candidate is Regional Manager)'}
+                                        </p>
+                                    ) : (
+                                        <p className="italic text-gray-800 text-[10px]">
+                                            {rmSig?.comments ? `"${rmSig.comments}"` : (lang === 'bn' ? 'সম্মত ও অগ্রবর্তী করা হলো।' : 'Agreed and forwarded.')}
+                                            <UpdatedByLine name={rmSig?.comment_updated_by_name} />
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex justify-between items-end pt-1 text-[9.5px]">
-                                    <div><span className="font-semibold">{rmSig?.user?.name || 'Regional Manager'}</span></div>
+                                    <div><span className="font-semibold">{isCandidateRm ? '—' : (rmSig?.user?.name || 'Regional Manager')}</span></div>
                                     <div className="text-right">
-                                        {renderSignatureImage(rmSig)}
-                                        <div className="font-mono">{formatDate(rmSig?.signed_at)}</div>
+                                        {!isCandidateRm && renderSignatureImage(rmSig)}
+                                        <div className="font-mono">{isCandidateRm ? '—' : formatDate(rmSig?.signed_at)}</div>
                                         <div className="border-t border-black w-32 mt-0.5 text-center font-bold">{lang === 'bn' ? 'স্বাক্ষর, তারিখ ও সিল' : 'Signature, Date & Seal'}</div>
                                     </div>
                                 </div>
@@ -696,15 +704,19 @@ export default function BmToZmFormDocument({
                                         {lang === 'bn' ? 'জোনাল ম্যানেজারের মন্তব্য ও সুপারিশ:' : 'Zonal Manager Review:'}
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
-                                        {zmSig?.comments ? `"${zmSig.comments}"` : (lang === 'bn' ? 'সুপারিশ করা হলো।' : 'Recommended.')}
+                                        {zmSig?.comments
+                                            ? `"${zmSig.comments}"`
+                                            : (isCandidateRm
+                                                ? (lang === 'bn' ? '১ম তত্ত্বাবধায়ক হিসেবে জোনাল ম্যানেজার কর্তৃক মূল্যায়ন ও সুপারিশ প্রণীত (১নং অনুচ্ছেদ দ্রষ্টব্য)।' : 'Evaluated and recommended by Zonal Manager as 1st Supervisor.')
+                                                : (lang === 'bn' ? 'সুপারিশ করা হলো।' : 'Recommended.'))}
                                         <UpdatedByLine name={zmSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
                                 <div className="flex justify-between items-end pt-1 text-[9.5px]">
-                                    <div><span className="font-semibold">{zmSig?.user?.name || 'Zonal Manager'}</span></div>
+                                    <div><span className="font-semibold">{zmSig?.user?.name || (isCandidateRm ? (initiatorSig?.user?.name || 'Zonal Manager') : 'Zonal Manager')}</span></div>
                                     <div className="text-right">
-                                        {renderSignatureImage(zmSig)}
-                                        <div className="font-mono">{formatDate(zmSig?.signed_at)}</div>
+                                        {renderSignatureImage(zmSig || (isCandidateRm ? initiatorSig : null))}
+                                        <div className="font-mono">{formatDate(zmSig?.signed_at || (isCandidateRm ? initiatorSig?.signed_at : null))}</div>
                                         <div className="border-t border-black w-32 mt-0.5 text-center font-bold">{lang === 'bn' ? 'স্বাক্ষর, তারিখ ও সিল' : 'Signature, Date & Seal'}</div>
                                     </div>
                                 </div>
