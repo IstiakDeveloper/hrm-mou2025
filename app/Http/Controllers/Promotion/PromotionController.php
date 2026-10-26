@@ -265,23 +265,33 @@ class PromotionController extends Controller
             $orderNo = $this->generatePromotionOrderNo();
         }
 
-        Promotion::create([
-            'employee_id' => $employee->id,
-            'from_designation_id' => $employee->designation_id,
-            'to_designation_id' => $request->to_designation_id,
-            'from_salary_grade_id' => $employee->salary_grade_id,
-            'to_salary_grade_id' => $payroll['to_salary_grade_id'],
-            'from_salary_step_id' => $employee->salary_step_id,
-            'to_salary_step_id' => $payroll['to_salary_step_id'],
-            'from_basic_salary' => $employee->resolveBasicSalary(),
-            'to_basic_salary' => $payroll['to_basic_salary'],
-            'effective_date' => $request->effective_date,
-            'promotion_order_no' => $orderNo,
-            'reason' => $request->reason,
-            'status' => 'pending',
-        ]);
+        $message = 'Promotion scheduled. It will complete automatically on the effective date.';
 
-        return redirect()->route('promotions.index')->with('success', 'Promotion request created successfully.');
+        DB::transaction(function () use ($request, $employee, $payroll, $orderNo, $user, &$message) {
+            $promotion = Promotion::create([
+                'employee_id' => $employee->id,
+                'from_designation_id' => $employee->designation_id,
+                'to_designation_id' => $request->to_designation_id,
+                'from_salary_grade_id' => $employee->salary_grade_id,
+                'to_salary_grade_id' => $payroll['to_salary_grade_id'],
+                'from_salary_step_id' => $employee->salary_step_id,
+                'to_salary_step_id' => $payroll['to_salary_step_id'],
+                'from_basic_salary' => $employee->resolveBasicSalary(),
+                'to_basic_salary' => $payroll['to_basic_salary'],
+                'effective_date' => $request->effective_date,
+                'promotion_order_no' => $orderNo,
+                'reason' => $request->reason,
+                'status' => 'approved',
+                'approved_by' => $user->id,
+            ]);
+
+            if ($this->promotionCompletionService->shouldApplyImmediately($promotion->effective_date)) {
+                $this->promotionCompletionService->apply($promotion, $user->id);
+                $message = 'Promotion completed successfully.';
+            }
+        });
+
+        return redirect()->route('promotions.index')->with('success', $message);
     }
 
     public function show(Promotion $promotion)
@@ -390,6 +400,18 @@ class PromotionController extends Controller
                 $promotion->employee->save();
                 $this->syncPromotionHistory($promotion, $user->id);
                 app(\App\Services\EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($promotion->employee);
+
+                return;
+            }
+
+            if (in_array($promotion->status, ['pending', 'approved'], true)
+                && $this->promotionCompletionService->shouldApplyImmediately($promotion->effective_date)) {
+                if ($promotion->approved_by === null) {
+                    $promotion->approved_by = $user->id;
+                    $promotion->save();
+                }
+
+                $this->promotionCompletionService->apply($promotion, $user->id);
             }
         });
 
@@ -450,8 +472,8 @@ class PromotionController extends Controller
             return redirect()->route('promotions.index')->with('error', 'You do not have permission to cancel promotion requests.');
         }
 
-        if ($promotion->status !== 'pending') {
-            return redirect()->route('promotions.index')->with('error', 'Only pending promotion requests can be cancelled.');
+        if (! in_array($promotion->status, ['pending', 'approved'], true)) {
+            return redirect()->route('promotions.index')->with('error', 'Only pending or scheduled promotion requests can be cancelled.');
         }
 
         $promotion->status = 'cancelled';

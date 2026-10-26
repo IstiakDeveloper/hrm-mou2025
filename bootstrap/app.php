@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ActivateScheduledHrActions;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureMovementFinePaid;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             EnsureMovementFinePaid::class,
+            ActivateScheduledHrActions::class,
         ]);
 
         // API middleware

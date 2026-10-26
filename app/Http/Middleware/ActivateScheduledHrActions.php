@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\AutoAttendanceService;
 use App\Services\ScheduledHrActivationService;
 use App\Support\BangladeshDate;
 use Closure;
@@ -20,6 +21,7 @@ class ActivateScheduledHrActions
     public function terminate(Request $request, Response $response): void
     {
         $this->maybeRun();
+        $this->fillAutoAttendance();
     }
 
     private function maybeRun(): void
@@ -42,6 +44,17 @@ class ActivateScheduledHrActions
             });
         } catch (\Throwable $exception) {
             Log::warning('Scheduled HR activation failed.', [
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function fillAutoAttendance(): void
+    {
+        try {
+            app(AutoAttendanceService::class)->fillToday();
+        } catch (\Throwable $exception) {
+            Log::warning('Auto attendance failed.', [
                 'message' => $exception->getMessage(),
             ]);
         }

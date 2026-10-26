@@ -102,13 +102,13 @@ class PromotionCompletionService
         $activated = 0;
 
         Promotion::query()
-            ->where('status', 'approved')
+            ->whereIn('status', ['pending', 'approved'])
             ->whereDate('effective_date', '<=', BangladeshDate::todayString())
             ->orderBy('id')
             ->each(function (Promotion $promotion) use ($actorUserId, &$activated) {
                 DB::transaction(function () use ($promotion, $actorUserId, &$activated) {
                     $promotion->refresh();
-                    if ($promotion->status !== 'approved') {
+                    if (! in_array($promotion->status, ['pending', 'approved'], true)) {
                         return;
                     }
 
