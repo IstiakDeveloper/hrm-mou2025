@@ -341,6 +341,7 @@ class EmployeeAssignmentHistoryService
     public function applyToEmployee(Employee $employee, ?EmployeeAssignmentHistory $history, bool $keepLiveBranch = false): Employee
     {
         $liveBranchId = $employee->current_branch_id;
+        $liveProjectId = $employee->project_id;
 
         if (! $history) {
             return $employee;
@@ -372,9 +373,16 @@ class EmployeeAssignmentHistoryService
         $employee->unsetRelation('payscale');
         $employee->unsetRelation('employeeType');
 
-        if ($keepLiveBranch && $liveBranchId) {
-            $employee->current_branch_id = $liveBranchId;
-            $employee->unsetRelation('branch');
+        if ($keepLiveBranch) {
+            // Current month keeps today's branch and project. A promotion history row
+            // often has no project, and a project fix today must apply from the 1st
+            // of this month. Past months stay on history.
+            if ($liveBranchId) {
+                $employee->current_branch_id = $liveBranchId;
+                $employee->unsetRelation('branch');
+            }
+            $employee->project_id = $liveProjectId;
+            $employee->unsetRelation('project');
         }
 
         return $employee;
@@ -470,7 +478,9 @@ class EmployeeAssignmentHistoryService
         $departmentId = $history?->department_id ?? $employee->department_id;
         $designationId = $history?->designation_id ?? $employee->designation_id;
         $programId = $history?->program_id ?? $employee->program_id;
-        $projectId = $history?->project_id ?? $employee->project_id;
+        $projectId = $useLiveBranch
+            ? $employee->project_id
+            : ($history?->project_id ?? $employee->project_id);
 
         if (! empty($filters['branch_id']) && (int) $branchId !== (int) $filters['branch_id']) {
             return false;

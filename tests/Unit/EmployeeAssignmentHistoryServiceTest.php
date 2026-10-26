@@ -151,18 +151,32 @@ test('current month payroll uses live branch not history branch', function () {
 
         $employee = new Employee([
             'current_branch_id' => 33,
+            'project_id' => 1,
             'status' => 'active',
         ]);
         $history = new EmployeeAssignmentHistory([
             'branch_id' => 30,
+            'project_id' => null,
             'status' => 'active',
         ]);
 
         $service->applyToEmployee($employee, $history, keepLiveBranch: true);
 
         expect((int) $employee->current_branch_id)->toBe(33)
+            ->and((int) $employee->project_id)->toBe(1)
             ->and($service->matchesOrgFilters($history, $employee, ['branch_id' => 33], true))->toBeTrue()
-            ->and($service->matchesOrgFilters($history, $employee, ['branch_id' => 30], true))->toBeFalse();
+            ->and($service->matchesOrgFilters($history, $employee, ['branch_id' => 30], true))->toBeFalse()
+            ->and($service->matchesOrgFilters($history, $employee, ['project_id' => 1], true))->toBeTrue();
+
+        $past = new Employee([
+            'current_branch_id' => 33,
+            'project_id' => 1,
+            'status' => 'active',
+        ]);
+        $service->applyToEmployee($past, $history, keepLiveBranch: false);
+
+        expect($past->project_id)->toBeNull()
+            ->and($service->matchesOrgFilters($history, $past, ['project_id' => 1], false))->toBeFalse();
     } finally {
         Carbon::setTestNow();
     }

@@ -54,16 +54,17 @@ class PayrollRunRecalculateService
             (int) $run->year,
             (int) $run->month,
         );
+        $keepLivePosting = $this->assignmentHistory->usesLiveBranchForMonth((int) $run->year, (int) $run->month);
 
         $employees = $run->payslips
-            ->map(function (Payslip $payslip) use ($asOfDate) {
+            ->map(function (Payslip $payslip) use ($asOfDate, $keepLivePosting) {
                 $employee = $payslip->employee;
                 if (! $employee) {
                     return null;
                 }
 
                 $history = $this->assignmentHistory->resolveAsOf($employee->id, $asOfDate);
-                $this->assignmentHistory->applyToEmployee($employee, $history);
+                $this->assignmentHistory->applyToEmployee($employee, $history, $keepLivePosting);
 
                 return $employee;
             })
