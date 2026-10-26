@@ -643,17 +643,20 @@ class PayrollReportService
             $branch = $payslip->displayBranch();
             $branchName = $payslip->displayBranchName();
             $branchCode = $payslip->displayBranchCode();
+            $department = $employee?->department?->name;
+            $isHeadOffice = (bool) ($branch?->is_head_office || $branchCode === '0000' || str_contains(strtolower($branchName ?? ''), 'head office'));
+            $designation = $this->formatSalarySheetDesignation($payslip->displayDesignation(), $department, $isHeadOffice);
 
             $rows[] = [
                 'pin' => $employee?->pin,
                 'name' => $payslip->displayName(),
-                'designation' => $payslip->displayDesignation(),
-                'department' => $employee?->department?->name,
+                'designation' => $designation,
+                'department' => $department,
                 'branch' => $branchName,
                 'branch_code' => $branchCode,
                 'branch_id' => $payslip->displayBranchId(),
                 'branch_model' => $branch,
-                'is_head_office' => (bool) ($branch?->is_head_office || $branchCode === '0000' || str_contains(strtolower($branchName ?? ''), 'head office')),
+                'is_head_office' => $isHeadOffice,
                 'branch_label' => $this->formatBranchLabel($branchName, $branchCode),
                 'grade' => $payslip->grade_label,
                 'step' => $payslip->step_number,
@@ -733,6 +736,28 @@ class PayrollReportService
         return 'Unassigned';
     }
 
+    protected function formatSalarySheetDesignation(?string $designation, ?string $department, bool $isHeadOffice): string
+    {
+        $designation = trim((string) $designation);
+
+        if (! $isHeadOffice) {
+            return $designation;
+        }
+
+        // For Head Office: if designation contains parentheses, strip them out (e.g. "Director (Microfinance)" -> "Director")
+        $base = trim(preg_replace('/\s*\([^)]*\)/u', '', $designation));
+        if ($base === '') {
+            $base = $designation;
+        }
+
+        $dept = trim((string) $department);
+        if ($dept !== '') {
+            return "{$base} ({$dept})";
+        }
+
+        return $base;
+    }
+
     /**
      * @param  array<string, mixed>  $row
      */
@@ -804,6 +829,10 @@ class PayrollReportService
         if ($this->isLoanPayslipLine($line)) {
             $type = $this->resolveLoanHeadType($line) ?? 'other';
 
+            if ($type === 'housing_loan' || $type === 'other') {
+                return 'Housing Loan';
+            }
+
             return config("employee_loans.loan_types.{$type}.short_name")
                 ?? $this->loanTypeLabel($type);
         }
@@ -871,6 +900,7 @@ class PayrollReportService
                 fn (string $key, string $label) => $key === 'loan:pf_loan' || str_contains($label, 'pf loan'),
                 fn (string $key, string $label) => $key === 'loan:motorcycle_loan' || str_contains($label, 'm/c loan') || str_contains($label, 'motorcycle loan'),
                 fn (string $key, string $label) => $key === 'loan:laptop_loan' || str_contains($label, 'laptop loan'),
+                fn (string $key, string $label) => $key === 'loan:housing_loan' || $key === 'loan:other' || str_contains($label, 'housing loan') || str_contains($label, 'home loan'),
                 fn (string $key, string $label) => $key === 'loan:other',
                 fn (string $key, string $label) => ! str_starts_with($key, 'loan:') && (str_contains($label, 'welfare') || str_contains($label, 'staff welfare')),
                 fn (string $key, string $label) => ! str_starts_with($key, 'loan:')
@@ -935,8 +965,9 @@ class PayrollReportService
                 'pf_loan' => 200,
                 'motorcycle_loan' => 300,
                 'laptop_loan' => 400,
-                'other' => 450,
-                default => 460,
+                'housing_loan' => 450,
+                'other' => 460,
+                default => 470,
             };
         }
 
@@ -947,6 +978,7 @@ class PayrollReportService
             str_contains($normalized, 'pf loan') => 200,
             str_contains($normalized, 'm/c loan') || str_contains($normalized, 'motorcycle loan') => 300,
             str_contains($normalized, 'laptop loan') => 400,
+            str_contains($normalized, 'housing loan') || str_contains($normalized, 'home loan') => 450,
             str_contains($normalized, 'welfare') || str_contains($normalized, 'staff welfare') => 500,
             in_array($normalized, ['income tax', 'tax'], true) || str_contains($normalized, 'income tax') || str_contains($normalized, 'tax') => 600,
             default => 700 + (abs(crc32($key)) % 200),
@@ -956,7 +988,7 @@ class PayrollReportService
     protected function loanColumnSortOrder(PayslipLine $line): int
     {
         $type = $this->resolveLoanHeadType($line) ?? 'other';
-        $order = ['pf_loan', 'motorcycle_loan', 'laptop_loan', 'other'];
+        $order = ['pf_loan', 'motorcycle_loan', 'laptop_loan', 'housing_loan', 'other'];
         $index = array_search($type, $order, true);
 
         return 50_000 + (($index === false ? 99 : $index) * 100) + (int) $line->sort_order;
@@ -984,9 +1016,16 @@ class PayrollReportService
 
     /**
      * First printed page also includes the company header, so it holds fewer employee rows.
+     * Head office can fit 30 rows on the first page.
      */
-    protected function salarySheetDataRowsForFirstPage(): int
+    protected function salarySheetDataRowsForFirstPage(bool $isHeadOffice = false): int
     {
+        if ($isHeadOffice) {
+            $hoRows = (int) (config('payroll_reports.print.head_office_first_page_rows') ?? 30);
+
+            return max(1, $hoRows);
+        }
+
         $rows = (int) (config('payroll_reports.print.first_page_rows') ?? 25);
 
         return max(1, min($rows, $this->salarySheetDataRowsForPage()));
@@ -999,18 +1038,27 @@ class PayrollReportService
      * @param  list<string>  $heads
      * @return list<array{rows: list<array<string, mixed>>, totals: array<string, mixed>|null, totals_label: string, serial_start: int}>
      */
-    public function paginateSalarySheetSectionPages(array $rows, array $heads, ?array $sectionTotals, ?int $rowsPerPage = null): array
+    public function paginateSalarySheetSectionPages(array $rows, array $heads, ?array $sectionTotals, ?int $rowsPerPage = null, ?int $firstPageRows = null): array
     {
         if ($rows === []) {
             return [];
         }
+
+        $isHeadOffice = (bool) (
+            ($rows[0]['is_head_office'] ?? false)
+            || (($rows[0]['branch_code'] ?? null) === '0000')
+            || str_contains(strtolower($rows[0]['branch'] ?? ''), 'head office')
+        );
 
         $pages = [];
         $offset = 0;
         $serialStart = 0;
         $total = count($rows);
         $regularBudget = max(1, $rowsPerPage ?? $this->salarySheetDataRowsForPage());
-        $firstPageBudget = max(1, min($this->salarySheetDataRowsForFirstPage(), $regularBudget));
+        $firstPageBudget = $firstPageRows ?? $this->salarySheetDataRowsForFirstPage($isHeadOffice);
+        if (! $isHeadOffice) {
+            $firstPageBudget = min($firstPageBudget, $regularBudget);
+        }
         $isFirstPage = true;
 
         while ($offset < $total) {

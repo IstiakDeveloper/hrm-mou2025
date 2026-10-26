@@ -1425,6 +1425,7 @@ export default function EmployeeEdit({
     const [salaryAdditionRows, setSalaryAdditionRows] = useState<SalaryComponentRow[]>(salaryAssignment?.addition_rows ?? []);
     const [salaryDeductionRows, setSalaryDeductionRows] = useState<SalaryComponentRow[]>(salaryAssignment?.deduction_rows ?? []);
     const [salaryComponentsEditing, setSalaryComponentsEditing] = useState(false);
+    const [salaryComponentsReset, setSalaryComponentsReset] = useState(false);
 
     useEffect(() => {
         setData('salary_lines_json', buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows));
@@ -1797,15 +1798,21 @@ export default function EmployeeEdit({
                     disciplinary_actions: (formData.disciplinary_actions ?? []).filter(
                         (row) => String(row.action_date ?? '').trim() !== '',
                     ),
-                    sync_salary_components: salaryComponentsEditing ? 1 : 0,
-                    salary_lines_json: salaryComponentsEditing
-                        ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
-                        : '',
+                    reset_salary_components: salaryComponentsReset ? 1 : 0,
+                    sync_salary_components: salaryComponentsReset
+                        ? 0
+                        : (salaryComponentsEditing || (formData.basic_salary !== '' && formData.basic_salary !== String(employee.basic_salary ?? '')) ? 1 : 0),
+                    salary_lines_json: salaryComponentsReset
+                        ? ''
+                        : (salaryComponentsEditing || (formData.basic_salary !== '' && formData.basic_salary !== String(employee.basic_salary ?? ''))
+                            ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
+                            : ''),
                 };
             },
             onSuccess: () => {
                 clearEmployeeDraft(editDraftKey);
                 setTabStepBlockMessages(null);
+                setSalaryComponentsReset(false);
                 setSalaryComponentsEditing(false);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             },
@@ -3316,16 +3323,26 @@ export default function EmployeeEdit({
                                                 showSalaryComponents
                                                 additionRows={salaryAdditionRows}
                                                 deductionRows={salaryDeductionRows}
-                                                onAdditionRowsChange={setSalaryAdditionRows}
-                                                onDeductionRowsChange={setSalaryDeductionRows}
+                                                onAdditionRowsChange={(rows) => {
+                                                    setSalaryComponentsReset(false);
+                                                    setSalaryAdditionRows(rows);
+                                                }}
+                                                onDeductionRowsChange={(rows) => {
+                                                    setSalaryComponentsReset(false);
+                                                    setSalaryDeductionRows(rows);
+                                                }}
                                                 previewUrl={route('employees.salary-assignment-preview')}
                                                 employeeId={employee.id}
                                                 stepBasicSalary={salaryAssignment?.step_basic_salary ?? 0}
                                                 componentsReadOnly={!salaryComponentsEditing}
                                                 componentsEditing={salaryComponentsEditing}
+                                                onResetToGradeStep={() => {
+                                                    setSalaryComponentsReset(true);
+                                                }}
                                                 onToggleComponentsEdit={() => {
                                                     setSalaryComponentsEditing((prev) => {
                                                         if (prev) {
+                                                            setSalaryComponentsReset(false);
                                                             // cancel: restore preview rows from server snapshot
                                                             setSalaryAdditionRows(salaryAssignment?.addition_rows ?? []);
                                                             setSalaryDeductionRows(salaryAssignment?.deduction_rows ?? []);

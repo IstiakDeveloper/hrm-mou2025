@@ -732,11 +732,12 @@ class EmployeeController extends Controller
             'salary_grade_id' => 'required|exists:salary_grades,id',
             'salary_step_id' => 'required|exists:salary_steps,id',
             'employee_id' => 'nullable|exists:employees,id',
+            'ignore_custom' => 'nullable|boolean',
             'year' => 'nullable|integer|min:2000|max:2100',
             'month' => 'nullable|integer|min:1|max:12',
         ]);
 
-        $employee = isset($validated['employee_id'])
+        $employee = (isset($validated['employee_id']) && ! $request->boolean('ignore_custom'))
             ? Employee::query()
                 ->with(['employeeType', 'salaryGrade', 'salaryStep', 'payscale'])
                 ->find($validated['employee_id'])
@@ -3864,7 +3865,9 @@ class EmployeeController extends Controller
                 }
 
                 $employee->refresh();
-                if ($request->boolean('sync_salary_components')) {
+                if ($request->boolean('reset_salary_components')) {
+                    $this->employeeSalaryAssignmentService->resetCustomAssignment($employee);
+                } elseif ($request->boolean('sync_salary_components') || ($request->has('basic_salary') && $request->input('basic_salary') !== null && $request->input('basic_salary') !== '')) {
                     $this->syncEmployeeSalaryComponents($employee, $validated);
                 }
             });

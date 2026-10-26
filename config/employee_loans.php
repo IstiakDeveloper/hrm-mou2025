@@ -53,6 +53,12 @@ return [
             'salary_head_code' => 'LOAN_LAPTOP',
             'short_name' => 'Laptop Loan',
         ],
+        'housing_loan' => [
+    'label' => 'Housing Loan',
+    'salary_head_code' => 'LOAN_HOUSING',
+    'short_name' => 'Housing Loan',
+],
+
         'other' => [
             'label' => 'Others',
             'salary_head_code' => 'LOAN_OTHER',

@@ -220,8 +220,8 @@ class EmployeeSalaryAssignmentService
                 continue;
             }
 
-            // PF / Tax / Loan stay process-driven unless we later add explicit custom UI for them.
-            if ($head->is_pf_head || $head->is_income_tax_head || $head->is_loan_head) {
+            // Loan collection is schedule-driven by loan applications.
+            if ($head->is_loan_head) {
                 continue;
             }
 
@@ -251,9 +251,15 @@ class EmployeeSalaryAssignmentService
             return;
         }
 
+        $isCustom = ($basicSalary !== null && $basicSalary >= 0) || ! empty($lines);
+
+        if ($basicSalary === null && ! empty($lines)) {
+            $basicSalary = $employee->resolveBasicSalary();
+        }
+
         $employee->update([
             'basic_salary' => $basicSalary !== null ? $basicSalary : null,
-            'custom_salary_assigned_at' => ($basicSalary !== null && $basicSalary > 0) ? now() : null,
+            'custom_salary_assigned_at' => $isCustom ? now() : null,
         ]);
 
         $this->syncEmployeeSalaryLines($employee, $lines, $effectiveFrom);

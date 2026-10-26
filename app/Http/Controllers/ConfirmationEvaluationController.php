@@ -633,7 +633,13 @@ class ConfirmationEvaluationController extends Controller
             if ($isSubmitting) {
                 $comments = ! empty($validated['comments'])
                     ? $validated['comments']
-                    : ($newStatus === 'submitted_to_zm' ? 'Evaluation submitted to Zonal Manager' : 'Evaluation submitted to Regional Manager');
+                    : match ($newStatus) {
+                        'submitted_to_director' => 'Evaluation submitted to Director (Microfinance)',
+                        'submitted_to_director_fa' => 'Evaluation submitted to Director (Finance & Accounts)',
+                        'submitted_to_hr' => 'Evaluation submitted to HR Department',
+                        'submitted_to_zm' => 'Evaluation submitted to Zonal Manager',
+                        default => 'Evaluation submitted to Regional Manager',
+                    };
                 $evaluation->signatures()->create([
                     'user_id' => $user->id,
                     'stage' => 'initiator',
@@ -779,9 +785,13 @@ class ConfirmationEvaluationController extends Controller
         $comments = $isSubmitStage
             ? (trim((string) $request->input('comments', '')) !== ''
                 ? trim((string) $request->input('comments'))
-                : ($nextStatus === 'submitted_to_zm'
-                    ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
-                    : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
+                : match ($nextStatus) {
+                    'submitted_to_director' => 'মূল্যায়নটি পরিচালক (মাইক্রোফাইন্যান্স) বরাবর দাখিল করা হয়েছে।',
+                    'submitted_to_director_fa' => 'মূল্যায়নটি পরিচালক (অর্থ ও হিসাব) বরাবর দাখিল করা হয়েছে।',
+                    'submitted_to_hr' => 'মূল্যায়নটি মানবসম্পদ বিভাগ (HR) বরাবর দাখিল করা হয়েছে।',
+                    'submitted_to_zm' => 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।',
+                    default => 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।',
+                })
             : trim((string) $request->input('comments'));
 
         if ($isStuckAtRm) {

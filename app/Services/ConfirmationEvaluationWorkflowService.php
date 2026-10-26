@@ -436,17 +436,22 @@ class ConfirmationEvaluationWorkflowService
     public function determineNextStatus(ConfirmationEvaluation $evaluation, string $currentStatus): string
     {
         if ($currentStatus === 'draft') {
-            $evaluation->loadMissing('initiator');
+            $evaluation->loadMissing(['initiator', 'employee.designation']);
             $initiator = $evaluation->initiator;
             $initiatorLevel = $initiator ? $this->getUserHierarchyLevel($initiator) : 3;
 
-            // If candidate is BM or above, OR initiator is Regional Manager (level 2)
-            if ($evaluation->form_type === 'bm_and_above' || $initiatorLevel === 2) {
-                return 'submitted_to_zm';
-            } elseif ($initiatorLevel === 1) {
-                return $evaluation->form_type === 'accountant' ? 'submitted_to_director_fa' : 'submitted_to_director';
-            } elseif ($initiatorLevel === 0) {
+            $candTitle = mb_strtolower(trim((string) optional($evaluation->employee?->designation)->name));
+            $isCandidateRmOrAbove = str_contains($candTitle, 'regional manager')
+                || str_contains($candTitle, 'আঞ্চলিক ব্যবস্থাপক')
+                || str_contains($candTitle, 'zonal manager')
+                || str_contains($candTitle, 'জোনাল ম্যানেজার');
+
+            if ($initiatorLevel === 0) {
                 return 'submitted_to_hr';
+            } elseif ($initiatorLevel === 1 || $isCandidateRmOrAbove) {
+                return $evaluation->form_type === 'accountant' ? 'submitted_to_director_fa' : 'submitted_to_director';
+            } elseif ($initiatorLevel === 2 || $evaluation->form_type === 'bm_and_above') {
+                return 'submitted_to_zm';
             }
 
             return 'submitted_to_rm';

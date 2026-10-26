@@ -48,7 +48,6 @@ export type SalaryAssignmentPreview = {
 export function buildSalaryLinesJson(additionRows: SalaryComponentRow[], deductionRows: SalaryComponentRow[]): string {
     return JSON.stringify(
         [...additionRows, ...deductionRows]
-            .filter((row) => !row.locked)
             .map((row) => ({
                 salary_head_id: row.salary_head_id,
                 amount_type: row.amount_type,
@@ -121,10 +120,10 @@ function SalaryComponentsTable({
     stepBasicSalary?: number;
     readOnly?: boolean;
 }) {
+    const componentsTotal = useMemo(() => sumComponentRows(rows, basicSalary), [rows, basicSalary]);
     const total = useMemo(() => {
-        const components = sumComponentRows(rows, basicSalary);
-        return includeBasicRow ? basicSalary + components : components;
-    }, [rows, basicSalary, includeBasicRow]);
+        return includeBasicRow ? basicSalary + componentsTotal : componentsTotal;
+    }, [basicSalary, componentsTotal, includeBasicRow]);
 
     return (
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
@@ -173,7 +172,7 @@ function SalaryComponentsTable({
                                     )}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono font-semibold text-zinc-700">
-                                    ৳{formatTakaWhole(basicAmount || stepBasicSalary || basicSalary || 0)}
+                                    ৳{formatTakaWhole(basicAmount !== '' ? Number(basicAmount) : (stepBasicSalary || basicSalary || 0))}
                                 </td>
                             </tr>
                         )}
@@ -182,14 +181,14 @@ function SalaryComponentsTable({
                             const evaluated = isPercentage
                                 ? Math.round((basicSalary * (parseFloat(row.amount) || 0)) / 100)
                                 : Math.round(parseFloat(row.amount) || 0);
-                            const rowReadOnly = readOnly || Boolean(row.locked);
+                            const rowReadOnly = readOnly;
 
                             return (
                                 <tr key={row.salary_head_id} className="border-b border-zinc-50 last:border-b-0">
                                     <td className="px-3 py-2">
                                         <div className="font-semibold text-zinc-800">{row.short_name}</div>
                                         <div className="truncate text-[10px] text-zinc-400">{row.name}</div>
-                                        {row.locked && (
+                                        {readOnly && row.locked && (
                                             <div className="text-[10px] text-amber-600">Auto from salary process</div>
                                         )}
                                     </td>
@@ -232,10 +231,23 @@ function SalaryComponentsTable({
                 </table>
             </div>
 
-            <div className="flex items-center justify-between border-t border-zinc-100 bg-zinc-50/60 px-3 py-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Total {title}</span>
-                <span className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(total)}</span>
-            </div>
+            {includeBasicRow ? (
+                <div className="border-t border-zinc-100 bg-zinc-50/60 px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                        <span>Addition Allowances</span>
+                        <span className="font-mono font-semibold text-zinc-700">৳{formatTakaWhole(componentsTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Total Gross (Basic + Addition)</span>
+                        <span className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(total)}</span>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center justify-between border-t border-zinc-100 bg-zinc-50/60 px-3 py-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Total {title}</span>
+                    <span className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(total)}</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -266,6 +278,7 @@ type Props = {
     componentsReadOnly?: boolean;
     onToggleComponentsEdit?: () => void;
     componentsEditing?: boolean;
+    onResetToGradeStep?: () => void;
 };
 
 export function EmployeeSalaryAssignment({
@@ -293,6 +306,7 @@ export function EmployeeSalaryAssignment({
     componentsReadOnly = false,
     onToggleComponentsEdit,
     componentsEditing = false,
+    onResetToGradeStep,
 }: Props) {
     const lockedPayscaleId = activePayscaleId ?? (payscales.length === 1 ? String(payscales[0].id) : null);
     const payscaleLocked = Boolean(lockedPayscaleId);
@@ -353,7 +367,9 @@ export function EmployeeSalaryAssignment({
     // Prefer saved/custom basic; otherwise use grade-step basic so preview totals are correct
     // even when employees.basic_salary is null (normal grade/step payroll).
     const basicNum = Math.round(
-        parseFloat(basicSalary) || stepBasicSalary || Number(selectedStep?.basic_salary) || 0,
+        basicSalary !== '' && !Number.isNaN(Number(basicSalary))
+            ? Number(basicSalary)
+            : stepBasicSalary || Number(selectedStep?.basic_salary) || 0,
     );
     const assignmentKey = `${effectivePayscaleId}-${salaryGradeId}-${salaryStepId}`;
 
@@ -365,8 +381,11 @@ export function EmployeeSalaryAssignment({
         }));
 
     const applyComponentPreview = (preview: SalaryAssignmentPreview) => {
-        const nextBasic = Math.round(preview.basic_salary) || Math.round(preview.step_basic_salary) || 0;
-        onBasicSalaryChange(nextBasic > 0 ? String(nextBasic) : '');
+        const hasExplicitBasic = preview.basic_salary !== undefined && preview.basic_salary !== null;
+        const nextBasic = hasExplicitBasic
+            ? Math.round(preview.basic_salary)
+            : Math.round(preview.step_basic_salary) || 0;
+        onBasicSalaryChange(hasExplicitBasic ? String(nextBasic) : (nextBasic > 0 ? String(nextBasic) : ''));
         setStepBasicSalary(preview.step_basic_salary);
         onAdditionRowsChange?.(normalizePreviewRows(preview.addition_rows));
         onDeductionRowsChange?.(normalizePreviewRows(preview.deduction_rows));
@@ -393,7 +412,7 @@ export function EmployeeSalaryAssignment({
         if (seedBasicOnly) {
             initialRowsApplied.current = true;
             // Seed basic from step when employees.basic_salary is empty (normal grade/step path).
-            if ((!basicSalary || Number(basicSalary) <= 0) && (stepBasicSalaryProp > 0 || selectedStep?.basic_salary)) {
+            if (basicSalary === '' && (stepBasicSalaryProp > 0 || selectedStep?.basic_salary)) {
                 const seed = Math.round(stepBasicSalaryProp || Number(selectedStep?.basic_salary) || 0);
                 if (seed > 0) {
                     onBasicSalaryChange(String(seed));
@@ -441,6 +460,44 @@ export function EmployeeSalaryAssignment({
                 }
             });
     }, [showSalaryComponents, previewUrl, assignmentKey, employeeId]);
+
+    const handleResetToGradeStep = () => {
+        if (!effectivePayscaleId || !salaryGradeId || !salaryStepId || !previewUrl) return;
+
+        setPreviewLoading(true);
+        const params = new URLSearchParams({
+            payscale_id: effectivePayscaleId,
+            salary_grade_id: salaryGradeId,
+            salary_step_id: salaryStepId,
+            ignore_custom: '1',
+        });
+        if (employeeId) {
+            params.set('employee_id', String(employeeId));
+        }
+
+        fetch(`${previewUrl}?${params.toString()}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Reset preview failed'))))
+            .then((preview: SalaryAssignmentPreview) => {
+                const nextBasic =
+                    preview.step_basic_salary !== undefined && preview.step_basic_salary !== null
+                        ? Math.round(preview.step_basic_salary)
+                        : Math.round(preview.basic_salary) || 0;
+                onBasicSalaryChange(nextBasic > 0 ? String(nextBasic) : '');
+                setStepBasicSalary(preview.step_basic_salary);
+                onAdditionRowsChange?.(normalizePreviewRows(preview.addition_rows));
+                onDeductionRowsChange?.(normalizePreviewRows(preview.deduction_rows));
+                setPayrollPreview(preview.payroll_preview ?? null);
+                onResetToGradeStep?.();
+            })
+            .catch((err) => {
+                console.error('Reset to grade/step error:', err);
+            })
+            .finally(() => {
+                setPreviewLoading(false);
+            });
+    };
 
     useEffect(() => {
         if (showSalaryComponents) return;
@@ -550,15 +607,27 @@ export function EmployeeSalaryAssignment({
                                     : 'Changes will be saved as a custom salary override when you update the employee.'}
                             </p>
                         </div>
-                        {onToggleComponentsEdit && (
-                            <button
-                                type="button"
-                                onClick={onToggleComponentsEdit}
-                                className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-[11px] font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
-                            >
-                                {componentsEditing ? 'Cancel component edit' : 'Edit components'}
-                            </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {componentsEditing && (
+                                <button
+                                    type="button"
+                                    onClick={handleResetToGradeStep}
+                                    className="inline-flex h-8 items-center justify-center rounded-md border border-amber-300 bg-amber-50 px-3 text-[11px] font-semibold text-amber-800 shadow-sm hover:bg-amber-100"
+                                    title="Reset all components and basic salary back to Grade & Step defaults"
+                                >
+                                    Reset to Grade/Step
+                                </button>
+                            )}
+                            {onToggleComponentsEdit && (
+                                <button
+                                    type="button"
+                                    onClick={onToggleComponentsEdit}
+                                    className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-[11px] font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
+                                >
+                                    {componentsEditing ? 'Cancel' : 'Edit components'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                     {previewLoading && (
                         <p className="text-[11px] text-muted-foreground">Loading salary components…</p>

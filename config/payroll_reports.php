@@ -12,6 +12,7 @@ return [
         'rows_per_page' => 30,
         // First printed page also has the company header, so fewer employee rows fit with the signature.
         'first_page_rows' => 25,
+        'head_office_first_page_rows' => 30,
         'pdf_rows_per_page' => 30,
         'margin_top_mm' => 4,
         'margin_bottom_mm' => 4,

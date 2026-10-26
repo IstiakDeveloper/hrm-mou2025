@@ -271,9 +271,6 @@ class PayrollCalculationService
         } else {
             $pfHead = $this->resolvePfHead();
             $pfMod = $pfHead ? $modifications->get($pfHead->id) : null;
-            if ($pfMod && $pfMod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
-                $pfMod = null;
-            }
 
             if ($pfMod) {
                 $pfAmountType = $pfMod->amount_type ?? 'percentage';
@@ -308,9 +305,6 @@ class PayrollCalculationService
 
             $taxHead = $this->resolveTaxHead();
             $taxMod = $taxHead ? $modifications->get($taxHead->id) : null;
-            if ($taxMod && $taxMod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
-                $taxMod = null;
-            }
 
             if ($taxMod) {
                 $taxAmountType = $taxMod->amount_type ?? 'fixed';
