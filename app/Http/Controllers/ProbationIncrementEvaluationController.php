@@ -438,6 +438,9 @@ class ProbationIncrementEvaluationController extends Controller
         $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
         $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
         return Inertia::render('sections/human-resources/evaluations/probation-increment/show', [
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
@@ -486,6 +489,9 @@ class ProbationIncrementEvaluationController extends Controller
 
         $templates = AppraisalTemplateCache::load('probation_increment');
 
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
         return Inertia::render('sections/human-resources/evaluations/probation-increment/edit', [
             'evaluation' => $evaluation,
             'templates' => $templates,
@@ -514,6 +520,8 @@ class ProbationIncrementEvaluationController extends Controller
                 ? $evaluation->employee->resolveEducationalQualification()
                 : null;
         }
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($request->user(), $evaluation);
 
         return Inertia::render('sections/human-resources/evaluations/probation-increment/print', [
             'evaluation' => $evaluation,

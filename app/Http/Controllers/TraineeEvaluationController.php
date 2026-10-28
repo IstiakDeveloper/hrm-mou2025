@@ -343,6 +343,9 @@ class TraineeEvaluationController extends Controller
         $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
         $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
         return Inertia::render('sections/human-resources/evaluations/trainee/show', [
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
@@ -378,6 +381,8 @@ class TraineeEvaluationController extends Controller
         ));
 
         $templates = AppraisalTemplateCache::load('trainee');
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
 
         return Inertia::render('sections/human-resources/evaluations/trainee/edit', [
             'evaluation' => $evaluation,
@@ -633,7 +638,7 @@ class TraineeEvaluationController extends Controller
         return back()->with('success', 'মূল্যায়ন সফলভাবে অনুমোদন ও অগ্রবর্তী করা হয়েছে।');
     }
 
-    public function print(TraineeEvaluation $evaluation): Response
+    public function print(Request $request, TraineeEvaluation $evaluation): Response
     {
         $evaluation->load([
             'employee.designation',
@@ -645,6 +650,8 @@ class TraineeEvaluationController extends Controller
             'ratings',
             ...AppraisalListQuery::signerWith(),
         ]);
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($request->user(), $evaluation);
 
         return Inertia::render('sections/human-resources/evaluations/trainee/print', [
             'evaluation' => $evaluation,

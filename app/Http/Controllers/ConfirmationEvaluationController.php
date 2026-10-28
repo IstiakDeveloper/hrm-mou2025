@@ -378,6 +378,9 @@ class ConfirmationEvaluationController extends Controller
         $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
         $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
         return Inertia::render('sections/human-resources/evaluations/confirmation/show', [
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
@@ -431,6 +434,9 @@ class ConfirmationEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         $templates = AppraisalTemplateCache::load('confirmation');
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/confirmation/edit', [
             'evaluation' => $evaluation,
@@ -700,7 +706,7 @@ class ConfirmationEvaluationController extends Controller
         return redirect()->route('confirmation.evaluations.index')->with('success', 'Confirmation evaluation deleted successfully.');
     }
 
-    public function print(ConfirmationEvaluation $evaluation)
+    public function print(Request $request, ConfirmationEvaluation $evaluation)
     {
         $evaluation->load([
             'employee.designation',
@@ -717,6 +723,8 @@ class ConfirmationEvaluationController extends Controller
         if ($evaluation->employee && empty($evaluation->employee->educational_qualification)) {
             $evaluation->employee->educational_qualification = $evaluation->employee->resolveEducationalQualification();
         }
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($request->user(), $evaluation);
 
         return Inertia::render('sections/human-resources/evaluations/confirmation/print', [
             'evaluation' => $evaluation,

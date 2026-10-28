@@ -326,6 +326,9 @@ class PromotionEvaluationController extends Controller
         $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
         $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
 
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
         return Inertia::render('sections/human-resources/evaluations/promotion/show', [
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
@@ -373,6 +376,9 @@ class PromotionEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         $templates = AppraisalTemplateCache::load('promotion', activeOnly: true, activeCriteriaOnly: true);
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/promotion/edit', [
             'evaluation' => $evaluation,
@@ -599,7 +605,7 @@ class PromotionEvaluationController extends Controller
         return redirect()->route('promotions.evaluations.index')->with('success', 'Promotion evaluation deleted successfully.');
     }
 
-    public function print(PromotionEvaluation $evaluation)
+    public function print(Request $request, PromotionEvaluation $evaluation)
     {
         $evaluation->load([
             'employee.designation',
@@ -611,6 +617,8 @@ class PromotionEvaluationController extends Controller
             'scores',
             ...AppraisalListQuery::signerWith(),
         ]);
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($request->user(), $evaluation);
 
         return Inertia::render('sections/human-resources/evaluations/promotion/print', [
             'evaluation' => $evaluation,
