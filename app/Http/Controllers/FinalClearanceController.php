@@ -157,6 +157,11 @@ class FinalClearanceController extends Controller
 
         $finalClearance->load(['signatures.user.employee', 'signatures.commentEditor:id,name', 'initiator:id,name']);
         $user->loadMissing('employee');
+        \App\Services\Appraisal\FinalClearanceVisibility::apply(
+            $finalClearance,
+            $this->clearances->viewerRank($user, $finalClearance),
+            (int) $user->id,
+        );
 
         return Inertia::render('final-clearances/show', [
             'clearance' => $this->payload($finalClearance),
@@ -171,6 +176,11 @@ class FinalClearanceController extends Controller
         $user = $request->user();
         $this->authorizeRecord($user, $finalClearance);
         $finalClearance->load(['signatures.user.employee', 'signatures.commentEditor:id,name', 'initiator:id,name']);
+        \App\Services\Appraisal\FinalClearanceVisibility::apply(
+            $finalClearance,
+            $this->clearances->viewerRank($user, $finalClearance),
+            (int) $user->id,
+        );
 
         return Inertia::render('final-clearances/print', [
             'clearance' => $this->payload($finalClearance),

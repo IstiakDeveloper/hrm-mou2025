@@ -331,6 +331,39 @@ class FinalClearanceService
         });
     }
 
+    /**
+     * Highest stage whose comments this viewer may read (see FinalClearanceVisibility).
+     * Super admin / ED see everything.
+     */
+    public function viewerRank(User $user, FinalClearance $clearance): int
+    {
+        if ($user->isSuperAdmin() || $this->isExecutiveDirector($user)) {
+            return \App\Services\Appraisal\FinalClearanceVisibility::RANK_TOP;
+        }
+
+        $rank = 0;
+
+        if ($this->isHr($user)) {
+            $rank = max($rank, 1);
+        }
+        if ($this->isAccounts($user)) {
+            $rank = max($rank, 2);
+        }
+        if ($this->isDirectorFinance($user)) {
+            $rank = max($rank, 3);
+        }
+
+        // Anyone who already signed at a stage can see that stage.
+        foreach ($clearance->signatures->where('user_id', $user->id) as $own) {
+            $stageRank = \App\Services\Appraisal\FinalClearanceVisibility::stageRank($own->stage);
+            if ($stageRank < \App\Services\Appraisal\FinalClearanceVisibility::RANK_TOP) {
+                $rank = max($rank, $stageRank);
+            }
+        }
+
+        return $rank;
+    }
+
     public function canAct(User $user, FinalClearance $clearance): bool
     {
         if (in_array($clearance->status, [FinalClearance::STATUS_APPROVED, FinalClearance::STATUS_REJECTED], true)) {
