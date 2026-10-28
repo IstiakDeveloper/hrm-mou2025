@@ -46,6 +46,43 @@ class AppraisalSignatureVisibility
         'hr_acr_satisfactory',
     ];
 
+    /** Auto-generated texts that carry no information; never shown to anybody. */
+    private const DEFAULT_COMMENTS = [
+        'Initial Evaluation Drafted',
+        'Initial Confirmation Evaluation Drafted',
+        'Initial appraisal created',
+        'Resubmitted by creator',
+        'খসড়া তৈরি ও ১ম তত্ত্বাবধায়ক কর্তৃক মূল্যায়ন সম্পন্ন।',
+        'সুপারিশ ও স্বাক্ষরসহ সংশোধনপূর্বক অনুমোদন করা হলো।',
+        'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।',
+    ];
+
+    public static function isDefaultComment(?string $comment): bool
+    {
+        $normalized = trim((string) preg_replace('/\s+/u', ' ', (string) $comment));
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        if (in_array($normalized, self::DEFAULT_COMMENTS, true)) {
+            return true;
+        }
+
+        // "মূল্যায়নটি <পদবি> বরাবর দাখিল করা হয়েছে।" (auto text on submit)
+        return (bool) preg_match('/^মূল্যায়নটি .+ বরাবর দাখিল করা হয়েছে।$/u', $normalized);
+    }
+
+    /** Blank auto-generated comments in memory only (nothing is saved). */
+    public static function stripDefaultComments(Collection $signatures): void
+    {
+        foreach ($signatures as $signature) {
+            if (self::isDefaultComment($signature->comments)) {
+                $signature->setAttribute('comments', null);
+            }
+        }
+    }
+
     /** Unknown stages are treated as top-level, i.e. hidden from everybody except super admin / ED. */
     public static function stageRank(?string $stage): int
     {
@@ -144,6 +181,8 @@ class AppraisalSignatureVisibility
      */
     public static function apply(User $user, Model $evaluation): void
     {
+        self::stripDefaultComments($evaluation->signatures);
+
         $rank = self::viewerRank($user, $evaluation);
 
         if ($rank >= self::RANK_TOP) {

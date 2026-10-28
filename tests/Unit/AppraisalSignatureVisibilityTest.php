@@ -72,3 +72,35 @@ test('unknown stage is hidden from non top viewers', function () {
 
     expect(Visibility::filter($sigs, 4, 2, false))->toHaveCount(0);
 });
+
+test('auto generated default comments are recognised', function (string $text) {
+    expect(Visibility::isDefaultComment($text))->toBeTrue();
+})->with([
+    'Initial Evaluation Drafted',
+    'Initial Confirmation Evaluation Drafted',
+    'Initial appraisal created',
+    'Resubmitted by creator',
+    'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।',
+    'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।',
+    'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।',
+]);
+
+test('real human comments are not treated as default', function (string $text) {
+    expect(Visibility::isDefaultComment($text))->toBeFalse();
+})->with([
+    'Please fix the loan figures',
+    'Good performance, recommended',
+    '',
+]);
+
+test('stripDefaultComments blanks only default comments, in memory', function () {
+    $sigs = collect([
+        new PromotionEvaluationSignature(['user_id' => 1, 'stage' => 'initiator', 'action' => 'drafted', 'comments' => 'Initial Evaluation Drafted']),
+        new PromotionEvaluationSignature(['user_id' => 2, 'stage' => 'rm', 'action' => 'forwarded', 'comments' => 'Needs more training']),
+    ]);
+
+    Visibility::stripDefaultComments($sigs);
+
+    expect($sigs[0]->comments)->toBeNull();
+    expect($sigs[1]->comments)->toBe('Needs more training');
+});
