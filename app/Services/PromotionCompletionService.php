@@ -97,6 +97,73 @@ class PromotionCompletionService
         }
     }
 
+    public function rollback(Promotion $promotion, ?int $actorUserId): void
+    {
+        if ($promotion->status !== 'completed') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'status' => 'Only completed promotions can be rolled back.',
+            ]);
+        }
+
+        $promotion->loadMissing(['employee', 'fromSalaryGrade']);
+
+        DB::transaction(function () use ($promotion, $actorUserId) {
+            $employee = $promotion->employee;
+
+            // Restore employee to pre-promotion values
+            $employee->designation_id = $promotion->from_designation_id;
+
+            if ($promotion->from_salary_grade_id) {
+                $fromGrade = $promotion->fromSalaryGrade
+                    ?? \App\Models\SalaryGrade::find($promotion->from_salary_grade_id);
+                $employee->payscale_id = $fromGrade?->payscale_id ?: $employee->payscale_id;
+                $employee->salary_grade_id = $promotion->from_salary_grade_id;
+            } else {
+                $employee->salary_grade_id = null;
+                $employee->payscale_id = null;
+            }
+
+            if ($promotion->from_salary_step_id) {
+                $employee->salary_step_id = $promotion->from_salary_step_id;
+            } else {
+                $employee->salary_step_id = null;
+            }
+
+            if ($promotion->from_basic_salary !== null && $promotion->from_basic_salary !== '') {
+                $employee->basic_salary = $promotion->from_basic_salary;
+            }
+
+            // Clear last_promotion_date if it matches this promotion's effective date
+            if ($promotion->effective_date && $employee->last_promotion_date) {
+                $promoDate = \Illuminate\Support\Carbon::parse($promotion->effective_date)->toDateString();
+                $lastDate = \Illuminate\Support\Carbon::parse($employee->last_promotion_date)->toDateString();
+                if ($promoDate === $lastDate) {
+                    // Find previous promotion date
+                    $prev = Promotion::query()
+                        ->where('employee_id', $employee->id)
+                        ->where('status', 'completed')
+                        ->where('id', '!=', $promotion->id)
+                        ->orderByDesc('effective_date')
+                        ->orderByDesc('id')
+                        ->value('effective_date');
+                    $employee->last_promotion_date = $prev ? \Illuminate\Support\Carbon::parse($prev) : null;
+                }
+            }
+
+            $employee->save();
+
+            // Delete the promotion history records for this promotion
+            $promotion->histories()->delete();
+
+            // Revert promotion status back to approved
+            $promotion->status = 'approved';
+            $promotion->save();
+
+            // Rebuild assignment history to reflect the reversal
+            app(EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($employee);
+        });
+    }
+
     public function activateDuePromotions(?int $actorUserId = null): int
     {
         $activated = 0;

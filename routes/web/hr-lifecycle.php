@@ -133,6 +133,7 @@ Route::middleware(['permission:promotions.view'])->prefix('promotions')->name('p
         Route::put('/{promotion}', [PromotionController::class, 'update'])->name('update');
         Route::post('/{promotion}/cancel', [PromotionController::class, 'cancel'])->name('cancel');
         Route::post('/{promotion}/complete', [PromotionController::class, 'complete'])->name('complete');
+        Route::post('/{promotion}/rollback', [PromotionController::class, 'rollback'])->name('rollback');
     });
 
     Route::middleware(['permission:promotions.approve'])->group(function () {

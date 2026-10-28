@@ -199,6 +199,7 @@ class PromotionController extends Controller
             'canApprove' => $user->hasPermission('promotions.approve'),
             'canEditPromotions' => $user->hasPermission('promotions.edit'),
             'canEditCompleted' => $user->isSuperAdmin(),
+            'canRollback' => $user->isSuperAdmin() || $user->hasPermission('promotions.edit'),
         ]);
     }
 
@@ -321,6 +322,13 @@ class PromotionController extends Controller
                 $user = Auth::user();
 
                 return $this->canEditPromotion($user, $promotion);
+            })(),
+            'canRollback' => (function () use ($promotion) {
+                /** @var User $user */
+                $user = Auth::user();
+
+                return $promotion->status === 'completed'
+                    && ($user->isSuperAdmin() || $user->hasPermission('promotions.edit'));
             })(),
         ]);
     }
@@ -499,6 +507,29 @@ class PromotionController extends Controller
         });
 
         return redirect()->route('promotions.index')->with('success', 'Promotion completed successfully.');
+    }
+
+    public function rollback(Promotion $promotion)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $user->isSuperAdmin() && ! $user->hasPermission('promotions.edit')) {
+            return redirect()->route('promotions.index')->with('error', 'You do not have permission to rollback promotions.');
+        }
+
+        if ($promotion->status !== 'completed') {
+            return redirect()->route('promotions.show', $promotion)->with('error', 'Only completed promotions can be rolled back.');
+        }
+
+        try {
+            DB::transaction(function () use ($promotion, $user) {
+                $this->promotionCompletionService->rollback($promotion, $user->id);
+            });
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return redirect()->route('promotions.show', $promotion)->with('success', 'Promotion has been rolled back successfully. Employee records have been restored to their previous state.');
     }
 
     private function syncPromotionHistory(Promotion $promotion, ?int $actorUserId): void

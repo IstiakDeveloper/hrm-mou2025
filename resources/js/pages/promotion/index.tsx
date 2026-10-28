@@ -31,6 +31,7 @@ import {
     Eye,
     Pencil,
     Plus,
+    RotateCcw,
     Search,
     User,
     X,
@@ -95,6 +96,7 @@ type Props = {
     canApprove: boolean;
     canEditPromotions?: boolean;
     canEditCompleted?: boolean;
+    canRollback?: boolean;
 };
 
 function statusBadge(status: Promotion['status']) {
@@ -114,7 +116,7 @@ function statusBadge(status: Promotion['status']) {
     }
 }
 
-export default function PromotionIndex({ promotions, employees, filters, canApprove, canEditPromotions = false, canEditCompleted = false }: Props) {
+export default function PromotionIndex({ promotions, employees, filters, canApprove, canEditPromotions = false, canEditCompleted = false, canRollback = false }: Props) {
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
     const [fromDate, setFromDate] = useState(filters.from_date || '');
@@ -392,6 +394,26 @@ export default function PromotionIndex({ promotions, employees, filters, canAppr
                                                                 }}
                                                             >
                                                                 <Check className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+
+                                                        {p.status === 'completed' && canRollback && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 rounded-lg transition-colors"
+                                                                title="Rollback Promotion"
+                                                                onClick={() => {
+                                                                    if (
+                                                                        confirm(
+                                                                            `Rollback promotion for ${p.employee ? (p.employee as any).name_en || (p.employee as any).name_bn || 'this employee' : 'this employee'}?\n\nThis will restore their previous designation & salary and revert status to "Approved".`,
+                                                                        )
+                                                                    ) {
+                                                                        router.post(route('promotions.rollback', p.id));
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <RotateCcw className="h-4 w-4" />
                                                             </Button>
                                                         )}
                                                     </div>

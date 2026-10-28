@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, CheckCircle2, Check, XCircle, Calendar, BriefcaseBusiness, Pencil } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, XCircle, Calendar, BriefcaseBusiness, Pencil, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
@@ -42,6 +42,7 @@ type Props = {
     promotion: Promotion;
     canApprove: boolean;
     canEdit?: boolean;
+    canRollback?: boolean;
 };
 
 function statusBadge(status: Promotion['status']) {
@@ -61,7 +62,7 @@ function statusBadge(status: Promotion['status']) {
     }
 }
 
-export default function PromotionShow({ promotion, canApprove, canEdit = false }: Props) {
+export default function PromotionShow({ promotion, canApprove, canEdit = false, canRollback = false }: Props) {
     const [rejectReason, setRejectReason] = useState('');
     const effective = new Date(promotion.effective_date);
     const anyPromotion: any = promotion as any;
@@ -140,6 +141,26 @@ export default function PromotionShow({ promotion, canApprove, canEdit = false }
                             >
                                 <Check className="mr-1.5 h-3.5 w-3.5" />
                                 Complete
+                            </Button>
+                        )}
+
+                        {promotion.status === 'completed' && canRollback && (
+                            <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-8 text-xs bg-amber-600 hover:bg-amber-700 border-0"
+                                onClick={() => {
+                                    if (
+                                        confirm(
+                                            'Are you sure you want to rollback this promotion?\n\nThis will:\n• Restore employee to previous designation & salary\n• Delete promotion history record\n• Revert status to "Approved"\n\nThis action cannot be undone automatically.',
+                                        )
+                                    ) {
+                                        router.post(route('promotions.rollback', promotion.id));
+                                    }
+                                }}
+                            >
+                                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                                Rollback
                             </Button>
                         )}
                     </div>
