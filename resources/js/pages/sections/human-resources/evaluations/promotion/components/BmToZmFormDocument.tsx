@@ -682,7 +682,7 @@ export default function BmToZmFormDocument({
                                         </p>
                                     ) : (
                                         <p className="italic text-gray-800 text-[10px]">
-                                            {rmSig?.comments ? `"${rmSig.comments}"` : (lang === 'bn' ? 'সম্মত ও অগ্রবর্তী করা হলো।' : 'Agreed and forwarded.')}
+                                            {rmSig?.comments ? `"${rmSig.comments}"` : null}
                                             <UpdatedByLine name={rmSig?.comment_updated_by_name} />
                                         </p>
                                     )}
@@ -704,11 +704,7 @@ export default function BmToZmFormDocument({
                                         {lang === 'bn' ? 'জোনাল ম্যানেজারের মন্তব্য ও সুপারিশ:' : 'Zonal Manager Review:'}
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
-                                        {zmSig?.comments
-                                            ? `"${zmSig.comments}"`
-                                            : (isCandidateRm
-                                                ? (lang === 'bn' ? '১ম তত্ত্বাবধায়ক হিসেবে জোনাল ম্যানেজার কর্তৃক মূল্যায়ন ও সুপারিশ প্রণীত (১নং অনুচ্ছেদ দ্রষ্টব্য)।' : 'Evaluated and recommended by Zonal Manager as 1st Supervisor.')
-                                                : (lang === 'bn' ? 'সুপারিশ করা হলো।' : 'Recommended.'))}
+                                        {zmSig?.comments ? `"${zmSig.comments}"` : null}
                                         <UpdatedByLine name={zmSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
@@ -732,7 +728,7 @@ export default function BmToZmFormDocument({
                                         {lang === 'bn' ? 'মাইক্রোফাইন্যান্স বিভাগের মন্তব্য ও সুপারিশ:' : 'Microfinance Department Review:'}
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
-                                        {directorSig?.comments ? `"${directorSig.comments}"` : (lang === 'bn' ? 'পর্যালোচনাপূর্বক অনুমোদন সুপারিশ করা হলো।' : 'Reviewed and recommended.')}
+                                        {directorSig?.comments ? `"${directorSig.comments}"` : null}
                                         <UpdatedByLine name={directorSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
@@ -753,7 +749,7 @@ export default function BmToZmFormDocument({
                                         {lang === 'bn' ? 'মানবসম্পদ বিভাগের মন্তব্য ও সুপারিশ:' : 'Human Resources Review:'}
                                     </div>
                                     <p className="italic text-gray-800 text-[10px]">
-                                        {hrSig?.comments ? `"${hrSig.comments}"` : (lang === 'bn' ? 'যাচাই সম্পন্ন ও পদোন্নতির জন্য সুপারিশ করা হলো।' : 'Verified and recommended.')}
+                                        {hrSig?.comments ? `"${hrSig.comments}"` : null}
                                         <UpdatedByLine name={hrSig?.comment_updated_by_name} />
                                     </p>
                                 </div>
@@ -781,7 +777,7 @@ export default function BmToZmFormDocument({
                                 )}
                             </div>
                             <p className="italic text-gray-800 text-[10px] mb-1">
-                                "{edSig?.comments || (evaluation.status === 'approved' ? (lang === 'bn' ? 'অনুমোদন করা হলো।' : 'Approved.') : (evaluation.status === 'rejected' ? (lang === 'bn' ? 'প্রত্যাখ্যাত হলো।' : 'Rejected.') : (lang === 'bn' ? 'চূড়ান্ত অনুমোদন অপেক্ষমাণ।' : 'Pending approval.')))}"
+                                {edSig?.comments ? `"${edSig.comments}"` : null}
                                 <UpdatedByLine name={edSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[9.5px]">

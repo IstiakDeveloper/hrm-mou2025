@@ -697,7 +697,7 @@ export default function AccountantFormDocument({
                         <div className="border border-black p-2">
                             <div className="font-bold text-[11px] mb-0.5">{lang === 'bn' ? '২. আঞ্চলিক ব্যবস্থাপকের মন্তব্য ও সুপারিশ:' : '2. Regional Manager Review:'}</div>
                             <p className="italic text-gray-800 text-[10.5px]">
-                                {rmSig?.comments ? `"${rmSig.comments}"` : (lang === 'bn' ? 'সম্মত ও অগ্রবর্তী করা হলো।' : 'Agreed and forwarded.')}
+                                {rmSig?.comments ? `"${rmSig.comments}"` : null}
                                 <UpdatedByLine name={rmSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[10px]">
@@ -714,7 +714,7 @@ export default function AccountantFormDocument({
                         <div className="border border-black p-2">
                             <div className="font-bold text-[11px] mb-0.5">{lang === 'bn' ? '৩. জোনাল ম্যানেজারের মন্তব্য ও সুপারিশ:' : '3. Zonal Manager Review:'}</div>
                             <p className="italic text-gray-800 text-[10.5px]">
-                                {zmSig?.comments ? `"${zmSig.comments}"` : (lang === 'bn' ? 'সুপারিশ করা হলো।' : 'Recommended.')}
+                                {zmSig?.comments ? `"${zmSig.comments}"` : null}
                                 <UpdatedByLine name={zmSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[10px]">
@@ -731,7 +731,7 @@ export default function AccountantFormDocument({
                         <div className="border border-black p-2">
                             <div className="font-bold text-[11px] mb-0.5">{lang === 'bn' ? '৪. অর্থ ও হিসাব বিভাগের মন্তব্য ও সুপারিশ:' : '4. Finance & Accounts Department Review:'}</div>
                             <p className="italic text-gray-800 text-[10.5px]">
-                                {directorFaSig?.comments ? `"${directorFaSig.comments}"` : (lang === 'bn' ? 'পর্যালোচনাপূর্বক অনুমোদন সুপারিশ করা হলো।' : 'Reviewed and recommended.')}
+                                {directorFaSig?.comments ? `"${directorFaSig.comments}"` : null}
                                 <UpdatedByLine name={directorFaSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[10px]">
@@ -748,7 +748,7 @@ export default function AccountantFormDocument({
                         <div className="border border-black p-2">
                             <div className="font-bold text-[11px] mb-0.5">{lang === 'bn' ? '৫. মানবসম্পদ বিভাগের মন্তব্য ও সুপারিশ:' : '5. Human Resources Department Review:'}</div>
                             <p className="italic text-gray-800 text-[10.5px]">
-                                {hrSig?.comments ? `"${hrSig.comments}"` : (lang === 'bn' ? 'যাচাই সম্পন্ন ও পদোন্নতির জন্য সুপারিশ করা হলো।' : 'Verified and recommended.')}
+                                {hrSig?.comments ? `"${hrSig.comments}"` : null}
                                 <UpdatedByLine name={hrSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[10px]">
@@ -772,7 +772,7 @@ export default function AccountantFormDocument({
                                 )}
                             </div>
                             <p className="italic text-gray-800 text-[10.5px] mb-1">
-                                "{edSig?.comments || (evaluation.status === 'approved' ? (lang === 'bn' ? 'অনুমোদন করা হলো।' : 'Approved.') : (evaluation.status === 'rejected' ? (lang === 'bn' ? 'প্রত্যাখ্যাত হলো।' : 'Rejected.') : (lang === 'bn' ? 'চূড়ান্ত অনুমোদন অপেক্ষমাণ।' : 'Pending approval.')))}"
+                                {edSig?.comments ? `"${edSig.comments}"` : null}
                                 <UpdatedByLine name={edSig?.comment_updated_by_name} />
                             </p>
                             <div className="flex justify-between items-end pt-1 text-[10px]">
