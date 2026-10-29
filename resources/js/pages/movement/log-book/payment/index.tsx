@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { LogBookScopeTabs } from '@/components/log-book-scope-tabs';
 import { format } from 'date-fns';
 import {
+    AlertTriangle,
     Banknote,
     Check,
     CheckCircle2,
@@ -141,12 +142,24 @@ function CompactDate({ label, value }: { label: string; value?: string | null })
     );
 }
 
+const SIGNATURE_REQUIRED = 'লগ বুক পেমেন্ট রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+
+function blockWithoutSignature(signature?: string | null) {
+    if (signature) return false;
+    alert(SIGNATURE_REQUIRED);
+    window.location.href = '/settings/profile';
+    return true;
+}
+
 function PaymentActions({ row, compact = false }: { row: Payment; compact?: boolean }) {
+    const signature = (usePage().props as { auth?: { user?: { signature?: string | null } } }).auth?.user?.signature;
     const handleRecommend = () => {
+        if (blockWithoutSignature(signature)) return;
         if (!confirm(`Recommend log book payment for ${employeeDisplayName(row.employee)}?`)) return;
         router.post(route('movement-log-book-payments.recommend', row.id), {}, { preserveScroll: true, preserveState: true });
     };
     const handleApprove = () => {
+        if (blockWithoutSignature(signature)) return;
         if (!confirm(`Approve payment for ${employeeDisplayName(row.employee)}?`)) return;
         router.post(route('movement-log-book-payments.approve', row.id), {}, { preserveScroll: true, preserveState: true });
     };
@@ -197,7 +210,8 @@ function PaymentActions({ row, compact = false }: { row: Payment; compact?: bool
 }
 
 export default function LogBookPaymentIndex({ payments, summary, filters, ratePerKm, canProcess, userLimitInfo, scopeView = 'team', showScopeTabs = false }: Props) {
-    const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
+    const { flash, auth } = usePage<{ flash?: { success?: string; error?: string }; auth?: { user?: { signature?: string | null } } }>().props;
+    const needsSignature = !auth?.user?.signature && payments.data.some((row) => row.can_recommend || row.can_approve);
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || '');
     const [periodYear, setPeriodYear] = useState(filters.period_year || '');
@@ -344,6 +358,18 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                     <Alert variant="destructive" className="mb-4">
                         <AlertTitle>Error</AlertTitle>
                         <AlertDescription>{flash.error}</AlertDescription>
+                    </Alert>
+                )}
+                {needsSignature && (
+                    <Alert className="mb-4 border-amber-300 bg-amber-50 text-amber-900">
+                        <AlertTriangle className="h-4 w-4 text-amber-700" />
+                        <AlertTitle>ডিজিটাল স্বাক্ষর প্রয়োজন</AlertTitle>
+                        <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <span>{SIGNATURE_REQUIRED}</span>
+                            <Button asChild size="sm" className="shrink-0 bg-amber-600 text-white hover:bg-amber-700">
+                                <Link href="/settings/profile">স্বাক্ষর আপলোড করুন</Link>
+                            </Button>
+                        </AlertDescription>
                     </Alert>
                 )}
 

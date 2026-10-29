@@ -28,8 +28,8 @@ interface Payment {
     status?: 'pending' | 'recommended' | 'approved' | 'rejected';
     needs_recommendation?: boolean;
     employee: Employee;
-    approver?: { name: string } | null;
-    recommender?: { name: string } | null;
+    approver?: { name: string; signature_path?: string | null } | null;
+    recommender?: { name: string; signature_path?: string | null } | null;
     processor?: { name: string } | null;
     approved_at?: string | null;
     recommended_at?: string | null;
@@ -51,6 +51,43 @@ type Props = {
     companyAddress?: string;
     generatedAt: string;
 };
+
+function signatureSrc(path?: string | null): string | null {
+    if (!path) return null;
+    if (path.startsWith('http') || path.startsWith('/')) return path;
+    return `/storage/${path}`;
+}
+
+function SignatoryBlock({
+    label,
+    name,
+    date,
+    signaturePath,
+}: {
+    label: string;
+    name: string;
+    date?: string | null;
+    signaturePath?: string | null;
+}) {
+    const src = signatureSrc(signaturePath);
+
+    return (
+        <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+            <div className="flex h-16 items-end">
+                {src ? (
+                    <img src={src} alt="" className="max-h-16 max-w-[150px] object-contain object-left" />
+                ) : null}
+            </div>
+            <div className="border-t border-slate-400 pt-1">
+                <p className="font-medium text-slate-900">{name}</p>
+                {date && (
+                    <p className="text-xs text-slate-500">{format(new Date(date), 'dd MMM yyyy')}</p>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function LogBookPaymentVoucher({ payment, displayVoucherNo, kmSummary, companyName, companyAddress, generatedAt }: Props) {
     const monthLabel = format(new Date(payment.period_year, payment.period_month - 1, 1), 'MMMM yyyy');
@@ -344,39 +381,25 @@ export default function LogBookPaymentVoucher({ payment, displayVoucherNo, kmSum
                             </div>
                         </div>
 
-                        <div className="mt-12 grid grid-cols-3 gap-8 text-sm">
-                            <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Processed by</p>
-                                <div className="mt-12 border-t border-slate-400 pt-1">
-                                    <p className="font-medium text-slate-900">{payment.processor?.name || '—'}</p>
-                                    {payment.processed_at && (
-                                        <p className="text-xs text-slate-500">{format(new Date(payment.processed_at), 'dd MMM yyyy')}</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Recommended by</p>
-                                <div className="mt-12 border-t border-slate-400 pt-1">
-                                    <p className="font-medium text-slate-900">
-                                        {payment.recommender?.name
-                                            || (payment.needs_recommendation === false ? 'Not required' : (isPending ? 'Awaiting recommendation' : '—'))}
-                                    </p>
-                                    {payment.recommended_at && (
-                                        <p className="text-xs text-slate-500">{format(new Date(payment.recommended_at), 'dd MMM yyyy')}</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Approved by</p>
-                                <div className="mt-12 border-t border-slate-400 pt-1">
-                                    <p className="font-medium text-slate-900">
-                                        {payment.status === 'approved' ? (payment.approver?.name || '—') : 'Awaiting approval'}
-                                    </p>
-                                    {payment.approved_at && (
-                                        <p className="text-xs text-slate-500">{format(new Date(payment.approved_at), 'dd MMM yyyy')}</p>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="mt-8 grid grid-cols-3 gap-8 text-sm">
+                            <SignatoryBlock
+                                label="Processed by"
+                                name={payment.processor?.name || '—'}
+                                date={payment.processed_at}
+                            />
+                            <SignatoryBlock
+                                label="Recommended by"
+                                name={payment.recommender?.name
+                                    || (payment.needs_recommendation === false ? 'Not required' : (isPending ? 'Awaiting recommendation' : '—'))}
+                                date={payment.recommended_at}
+                                signaturePath={payment.recommender?.signature_path}
+                            />
+                            <SignatoryBlock
+                                label="Approved by"
+                                name={payment.status === 'approved' ? (payment.approver?.name || '—') : 'Awaiting approval'}
+                                date={payment.approved_at}
+                                signaturePath={payment.status === 'approved' ? payment.approver?.signature_path : null}
+                            />
                         </div>
 
                         <p className="mt-6 text-right text-[10px] text-slate-400">

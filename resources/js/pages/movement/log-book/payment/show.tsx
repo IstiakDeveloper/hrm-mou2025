@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { format } from 'date-fns';
-import { ArrowLeft, Check, Eye, Printer, ThumbsUp, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, Eye, Printer, ThumbsUp, Trash2, XCircle } from 'lucide-react';
+
+const SIGNATURE_REQUIRED = 'লগ বুক পেমেন্ট রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+
+function blockWithoutSignature(signature?: string | null) {
+    if (signature) return false;
+    alert(SIGNATURE_REQUIRED);
+    window.location.href = '/settings/profile';
+    return true;
+}
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -96,6 +105,8 @@ function paymentBadge(status: string) {
 }
 
 export default function LogBookPaymentShow({ payment, canRecommend = false, canApprove, canReject = false, canDelete = false, nextActionLabel }: Props) {
+    const signature = (usePage().props as { auth?: { user?: { signature?: string | null } } }).auth?.user?.signature;
+    const needsSignature = (canRecommend || canApprove) && !signature;
     const monthLabel = format(new Date(payment.period_year, payment.period_month - 1, 1), 'MMMM yyyy');
     const entries = payment.log_books ?? [];
 
@@ -111,11 +122,13 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
     }, [entries]);
 
     const handleRecommend = () => {
+        if (blockWithoutSignature(signature)) return;
         if (!confirm('Recommend this log book payment?')) return;
         router.post(route('movement-log-book-payments.recommend', payment.id));
     };
 
     const handleApprove = () => {
+        if (blockWithoutSignature(signature)) return;
         if (!confirm('Approve this monthly log book payment?')) return;
         router.post(route('movement-log-book-payments.approve', payment.id));
     };
@@ -179,6 +192,21 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                         )}
                     </div>
                 </div>
+
+                {needsSignature && (
+                    <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                            <div>
+                                <p className="text-sm font-semibold">ডিজিটাল স্বাক্ষর প্রয়োজন</p>
+                                <p className="mt-0.5 text-xs text-amber-800">{SIGNATURE_REQUIRED}</p>
+                            </div>
+                        </div>
+                        <Button asChild size="sm" className="shrink-0 bg-amber-600 text-white hover:bg-amber-700">
+                            <Link href="/settings/profile">স্বাক্ষর আপলোড করুন</Link>
+                        </Button>
+                    </div>
+                )}
 
                 <Card className="mb-4">
                     <CardHeader>

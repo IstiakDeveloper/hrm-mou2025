@@ -265,6 +265,10 @@ class MovementLogBookPaymentController extends Controller
         $user = Auth::user();
         abort_unless($this->workflow->userCanRecommend($user, $payment), 403);
 
+        if ($redirect = $this->redirectIfSignatureMissing($user)) {
+            return $redirect;
+        }
+
         $request->validate(['recommendation_remarks' => 'nullable|string|max:1000']);
 
         $payment->update([
@@ -281,6 +285,10 @@ class MovementLogBookPaymentController extends Controller
     {
         $user = Auth::user();
         abort_unless($this->workflow->userCanApprove($user, $payment), 403);
+
+        if ($redirect = $this->redirectIfSignatureMissing($user)) {
+            return $redirect;
+        }
 
         $request->validate(['approval_remarks' => 'nullable|string|max:1000']);
 
@@ -386,10 +394,14 @@ class MovementLogBookPaymentController extends Controller
             'employee.department',
             'employee.designation',
             'employee.branch',
-            'recommender:id,name',
-            'approver:id,name',
+            'recommender:id,name,signature,employee_id',
+            'recommender.employee:id,signature',
+            'approver:id,name,signature,employee_id',
+            'approver.employee:id,signature',
             'processor:id,name',
         ]);
+
+        $this->attachSignatoryPaths($payment);
 
         $kmSummary = MovementLogBook::query()
             ->where('log_book_payment_id', $payment->id)
@@ -412,6 +424,30 @@ class MovementLogBookPaymentController extends Controller
             'companyAddress' => config('payroll_reports.company_address', ''),
             'generatedAt' => now()->toIso8601String(),
         ]);
+    }
+
+    private function redirectIfSignatureMissing(User $user): ?\Illuminate\Http\RedirectResponse
+    {
+        if ($user->hasSignature()) {
+            return null;
+        }
+
+        return redirect()
+            ->route('settings.profile.edit')
+            ->with('error', 'লগ বুক পেমেন্ট রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
+    }
+
+    private function attachSignatoryPaths(MovementLogBookPayment $payment): void
+    {
+        foreach (['recommender', 'approver'] as $relation) {
+            $person = $payment->{$relation};
+            if (! $person instanceof User) {
+                continue;
+            }
+
+            $person->setAttribute('signature_path', $person->getSignaturePath());
+            $person->makeHidden(['signature', 'employee']);
+        }
     }
 
     private function generateVoucherNo(MovementLogBookPayment $payment): string
