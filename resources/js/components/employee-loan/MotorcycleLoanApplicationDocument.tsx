@@ -176,21 +176,12 @@ export function MotorcycleLoanApplicationDocument({ fields, editing = false, onC
 
             <p className="mt-2">উপরে বর্ণিত তথ্যের ভিত্তিতে ঋণ মঞ্জুর করার আবেদন করিতেছি।</p>
 
-            <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                    <p>আবেদনকারীর স্বাক্ষর:</p>
-                    <div className="flex h-10 items-end">{fields.signature ? <img src={signatureUrl(fields.signature) || ''} alt="" className="max-h-10 max-w-[9rem] object-contain" /> : null}</div>
-                    <p>নাম: <span className="font-semibold">{fields.name}</span></p>
-                    <p>পদবী: <span className="font-semibold">{fields.designation}</span></p>
-                    <p>তারিখ: <span className="font-semibold">{fields.date}</span></p>
-                </div>
-                <div className="border border-black p-2 text-[11px] leading-5 print:border-black">
-                    <p className="mb-1 text-center font-bold">প্রধান কার্যালয়ের হিসাব বিভাগ কর্তৃক পূরণীয়</p>
-                    <p>অনুমোদনকৃত লোনের পরিমাণ: {fields.accounts_amount || '....................'} টাকা</p>
-                    <p>কথায় ({fields.accounts_amount_words || '................................'})</p>
-                    <p>প্রদান করা হলো: {fields.accounts_date || '....................'}</p>
-                    <p>সিল ও স্বাক্ষর: {accountsSign ? <img src={accountsSign} alt="" className="inline-block h-7 max-w-[6rem] object-contain align-middle" /> : '............'}</p>
-                </div>
+            <div className="mt-3">
+                <p>আবেদনকারীর স্বাক্ষর:</p>
+                <div className="flex h-10 items-end">{fields.signature ? <img src={signatureUrl(fields.signature) || ''} alt="" className="max-h-10 max-w-[9rem] object-contain" /> : null}</div>
+                <p>নাম: <span className="font-semibold">{fields.name}</span></p>
+                <p>পদবী: <span className="font-semibold">{fields.designation}</span></p>
+                <p>তারিখ: <span className="font-semibold">{fields.date}</span></p>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3">
@@ -205,6 +196,14 @@ export function MotorcycleLoanApplicationDocument({ fields, editing = false, onC
                     </>
                 )}
                 <Seat title="নির্বাহী পরিচালকের অনুমোদন:" seat={seats.ed} />
+            </div>
+
+            <div className="mt-4 border border-black p-2 text-[11px] leading-5 print:border-black">
+                <p className="mb-1 text-center font-bold">প্রধান কার্যালয়ের হিসাব বিভাগ কর্তৃক পূরণীয়</p>
+                <p>অনুমোদনকৃত লোনের পরিমাণ: {fields.accounts_amount || '....................'} টাকা</p>
+                <p>কথায় ({fields.accounts_amount_words || '................................'})</p>
+                <p>প্রদান করা হলো: {fields.accounts_date || '....................'}</p>
+                <p>সিল ও স্বাক্ষর: {accountsSign ? <img src={accountsSign} alt="" className="inline-block h-7 max-w-[6rem] object-contain align-middle" /> : '............'}</p>
             </div>
         </article>
     );

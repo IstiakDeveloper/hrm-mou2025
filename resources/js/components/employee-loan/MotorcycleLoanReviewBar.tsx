@@ -72,7 +72,7 @@ export function MotorcycleLoanReviewBar({ applicationId, review, appliedAmount =
                     disabled={!review.has_signature || comments.trim() === '' || forward.processing}
                     onClick={submitForward}
                 >
-                    {review.stage === 'ed' ? 'অনুমোদন ও প্রদান' : review.stage === 'accounts' ? 'অনুমোদন' : 'সুপারিশ করে পাঠান'}
+                    {review.stage === 'accounts' ? 'প্রদান করুন' : review.stage === 'ed' ? 'অনুমোদন' : 'সুপারিশ করে পাঠান'}
                 </Button>
             </div>
             {review.stage === 'accounts' && (

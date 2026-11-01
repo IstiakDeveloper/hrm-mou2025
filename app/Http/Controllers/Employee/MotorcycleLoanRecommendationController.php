@@ -76,6 +76,8 @@ class MotorcycleLoanRecommendationController extends Controller
             'disbursement_date.required' => 'প্রদানের তারিখ দিন।',
         ]);
 
+        $previousStage = (string) $loan_application->workflow_stage;
+
         try {
             $updated = $this->motorcycle->forward(
                 $loan_application,
@@ -88,9 +90,12 @@ class MotorcycleLoanRecommendationController extends Controller
             throw ValidationException::withMessages(['comments' => $e->getMessage()]);
         }
 
-        $message = $updated->status === 'disbursed'
-            ? 'নির্বাহী পরিচালক অনুমোদন করেছেন। ঋণ স্বয়ংক্রিয়ভাবে প্রদান হয়েছে।'
-            : 'সুপারিশ পরের ধাপে পাঠানো হয়েছে।';
+        $message = match (true) {
+            $updated->status === 'disbursed' => 'হিসাব বিভাগ ঋণ প্রদান করেছে।',
+            $previousStage === 'accounts' && $updated->workflow_stage === 'ed' => 'এই আবেদন আগে নির্বাহী পরিচালকের অনুমোদনে গেছে। অনুমোদনের পর হিসাব বিভাগে আসবে।',
+            $updated->workflow_stage === 'accounts' => 'নির্বাহী পরিচালক অনুমোদন করেছেন। আবেদন এখন হিসাব বিভাগের কাছে।',
+            default => 'সুপারিশ পরের ধাপে পাঠানো হয়েছে।',
+        };
 
         return redirect()
             ->back()

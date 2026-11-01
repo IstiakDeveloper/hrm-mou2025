@@ -139,7 +139,7 @@ export function MotorcycleDecisionModal({
                         ফেরত পাঠান
                     </Button>
                     <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={!canSend} onClick={submitForward}>
-                        {isEd ? 'অনুমোদন ও প্রদান' : isAccounts ? 'অনুমোদন' : 'সুপারিশ করে পাঠান'}
+                        {isAccounts ? 'প্রদান করুন' : isEd ? 'অনুমোদন' : 'সুপারিশ করে পাঠান'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

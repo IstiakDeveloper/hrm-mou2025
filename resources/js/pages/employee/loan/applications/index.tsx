@@ -37,7 +37,8 @@ const statusLabel: Record<string, string> = {
 };
 
 function actionLabel(stage?: string | null): string {
-    if (stage === 'accounts' || stage === 'ed') return 'অনুমোদন';
+    if (stage === 'accounts') return 'প্রদান';
+    if (stage === 'ed') return 'অনুমোদন';
     return 'সুপারিশ';
 }
 

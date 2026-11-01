@@ -67,7 +67,7 @@ export default function MotorcycleRecommendationShow({ application, form, stage,
                         </Button>
                         <Button type="button" variant="outline" size="sm" disabled={comments.trim() === '' || sendBack.processing} onClick={submitBack}>ফেরত পাঠান</Button>
                         <Button type="button" size="sm" className="bg-emerald-600 hover:bg-emerald-700" disabled={!has_signature || comments.trim() === '' || forward.processing} onClick={submitForward}>
-                            {stage === 'ed' ? 'অনুমোদন ও প্রদান' : 'সুপারিশ করে পাঠান'}
+                            {stage === 'accounts' ? 'প্রদান করুন' : stage === 'ed' ? 'অনুমোদন' : 'সুপারিশ করে পাঠান'}
                         </Button>
                     </div>
                 </div>

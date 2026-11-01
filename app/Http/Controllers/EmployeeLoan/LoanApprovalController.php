@@ -72,9 +72,12 @@ class LoanApprovalController extends Controller
             throw ValidationException::withMessages(['application' => $e->getMessage()]);
         }
 
-        $message = $updated->status === 'in_review'
-            ? 'হিসাব বিভাগের সিল ও স্বাক্ষর হয়েছে। এখন নির্বাহী পরিচালকের অনুমোদনের অপেক্ষায়।'
-            : 'Loan application approved.';
+        $message = 'Loan application approved.';
+        if ($motorcycle && $updated->status === 'disbursed') {
+            $message = 'হিসাব বিভাগ ঋণ প্রদান করেছে।';
+        } elseif ($motorcycle && $updated->workflow_stage === 'ed') {
+            $message = 'এই আবেদন আগে নির্বাহী পরিচালকের অনুমোদনে গেছে। অনুমোদনের পর হিসাব বিভাগে আসবে।';
+        }
 
         return back()->with('success', $message);
     }

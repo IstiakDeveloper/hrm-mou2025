@@ -36,13 +36,13 @@ test('motorcycle cap is 150000 for officer and accountant and 200000 from abm up
 test('motorcycle recommendation skips the applicant own seat', function () {
     $service = app(MotorcycleLoanApplicationService::class);
 
-    expect($service->stagesFor(motorcycleEmployee('Officer')))->toBe(['bm', 'rm', 'zm', 'accounts', 'ed']);
-    expect($service->stagesFor(motorcycleEmployee('Accountant')))->toBe(['bm', 'rm', 'zm', 'accounts', 'ed']);
-    expect($service->stagesFor(motorcycleEmployee('Assistant Branch Manager')))->toBe(['bm', 'rm', 'zm', 'accounts', 'ed']);
-    expect($service->stagesFor(motorcycleEmployee('Branch Manager')))->toBe(['rm', 'zm', 'accounts', 'ed']);
-    expect($service->stagesFor(motorcycleEmployee('Regional Manager')))->toBe(['zm', 'accounts', 'ed']);
-    expect($service->stagesFor(motorcycleEmployee('Zonal Manager')))->toBe(['accounts', 'ed']);
-    expect($service->stagesFor(motorcycleEmployee('Executive Director')))->toBe(['accounts', 'ed']);
+    expect($service->stagesFor(motorcycleEmployee('Officer')))->toBe(['bm', 'rm', 'zm', 'ed', 'accounts']);
+    expect($service->stagesFor(motorcycleEmployee('Accountant')))->toBe(['bm', 'rm', 'zm', 'ed', 'accounts']);
+    expect($service->stagesFor(motorcycleEmployee('Assistant Branch Manager')))->toBe(['bm', 'rm', 'zm', 'ed', 'accounts']);
+    expect($service->stagesFor(motorcycleEmployee('Branch Manager')))->toBe(['rm', 'zm', 'ed', 'accounts']);
+    expect($service->stagesFor(motorcycleEmployee('Regional Manager')))->toBe(['zm', 'ed', 'accounts']);
+    expect($service->stagesFor(motorcycleEmployee('Zonal Manager')))->toBe(['ed', 'accounts']);
+    expect($service->stagesFor(motorcycleEmployee('Executive Director')))->toBe(['ed', 'accounts']);
 });
 
 test('head office motorcycle application uses the department head unless the applicant is the head', function () {
@@ -53,7 +53,7 @@ test('head office motorcycle application uses the department head unless the app
     $staff = motorcycleEmployee('Officer');
     $staff->setRelation('branch', $branch);
 
-    expect($service->stagesFor($staff))->toBe(['department_head', 'accounts', 'ed']);
+    expect($service->stagesFor($staff))->toBe(['department_head', 'ed', 'accounts']);
 });
 
 test('motorcycle recommendation is blocked when seal and signature file is missing', function () {

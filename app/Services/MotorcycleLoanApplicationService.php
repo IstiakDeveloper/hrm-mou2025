@@ -82,7 +82,7 @@ class MotorcycleLoanApplicationService
     /**
      * Seats above the applicant. Branch: BM, RM, ZM (own seat and below are skipped).
      * Head office: Department Head, unless the applicant is that head.
-     * Both paths then go to Accounts and Executive Director.
+     * Both paths then go to the Executive Director, and after that approval to Accounts.
      *
      * @return list<string>
      */
@@ -90,8 +90,8 @@ class MotorcycleLoanApplicationService
     {
         if ($this->isHeadOffice($employee)) {
             return $this->isDepartmentHeadApplicant($employee)
-                ? ['accounts', 'ed']
-                : ['department_head', 'accounts', 'ed'];
+                ? ['ed', 'accounts']
+                : ['department_head', 'ed', 'accounts'];
         }
 
         $skip = match ($this->rank($employee)) {
@@ -102,7 +102,7 @@ class MotorcycleLoanApplicationService
         };
 
         return array_values(array_filter(
-            ['bm', 'rm', 'zm', 'accounts', 'ed'],
+            ['bm', 'rm', 'zm', 'ed', 'accounts'],
             fn (string $stage) => ! in_array($stage, $skip, true),
         ));
     }
@@ -432,13 +432,20 @@ class MotorcycleLoanApplicationService
         return DB::transaction(function () use ($application, $user, $comments, $approvedAmount, $disbursementDate) {
             $application->refresh();
             $stage = (string) $application->workflow_stage;
-            $this->writeRecommendation($application, $user, $stage, 'recommended', $comments);
 
-            if ($stage === 'ed') {
-                $this->approveAndDisburse($application, $user);
+            // Older applications were queued at Accounts before the Executive Director.
+            // Send those to the director first; Accounts acts only after that approval.
+            if ($stage === 'accounts' && ! $this->hasRecommendation($application, 'ed')) {
+                $application->update([
+                    'status' => 'in_review',
+                    'workflow_stage' => 'ed',
+                    'form_snapshot' => $this->snapshotWithRecommendations($application),
+                ]);
 
                 return $application->fresh(['policy:id,name,code,loan_type', 'recommendations.user']);
             }
+
+            $this->writeRecommendation($application, $user, $stage, 'recommended', $comments);
 
             if ($stage === 'accounts') {
                 $this->completeAccounts($application, $user, $approvedAmount, $disbursementDate);
@@ -446,14 +453,24 @@ class MotorcycleLoanApplicationService
                 return $application->fresh(['policy:id,name,code,loan_type', 'recommendations.user']);
             }
 
+            $snapshot = is_array($application->form_snapshot) ? $application->form_snapshot : [];
+            $accountsAlreadyStamped = ($snapshot['accounts_signature'] ?? null) || ($snapshot['disbursement_date'] ?? null);
+            if ($stage === 'ed' && $accountsAlreadyStamped) {
+                $this->approveAndDisburse($application, $user);
+
+                return $application->fresh(['policy:id,name,code,loan_type', 'recommendations.user']);
+            }
+
             $employee = $application->employee()->first();
-            $stages = $employee ? $this->stagesFor($employee) : ['accounts', 'ed'];
+            $stages = $employee ? $this->stagesFor($employee) : ['ed', 'accounts'];
             $index = array_search($stage, $stages, true);
-            $next = $index === false ? 'accounts' : ($stages[$index + 1] ?? 'accounts');
+            $next = $index === false ? 'ed' : ($stages[$index + 1] ?? 'accounts');
 
             $application->update([
                 'status' => $next === 'accounts' ? 'pending' : 'in_review',
                 'workflow_stage' => $next,
+                'approved_by' => $stage === 'ed' ? $user->id : $application->approved_by,
+                'approved_at' => $stage === 'ed' ? now() : $application->approved_at,
                 'form_snapshot' => $this->snapshotWithRecommendations($application),
             ]);
 
@@ -470,6 +487,18 @@ class MotorcycleLoanApplicationService
             throw new InvalidArgumentException('হিসাব বিভাগের অনুমোদন দেওয়ার অনুমতি নেই।');
         }
         $this->assertSealAndSignature($user);
+
+        if (! $this->hasRecommendation($application, 'ed')) {
+            return DB::transaction(function () use ($application) {
+                $application->update([
+                    'status' => 'in_review',
+                    'workflow_stage' => 'ed',
+                    'form_snapshot' => $this->snapshotWithRecommendations($application),
+                ]);
+
+                return $application->fresh();
+            });
+        }
 
         return DB::transaction(function () use ($application, $user, $approvedAmount, $disbursementDate) {
             $this->writeRecommendation($application, $user, 'accounts', 'recommended', 'হিসাব বিভাগ যাচাই করেছে।');
@@ -526,7 +555,7 @@ class MotorcycleLoanApplicationService
         }
 
         $employee = $application->employee;
-        $stages = $employee ? $this->stagesFor($employee) : ['bm', 'rm', 'zm', 'accounts', 'ed'];
+        $stages = $employee ? $this->stagesFor($employee) : ['bm', 'rm', 'zm', 'ed', 'accounts'];
         $path = array_merge(['applicant'], $stages, ['disburse']);
         $current = $this->currentStep($application, $path);
         $latest = $application->recommendations->sortBy('id')->groupBy('stage')->map->last();
@@ -730,10 +759,10 @@ class MotorcycleLoanApplicationService
         $amount = $this->applyApprovedAmount($application, $approvedAmount);
         $application->refresh();
         $application->update([
-            'status' => 'in_review',
-            'workflow_stage' => 'ed',
             'form_snapshot' => $this->stampAccounts($application, $user, $amount, $disbursementDate),
         ]);
+        $application->refresh();
+        $this->approveAndDisburse($application, $user);
     }
 
     protected function applyApprovedAmount(LoanApplication $application, float $amount): float
@@ -844,9 +873,9 @@ class MotorcycleLoanApplicationService
         $disbursementDate = (string) ($snapshot['disbursement_date'] ?? now()->toDateString());
         $application->update([
             'status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-            'workflow_stage' => 'ed',
+            'approved_by' => $application->approved_by ?: $user->id,
+            'approved_at' => $application->approved_at ?: now(),
+            'workflow_stage' => 'accounts',
             'form_snapshot' => $snapshot,
         ]);
 
@@ -951,6 +980,14 @@ class MotorcycleLoanApplicationService
             $employee->unsetRelation('branch');
         }
         $employee->loadMissing('branch.regionalOffice');
+    }
+
+    protected function hasRecommendation(LoanApplication $application, string $stage): bool
+    {
+        return $application->recommendations()
+            ->where('stage', $stage)
+            ->where('action', 'recommended')
+            ->exists();
     }
 
     protected function writeRecommendation(LoanApplication $application, User $user, string $stage, string $action, string $comments): void
@@ -1092,7 +1129,7 @@ class MotorcycleLoanApplicationService
 
     protected function stepIsBefore(string $key, string $current): bool
     {
-        $order = ['applicant', 'bm', 'rm', 'zm', 'department_head', 'director', 'accounts', 'ed', 'disburse'];
+        $order = ['applicant', 'bm', 'rm', 'zm', 'department_head', 'director', 'ed', 'accounts', 'disburse'];
         $left = array_search($key, $order, true);
         $right = array_search($current, $order, true);
 
