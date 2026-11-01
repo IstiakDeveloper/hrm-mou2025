@@ -17,6 +17,7 @@ class PfLoanApplicationService
     public function __construct(
         protected LoanApplicationService $applications,
         protected LoanCalculationService $calculator,
+        protected EmployeeSalaryAssignmentService $salaryAssignment,
     ) {}
 
     public function minimumServiceYears(): int
@@ -68,7 +69,7 @@ class PfLoanApplicationService
      */
     public function assess(Employee $employee): array
     {
-        $employee->loadMissing(['designation:id,name', 'salaryGrade:id,code,name', 'user:id,employee_id,signature']);
+        $employee->loadMissing(['designation:id,name', 'user:id,employee_id,signature']);
 
         $years = $this->minimumServiceYears();
         $percent = $this->balancePercent();
@@ -126,7 +127,7 @@ class PfLoanApplicationService
         $permanentAddress = $this->permanentAddress($employee);
         $today = Carbon::today();
         $name = trim((string) ($employee->name_bn ?: $employee->name_en));
-        $grade = $employee->salaryGrade?->displayLabel() ?: '—';
+        $grossSalary = $this->grossSalaryLabel($employee);
 
         return [
             'can_apply' => $blockers === [],
@@ -178,7 +179,7 @@ class PfLoanApplicationService
                 'amount_in_words' => '',
                 'reason' => '',
                 'pf_balance' => taka_fmt($balance),
-                'salary_grade' => $grade,
+                'salary_grade' => $grossSalary,
                 'basic_salary' => taka_fmt($employee->resolveBasicSalary()),
                 'installments' => '',
                 'installment_amount' => '',
@@ -539,6 +540,39 @@ class PfLoanApplicationService
                 ...$money,
             ]);
         });
+    }
+
+    /**
+     * Gross salary total (basic + additions). Net payable is excluded.
+     *
+     * @param  array<string, mixed>|null  $form
+     * @return array<string, mixed>|null
+     */
+    public function withCurrentGrossSalary(?array $form, ?Employee $employee): ?array
+    {
+        if ($form === null || $employee === null) {
+            return $form;
+        }
+
+        if (($form['form'] ?? null) === 'motorcycle' || ! array_key_exists('salary_grade', $form)) {
+            return $form;
+        }
+
+        $form['salary_grade'] = $this->grossSalaryLabel($employee);
+
+        return $form;
+    }
+
+    public function grossSalaryLabel(Employee $employee): string
+    {
+        $rows = $this->salaryAssignment->resolveRows(
+            $employee->payscale_id ? (int) $employee->payscale_id : null,
+            $employee->salary_grade_id ? (int) $employee->salary_grade_id : null,
+            $employee->salary_step_id ? (int) $employee->salary_step_id : null,
+            $employee,
+        );
+
+        return taka_fmt($rows['totals']['total_addition'] ?? 0);
     }
 
     protected function currentDraft(Employee $employee): ?LoanApplication

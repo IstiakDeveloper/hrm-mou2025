@@ -247,6 +247,7 @@ class User extends Authenticatable
         }
 
         if (
+            str_starts_with($permission, 'resignation-applications.') ||
             str_starts_with($permission, 'promotion-evaluations.') || 
             str_starts_with($permission, 'confirmation-evaluations.') ||
             str_starts_with($permission, 'probation-increment-evaluations.') ||

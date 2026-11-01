@@ -654,23 +654,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 ],
             },
             {
-                title: 'Final Payment & Clearance',
+                title: 'Resignation & Clearance',
                 menuKey: 'final-clearance',
                 icon: <HandCoins className="h-5 w-5" />,
-                path: '/final-clearances',
+                path: '/resignation-applications',
                 hasSubmenu: true,
-                anyPermissions: [
-                    'final-clearances.view',
-                    'final-clearances.create',
-                    'final-clearances.hr',
-                    'final-clearances.accounts',
-                    'promotion-evaluations.create',
-                    'promotion-evaluations.hr_verify',
-                    'promotion-evaluations.approve',
-                    'promotion-evaluations.review',
-                    'separations.view',
-                ],
                 submenu: [
+                    {
+                        title: 'Resignation Applications',
+                        path: '/resignation-applications',
+                    },
                     {
                         title: 'Clearance Applications',
                         path: '/final-clearances',

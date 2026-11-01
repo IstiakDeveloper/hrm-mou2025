@@ -10,6 +10,7 @@ use App\Models\LoanCommittee;
 use App\Models\LoanPolicy;
 use App\Services\LoanApplicationService;
 use App\Services\LoanCalculationService;
+use App\Services\PfLoanApplicationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,7 @@ class LoanApplicationController extends Controller
     public function __construct(
         protected LoanApplicationService $applicationService,
         protected LoanCalculationService $calculator,
+        protected PfLoanApplicationService $pfLoans,
     ) {}
 
     public function index(Request $request)
@@ -324,7 +326,10 @@ class LoanApplicationController extends Controller
             ] : null,
             'committee_name' => $a->committee?->committee_name,
             'channel' => $a->channel ?: 'admin',
-            'official_form' => is_array($a->form_snapshot) ? $a->form_snapshot : null,
+            'official_form' => $this->pfLoans->withCurrentGrossSalary(
+                is_array($a->form_snapshot) ? $a->form_snapshot : null,
+                $a->employee,
+            ),
         ];
     }
 

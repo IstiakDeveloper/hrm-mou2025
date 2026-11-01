@@ -314,3 +314,21 @@ Route::prefix('final-clearances')->name('final-clearances.')->group(function () 
     Route::post('/{finalClearance}/reject', [\App\Http\Controllers\FinalClearanceController::class, 'reject'])->name('reject');
     Route::put('/{finalClearance}/signatures/{signature}/comment', [\App\Http\Controllers\FinalClearanceController::class, 'correctComment'])->name('signatures.comment');
 });
+
+// RESIGNATION APPLICATIONS
+// ========================
+Route::prefix('resignation-applications')->name('resignation-applications.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\ResignationApplicationController::class, 'index'])->name('index');
+    Route::get('/create', [\App\Http\Controllers\ResignationApplicationController::class, 'create'])->name('create');
+    Route::post('/', [\App\Http\Controllers\ResignationApplicationController::class, 'store'])->name('store');
+    Route::get('/{resignationApplication}/print', [\App\Http\Controllers\ResignationApplicationController::class, 'print'])->name('print');
+    Route::get('/{resignationApplication}', [\App\Http\Controllers\ResignationApplicationController::class, 'show'])->name('show');
+    Route::get('/{resignationApplication}/edit', [\App\Http\Controllers\ResignationApplicationController::class, 'edit'])->name('edit');
+    Route::put('/{resignationApplication}', [\App\Http\Controllers\ResignationApplicationController::class, 'update'])->name('update');
+    Route::delete('/{resignationApplication}', [\App\Http\Controllers\ResignationApplicationController::class, 'destroy'])->name('destroy');
+
+    Route::post('/{resignationApplication}/forward', [\App\Http\Controllers\ResignationApplicationController::class, 'forward'])->name('forward');
+    Route::post('/{resignationApplication}/send-back', [\App\Http\Controllers\ResignationApplicationController::class, 'sendBack'])->name('sendBack');
+    Route::post('/{resignationApplication}/ed-approve', [\App\Http\Controllers\ResignationApplicationController::class, 'edApprove'])->name('edApprove');
+    Route::put('/{resignationApplication}/signatures/{signature}/comment', [\App\Http\Controllers\ResignationApplicationController::class, 'correctComment'])->name('signatures.comment');
+});

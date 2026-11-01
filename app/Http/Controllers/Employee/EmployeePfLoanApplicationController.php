@@ -122,7 +122,8 @@ class EmployeePfLoanApplicationController extends Controller
             abort(403);
         }
 
-        $loan_application->load('policy:id,name,code,loan_type');
+        $loan_application->load(['policy:id,name,code,loan_type', 'employee']);
+        $form = is_array($loan_application->form_snapshot) ? $loan_application->form_snapshot : null;
 
         return Inertia::render('employee/loan/applications/show', [
             'timeline' => $this->motorcycle->timeline($loan_application),
@@ -137,7 +138,7 @@ class EmployeePfLoanApplicationController extends Controller
                 'applied_amount' => (float) $loan_application->applied_amount,
                 'rejection_reason' => $loan_application->rejection_reason,
             ],
-            'form' => $loan_application->form_snapshot,
+            'form' => $this->pfLoans->withCurrentGrossSalary($form, $loan_application->employee),
             'review' => [
                 'can_act' => $this->motorcycle->canReview($user, $loan_application),
                 'has_signature' => $this->motorcycle->hasSealAndSignature($user),
