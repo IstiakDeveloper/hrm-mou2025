@@ -52,12 +52,21 @@ class MovementLogBookPaymentController extends Controller
         $this->constrainVisiblePayments($query, $user);
         $this->applyLogBookScopeView($query, $user, $scope['view'], $scope['showTabs']);
 
+        $actionableIds = $this->workflow->actionablePaymentIds($user);
+        $myPendingCounts = $this->workflow->pendingCountsBreakdown($user);
+
         if ($request->filled('status') && $request->status !== 'all') {
             $status = (string) $request->status;
             if ($status === 'paid') {
                 $query->where('status', 'approved');
             } elseif ($status === 'in_process') {
                 $query->whereIn('status', ['pending', 'recommended']);
+            } elseif ($status === 'my_pending') {
+                if (! empty($actionableIds)) {
+                    $query->whereIn('id', $actionableIds);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
             } else {
                 $query->where('status', $status);
             }
@@ -85,13 +94,20 @@ class MovementLogBookPaymentController extends Controller
 
         $perPage = $this->resolvePerPage($request->get('per_page'), 10);
 
+        $summaryQuery = clone $query;
+
+        if (! empty($actionableIds)) {
+            $idList = implode(',', array_map('intval', $actionableIds));
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 0 ELSE 1 END ASC");
+        }
+
         $payments = $query->orderByDesc('period_year')
             ->orderByDesc('period_month')
             ->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString();
 
-        $summaryRow = (clone $query)->selectRaw("
+        $summaryRow = $summaryQuery->selectRaw("
             COUNT(*) as total,
             SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
             SUM(CASE WHEN status = 'recommended' THEN 1 ELSE 0 END) as recommended,
@@ -124,6 +140,7 @@ class MovementLogBookPaymentController extends Controller
         return Inertia::render('movement/log-book/payment/index', [
             'payments' => $this->inertiaPagination($payments),
             'summary' => $summary,
+            'myPendingCounts' => $myPendingCounts,
             'filters' => $request->only(['status', 'period_year', 'period_month', 'search', 'per_page', 'view']),
             'ratePerKm' => $this->ratePerKm(),
             'canProcess' => $this->userCanProcessPayments($user),

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Appraisal\AppraisalPendingCountService;
 use App\Services\AssetFinancialYearService;
 use App\Services\FinalClearanceService;
+use App\Services\LogBookPaymentWorkflowService;
 use App\Services\MotorcycleLoanApplicationService;
 use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
@@ -145,6 +146,7 @@ class HandleInertiaRequests extends Middleware
         ];
         $pendingFinalClearanceCount = 0;
         $pendingMotorcycleLoanCount = 0;
+        $pendingLogBookPaymentCount = 0;
         if ($user) {
             $leaveQuery = LeaveApplication::query()->where('status', 'pending');
             OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
@@ -155,6 +157,9 @@ class HandleInertiaRequests extends Middleware
             }
             if (Schema::hasTable('loan_applications') && $user->canAccessSection('employee-loan')) {
                 $pendingMotorcycleLoanCount = app(MotorcycleLoanApplicationService::class)->pendingCount($user);
+            }
+            if (Schema::hasTable('movement_log_book_payments') && $user->hasPermission('movements.view')) {
+                $pendingLogBookPaymentCount = app(LogBookPaymentWorkflowService::class)->pendingCount($user);
             }
         }
 
@@ -205,6 +210,7 @@ class HandleInertiaRequests extends Middleware
             'pendingAppraisalCounts' => $pendingAppraisalCounts,
             'pendingFinalClearanceCount' => $pendingFinalClearanceCount,
             'pendingMotorcycleLoanCount' => $pendingMotorcycleLoanCount,
+            'pendingLogBookPaymentCount' => $pendingLogBookPaymentCount,
             'officeOpenDates' => OfficeOpenDate::dateStrings(),
         ];
     }

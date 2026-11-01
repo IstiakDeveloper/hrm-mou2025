@@ -99,6 +99,11 @@ interface Props {
         links?: { first: string; last: string; prev: string | null; next: string | null };
     };
     summary: { total: number; pending: number; recommended?: number; approved: number; rejected: number; totalAmount: number; pendingAmount: number };
+    myPendingCounts?: {
+        recommend: number;
+        approve: number;
+        total: number;
+    };
     filters: Record<string, string | undefined>;
     ratePerKm: number;
     canProcess: boolean;
@@ -209,7 +214,7 @@ function PaymentActions({ row, compact = false }: { row: Payment; compact?: bool
     );
 }
 
-export default function LogBookPaymentIndex({ payments, summary, filters, ratePerKm, canProcess, userLimitInfo, scopeView = 'team', showScopeTabs = false }: Props) {
+export default function LogBookPaymentIndex({ payments, summary, myPendingCounts, filters, ratePerKm, canProcess, userLimitInfo, scopeView = 'team', showScopeTabs = false }: Props) {
     const { flash, auth } = usePage<{ flash?: { success?: string; error?: string }; auth?: { user?: { signature?: string | null } } }>().props;
     const needsSignature = !auth?.user?.signature && payments.data.some((row) => row.can_recommend || row.can_approve);
     const [search, setSearch] = useState(filters.search || '');
@@ -312,6 +317,9 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">All statuses</SelectItem>
+                    {myPendingCounts && myPendingCounts.total > 0 && (
+                        <SelectItem value="my_pending">My pending action ({myPendingCounts.total})</SelectItem>
+                    )}
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="recommended">Recommended</SelectItem>
                     <SelectItem value="in_process">In process</SelectItem>
@@ -431,6 +439,51 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                         </Button>
                     )}
                 </div>
+
+                {myPendingCounts && myPendingCounts.total > 0 && (
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-rose-200 bg-rose-50/70 p-3 sm:px-4">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+                                <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500" />
+                            </span>
+                            <div>
+                                <p className="text-xs font-semibold text-rose-900 sm:text-sm">
+                                    আপনার অনুমোদনের জন্য অপেক্ষমাণ: <span className="font-bold">{myPendingCounts.total}</span> টি
+                                    {myPendingCounts.recommend > 0 && myPendingCounts.approve > 0 ? (
+                                        <span className="ml-1 text-[11px] font-normal text-rose-700 sm:text-xs">
+                                            (সুপারিশ: {myPendingCounts.recommend}, অনুমোদন: {myPendingCounts.approve})
+                                        </span>
+                                    ) : myPendingCounts.recommend > 0 ? (
+                                        <span className="ml-1 text-[11px] font-normal text-rose-700 sm:text-xs">
+                                            (সুপারিশের জন্য)
+                                        </span>
+                                    ) : (
+                                        <span className="ml-1 text-[11px] font-normal text-rose-700 sm:text-xs">
+                                            (অনুমোদনের জন্য)
+                                        </span>
+                                    )}
+                                </p>
+                                <p className="text-[11px] text-rose-700">এই পেমেন্টগুলো তালিকায় সবার উপরে অগ্রাধিকার ভিত্তিতে সাজানো হয়েছে।</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant={status === 'my_pending' ? 'default' : 'outline'}
+                                className={cn(
+                                    'h-8 text-xs font-semibold',
+                                    status === 'my_pending'
+                                        ? 'bg-rose-600 text-white hover:bg-rose-700'
+                                        : 'border-rose-300 bg-white text-rose-800 hover:bg-rose-100 hover:text-rose-900',
+                                )}
+                                onClick={() => applyStatus('my_pending')}
+                            >
+                                {status === 'my_pending' ? 'সবগুলো দেখুন' : 'শুধুমাত্র আমার পেন্ডিং দেখুন'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
                 <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 md:mb-4">
                     {[
                         { key: '', label: 'Total', value: summary.total, icon: Wallet, color: 'text-slate-700', bg: 'bg-slate-50' },
@@ -562,20 +615,38 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
 
                     <div className="space-y-3 p-3 md:hidden">
                         {payments.data.length > 0 ? (
-                            payments.data.map((row) => (
-                                <div key={row.id} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="truncate text-sm font-semibold text-slate-900">{employeeDisplayName(row.employee)}</div>
-                                            <div className="text-xs text-slate-500">{row.employee.branch?.name || '—'} · {row.entry_count} entries</div>
+                            payments.data.map((row) => {
+                                const isActionable = Boolean(row.can_recommend || row.can_approve);
+                                return (
+                                    <div
+                                        key={row.id}
+                                        className={cn(
+                                            'space-y-2 rounded-xl border bg-white p-3 shadow-xs transition-colors',
+                                            isActionable
+                                                ? 'border-amber-400 bg-amber-50/20 ring-1 ring-amber-300'
+                                                : 'border-slate-200',
+                                        )}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className="truncate text-sm font-semibold text-slate-900">{employeeDisplayName(row.employee)}</span>
+                                                    {row.can_recommend && (
+                                                        <Badge className="border-sky-300 bg-sky-100 text-[10px] text-sky-800" variant="outline">Action: Recommend</Badge>
+                                                    )}
+                                                    {row.can_approve && (
+                                                        <Badge className="border-emerald-300 bg-emerald-100 text-[10px] text-emerald-800" variant="outline">Action: Approve</Badge>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs text-slate-500">{row.employee.branch?.name || '—'} · {row.entry_count} entries</div>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                {statusBadge(row.status)}
+                                                {row.next_action_label && (row.status === 'pending' || row.status === 'recommended') && (
+                                                    <p className="mt-1 max-w-[140px] text-[10px] leading-tight text-slate-500">{row.next_action_label}</p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="shrink-0 text-right">
-                                            {statusBadge(row.status)}
-                                            {row.next_action_label && (row.status === 'pending' || row.status === 'recommended') && (
-                                                <p className="mt-1 max-w-[140px] text-[10px] leading-tight text-slate-500">{row.next_action_label}</p>
-                                            )}
-                                        </div>
-                                    </div>
                                     <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-50 p-2 text-center">
                                         <CompactDate label="Process" value={row.processed_at} />
                                         <CompactDate label="Recommend" value={row.recommended_at} />
@@ -602,7 +673,8 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                         <PaymentActions row={row} compact />
                                     </div>
                                 </div>
-                            ))
+                            );
+                        })
                         ) : (
                             <div className="rounded-xl border border-dashed border-slate-200 py-12 text-center text-sm text-slate-500">
                                 No payment records found.
@@ -633,15 +705,33 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                 </TableHeader>
                                 <TableBody>
                                     {payments.data.length > 0 ? (
-                                        payments.data.map((row) => (
-                                            <TableRow key={row.id} className="group border-b border-slate-100 transition-colors hover:bg-slate-50">
-                                                <TableCell className="whitespace-nowrap pl-6 text-[13px] text-slate-600">{monthLabel(row.period_year, row.period_month)}</TableCell>
-                                                <TableCell>
-                                                    <Link href={route('movement-log-book-payments.show', row.id)} className="block text-[13px] font-semibold text-slate-800 hover:text-emerald-600">
-                                                        {employeeDisplayName(row.employee)}
-                                                    </Link>
-                                                    <div className="text-xs text-slate-500">{row.employee.branch?.name || '—'} · {row.entry_count} entries</div>
-                                                </TableCell>
+                                        payments.data.map((row) => {
+                                            const isActionable = Boolean(row.can_recommend || row.can_approve);
+                                            return (
+                                                <TableRow
+                                                    key={row.id}
+                                                    className={cn(
+                                                        'group border-b border-slate-100 transition-colors',
+                                                        isActionable
+                                                            ? 'border-l-4 border-l-amber-500 bg-amber-50/25 hover:bg-amber-50/50'
+                                                            : 'hover:bg-slate-50',
+                                                    )}
+                                                >
+                                                    <TableCell className="whitespace-nowrap pl-6 text-[13px] text-slate-600">{monthLabel(row.period_year, row.period_month)}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-wrap items-center gap-1.5">
+                                                            <Link href={route('movement-log-book-payments.show', row.id)} className="block text-[13px] font-semibold text-slate-800 hover:text-emerald-600">
+                                                                {employeeDisplayName(row.employee)}
+                                                            </Link>
+                                                            {row.can_recommend && (
+                                                                <Badge className="border-sky-300 bg-sky-100 text-[10px] text-sky-800" variant="outline">Action: Recommend</Badge>
+                                                            )}
+                                                            {row.can_approve && (
+                                                                <Badge className="border-emerald-300 bg-emerald-100 text-[10px] text-emerald-800" variant="outline">Action: Approve</Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500">{row.employee.branch?.name || '—'} · {row.entry_count} entries</div>
+                                                    </TableCell>
                                                 <TableCell className="whitespace-nowrap text-right text-[13px] text-slate-700">
                                                     <div>{formatSmartKm(row.total_official_km)}</div>
                                                     {row.billed_official_km != null && Number(row.billed_official_km) < Number(row.total_official_km) && (
@@ -675,7 +765,8 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                                     <PaymentActions row={row} />
                                                 </TableCell>
                                             </TableRow>
-                                        ))
+                                        );
+                                    })
                                     ) : (
                                         <TableRow>
                                             <TableCell colSpan={11} className="h-24 text-center text-sm text-slate-500">

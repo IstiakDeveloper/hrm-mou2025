@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\MovementLogBookPayment;
 use App\Models\User;
 use App\Models\Zone;
+use Illuminate\Database\Eloquent\Collection;
 
 class LogBookPaymentWorkflowService
 {
@@ -17,6 +18,91 @@ class LogBookPaymentWorkflowService
     public const TIER_DIRECTOR = 'director';
     public const TIER_EXECUTIVE_DIRECTOR = 'executive_director';
     public const TIER_HEAD_OFFICE = 'head_office';
+
+    /** @var array<int, Collection<int, MovementLogBookPayment>> */
+    private array $actionablePaymentsCache = [];
+
+    /** @var array<string, ?int> */
+    private array $branchManagerCache = [];
+
+    /** @var array<string, ?int> */
+    private array $regionalManagerCache = [];
+
+    /** @var array<string, ?int> */
+    private array $zonalManagerCache = [];
+
+    /** @var array<int, bool> */
+    private array $hasLoginCache = [];
+
+    /**
+     * Open payments requiring recommendation or approval from the given user.
+     *
+     * @return Collection<int, MovementLogBookPayment>
+     */
+    public function pendingActionablePayments(User $user): Collection
+    {
+        $userId = (int) $user->id;
+        if (isset($this->actionablePaymentsCache[$userId])) {
+            return $this->actionablePaymentsCache[$userId];
+        }
+
+        if (! $user->hasPermission('movements.view')) {
+            return $this->actionablePaymentsCache[$userId] = new Collection();
+        }
+
+        $candidates = MovementLogBookPayment::query()
+            ->with([
+                'employee:id,employee_id,pin,name_en,current_branch_id,designation_id',
+                'employee.designation:id,name',
+                'employee.branch:id,name,regional_office_id,is_head_office,branch_head_designation_id,head_employee_id',
+                'employee.branch.regionalOffice:id,zone_id,regional_manager_employee_id',
+            ])
+            ->whereIn('status', ['pending', 'recommended'])
+            ->get();
+
+        $actionable = $candidates->filter(function (MovementLogBookPayment $payment) use ($user) {
+            return $this->userCanRecommend($user, $payment) || $this->userCanApprove($user, $payment);
+        })->values();
+
+        return $this->actionablePaymentsCache[$userId] = $actionable;
+    }
+
+    public function pendingCount(User $user): int
+    {
+        return $this->pendingActionablePayments($user)->count();
+    }
+
+    /**
+     * @return array{recommend: int, approve: int, total: int}
+     */
+    public function pendingCountsBreakdown(User $user): array
+    {
+        $payments = $this->pendingActionablePayments($user);
+        $recommend = 0;
+        $approve = 0;
+
+        foreach ($payments as $payment) {
+            if ($this->userCanRecommend($user, $payment)) {
+                $recommend++;
+            } elseif ($this->userCanApprove($user, $payment)) {
+                $approve++;
+            }
+        }
+
+        return [
+            'recommend' => $recommend,
+            'approve' => $approve,
+            'total' => $recommend + $approve,
+        ];
+    }
+
+    /**
+     * @return array<int>
+     */
+    public function actionablePaymentIds(User $user): array
+    {
+        return $this->pendingActionablePayments($user)->pluck('id')->all();
+    }
 
     public function resolveSubmitterTier(Employee $employee): string
     {
@@ -336,15 +422,25 @@ class LogBookPaymentWorkflowService
 
     private function branchManagerEmployeeId(Employee $employee): ?int
     {
+        $branchId = (int) ($employee->current_branch_id ?: $employee->branch?->id);
+        if ($branchId <= 0) {
+            return null;
+        }
+
+        $cacheKey = $branchId.':'.$employee->id;
+        if (array_key_exists($cacheKey, $this->branchManagerCache)) {
+            return $this->branchManagerCache[$cacheKey];
+        }
+
         $employee->loadMissing('branch');
         $branch = $employee->branch;
         if (! $branch || $branch->is_head_office) {
-            return null;
+            return $this->branchManagerCache[$cacheKey] = null;
         }
 
         $head = $branch->resolveBranchHeadEmployee();
         if ($head && (int) $head->id !== (int) $employee->id && $this->hasLogin((int) $head->id)) {
-            return (int) $head->id;
+            return $this->branchManagerCache[$cacheKey] = (int) $head->id;
         }
 
         $byDesignation = Employee::query()
@@ -363,7 +459,7 @@ class LogBookPaymentWorkflowService
 
         foreach ($byDesignation as $candidate) {
             if ($this->titleLooksLikeBranchManager((string) ($candidate->designation?->name ?? '')) && $this->hasLogin((int) $candidate->id)) {
-                return (int) $candidate->id;
+                return $this->branchManagerCache[$cacheKey] = (int) $candidate->id;
             }
         }
 
@@ -383,11 +479,11 @@ class LogBookPaymentWorkflowService
 
             $eid = (int) $user->employee_id;
             if ($eid > 0 && $this->hasLogin($eid)) {
-                return $eid;
+                return $this->branchManagerCache[$cacheKey] = $eid;
             }
         }
 
-        return null;
+        return $this->branchManagerCache[$cacheKey] = null;
     }
 
     private function titleLooksLikeBranchManager(string $title): bool
@@ -403,12 +499,18 @@ class LogBookPaymentWorkflowService
     private function regionalManagerEmployeeId(Employee $employee): ?int
     {
         $employee->loadMissing('branch.regionalOffice');
-        $eid = (int) ($employee->branch?->regionalOffice?->regional_manager_employee_id ?: 0);
-        if ($eid > 0 && $eid !== (int) $employee->id && $this->hasLogin($eid)) {
-            return $eid;
+        $regId = (int) ($employee->branch?->regional_office_id ?: 0);
+        $cacheKey = $regId.':'.$employee->id;
+        if (array_key_exists($cacheKey, $this->regionalManagerCache)) {
+            return $this->regionalManagerCache[$cacheKey];
         }
 
-        return null;
+        $eid = (int) ($employee->branch?->regionalOffice?->regional_manager_employee_id ?: 0);
+        if ($eid > 0 && $eid !== (int) $employee->id && $this->hasLogin($eid)) {
+            return $this->regionalManagerCache[$cacheKey] = $eid;
+        }
+
+        return $this->regionalManagerCache[$cacheKey] = null;
     }
 
     private function zonalManagerEmployeeId(Employee $employee): ?int
@@ -419,12 +521,17 @@ class LogBookPaymentWorkflowService
             return null;
         }
 
-        $eid = (int) (Zone::query()->where('id', $zoneId)->value('zone_manager_employee_id') ?: 0);
-        if ($eid > 0 && $eid !== (int) $employee->id && $this->hasLogin($eid)) {
-            return $eid;
+        $cacheKey = $zoneId.':'.$employee->id;
+        if (array_key_exists($cacheKey, $this->zonalManagerCache)) {
+            return $this->zonalManagerCache[$cacheKey];
         }
 
-        return null;
+        $eid = (int) (Zone::query()->where('id', $zoneId)->value('zone_manager_employee_id') ?: 0);
+        if ($eid > 0 && $eid !== (int) $employee->id && $this->hasLogin($eid)) {
+            return $this->zonalManagerCache[$cacheKey] = $eid;
+        }
+
+        return $this->zonalManagerCache[$cacheKey] = null;
     }
 
     private function isAssignedZonalManager(Employee $employee): bool
@@ -465,7 +572,15 @@ class LogBookPaymentWorkflowService
 
     private function hasLogin(int $employeeId): bool
     {
-        return User::query()->where('employee_id', $employeeId)->exists();
+        if ($employeeId <= 0) {
+            return false;
+        }
+
+        if (array_key_exists($employeeId, $this->hasLoginCache)) {
+            return $this->hasLoginCache[$employeeId];
+        }
+
+        return $this->hasLoginCache[$employeeId] = User::query()->where('employee_id', $employeeId)->exists();
     }
 
     private function userIsEd(?User $user): bool

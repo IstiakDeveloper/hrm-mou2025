@@ -203,8 +203,24 @@ function loanPendingForPath(path: string, count = 0): number {
     return 0;
 }
 
-function menuPendingCount(path: string, counts?: AppraisalPendingCounts | null, clearanceCount = 0, loanCount = 0): number {
-    return appraisalPendingForPath(path, counts, clearanceCount) + loanPendingForPath(path, loanCount);
+function logBookPaymentPendingForPath(path: string, count = 0): number {
+    const clean = path.split('?')[0];
+    if (clean === '/movement-log-book-payments') {
+        return count;
+    }
+    return 0;
+}
+
+function menuPendingCount(
+    path: string,
+    counts?: AppraisalPendingCounts | null,
+    clearanceCount = 0,
+    loanCount = 0,
+    logBookCount = 0,
+): number {
+    return appraisalPendingForPath(path, counts, clearanceCount)
+        + loanPendingForPath(path, loanCount)
+        + logBookPaymentPendingForPath(path, logBookCount);
 }
 
 function PendingCountBadge({ count, className = '' }: { count: number; className?: string }) {
@@ -319,12 +335,13 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
-    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount } = page.props as any;
+    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount, pendingLogBookPaymentCount } = page.props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
     const appraisalCounts = (pendingAppraisalCounts ?? null) as AppraisalPendingCounts | null;
     const pendingAppraisal = appraisalCounts?.total ?? 0;
     const pendingFinalClearance = Number(pendingFinalClearanceCount ?? 0);
     const pendingMotorcycle = Number(pendingMotorcycleLoanCount ?? 0);
+    const pendingLogBookPayment = Number(pendingLogBookPaymentCount ?? 0);
     const inertiaUrl = page.url;
     const { navLayout, setNavLayout, toggleNavLayout, isTopNav, isSidebarNav } = useNavLayout();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -1275,7 +1292,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         title: subItem.title,
                         href: subItem.path,
                         icon: getSubNavIcon(subItem.title, subItem.path),
-                        badge: menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle),
+                        badge: menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment),
                     });
                 });
             } else {
@@ -1295,7 +1312,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             seen.add(clean);
             return true;
         });
-    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts, pendingFinalClearance, pendingMotorcycle]);
+    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment]);
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
@@ -1345,7 +1362,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 ? pendingFinalClearance
                 : item.menuKey === 'el-process'
                     ? pendingMotorcycle
-                    : 0;
+                    : item.menuKey === 'movement'
+                        ? pendingLogBookPayment
+                        : 0;
 
         return item.hasSubmenu ? (
             <div className="group relative mb-1">
@@ -1409,7 +1428,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     onClick={closeMobileSidebar}
                                 >
                                     <span className="truncate">{subItem.title}</span>
-                                    <PendingCountBadge count={menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle)} />
+                                    <PendingCountBadge count={menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment)} />
                                 </Link>
                             ),
                         )}
@@ -1543,6 +1562,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     {item.menuKey === 'el-process' && (
                                         <PendingCountBadge count={pendingMotorcycle} className="min-w-[16px] text-[8px]" />
                                     )}
+                                    {item.menuKey === 'movement' && (
+                                        <PendingCountBadge count={pendingLogBookPayment} className="min-w-[16px] text-[8px]" />
+                                    )}
                                 </span>
                                 <ChevronDown
                                     className={cn(
@@ -1586,8 +1608,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             )}
                                         >
                                             <span>{subItem.title}</span>
-                                            {menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle) > 0 ? (
-                                                <PendingCountBadge count={menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle)} />
+                                            {menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment) > 0 ? (
+                                                <PendingCountBadge count={menuPendingCount(subItem.path, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment)} />
                                             ) : isActive(subItem.path) ? (
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                                             ) : null}
