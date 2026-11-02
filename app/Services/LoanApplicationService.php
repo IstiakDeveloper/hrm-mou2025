@@ -144,7 +144,6 @@ class LoanApplicationService
             'notes' => $data['notes'] ?? null,
             'created_by' => $createdBy ?? auth()->id(),
             'form_snapshot' => $parallelLoan ? [
-                'form' => 'motorcycle',
                 'parallel_active' => true,
                 'active_loan_number' => $parallelLoan->loan_number,
             ] : null,
@@ -158,7 +157,9 @@ class LoanApplicationService
         }
 
         $snapshot = is_array($application->form_snapshot) ? $application->form_snapshot : null;
-        if (($snapshot['form'] ?? null) === 'motorcycle') {
+        $employeeAccountsStep = ($snapshot['form'] ?? null) === 'motorcycle'
+            && $application->workflow_stage === 'accounts';
+        if ($employeeAccountsStep) {
             $approver = \App\Models\User::query()->find($approvedBy ?? auth()->id());
             if (! $approver) {
                 throw new InvalidArgumentException('অনুমোদনকারী পাওয়া যায়নি।');

@@ -175,7 +175,12 @@ beforeEach(function () {
         $table->text('notes')->nullable();
         $table->unsignedBigInteger('created_by')->nullable();
         $table->json('form_snapshot')->nullable();
+        $table->string('workflow_stage')->nullable();
+        $table->string('channel')->nullable();
         $table->string('status')->default('draft');
+        $table->unsignedBigInteger('approved_by')->nullable();
+        $table->timestamp('approved_at')->nullable();
+        $table->text('rejection_reason')->nullable();
         $table->timestamps();
     });
 
@@ -485,7 +490,15 @@ test('accounts can save a second motorcycle application while one loan is active
 
     expect($application->loan_cycle)->toBe(2)
         ->and($application->form_snapshot['parallel_active'] ?? false)->toBeTrue()
-        ->and($application->form_snapshot['active_loan_number'] ?? null)->toBe($first->loan_number);
+        ->and($application->form_snapshot['active_loan_number'] ?? null)->toBe($first->loan_number)
+        ->and($application->form_snapshot['form'] ?? null)->toBeNull();
+
+    $application->update([
+        'status' => 'pending',
+        'form_snapshot' => array_merge($application->form_snapshot ?? [], ['form' => 'motorcycle']),
+    ]);
+    $approved = $service->approve($application->fresh(), $admin->id, 80000, '2026-11-02');
+    expect($approved->status)->toBe('approved');
 
     $application->update(['status' => 'approved']);
     $second = app(EmployeeLoanService::class)->disburseFromApplication($application->fresh(), '2026-11-02', $admin->id);

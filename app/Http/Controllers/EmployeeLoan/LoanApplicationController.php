@@ -204,7 +204,6 @@ class LoanApplicationController extends Controller
         }
 
         return array_merge($existing ?? [], [
-            'form' => 'motorcycle',
             'parallel_active' => true,
             'active_loan_number' => $parallel->loan_number,
         ]);
