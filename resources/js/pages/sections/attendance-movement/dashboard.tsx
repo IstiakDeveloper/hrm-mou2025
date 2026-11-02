@@ -13,7 +13,7 @@ import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowUpRight, BarChart3, Calendar, Clock, MapPin, MonitorSmartphone, Search, Timer, User, UserX, Users } from 'lucide-react';
+import { ArrowUpRight, BarChart3, Calendar, Clock, MapPin, MonitorSmartphone, Search, Timer, User, UserX, Users, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 type Movement = {
@@ -112,7 +112,7 @@ function KpiCard({
     return inner;
 }
 
-function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string; icon: LucideIcon }) {
+function ShortcutTile({ href, title, icon: Icon, badge = 0 }: { href: string; title: string; icon: LucideIcon; badge?: number }) {
     return (
         <Link
             href={href}
@@ -122,6 +122,11 @@ function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string
                 <Icon className="h-3.5 w-3.5" />
             </span>
             <span className="min-w-0 flex-1 truncate leading-none">{title}</span>
+            {badge > 0 && (
+                <span className="inline-flex min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-xs">
+                    {badge > 99 ? '99+' : badge}
+                </span>
+            )}
             <ArrowUpRight className="text-zinc-350 h-3 w-3 shrink-0" />
         </Link>
     );
@@ -307,6 +312,7 @@ export default function AttendanceMovementDashboard(props: Props) {
 function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMovements }: Props) {
     const totalActive = attendanceStats.totalActive ?? 0;
     const activeSub = totalActive > 0 ? `of ${totalActive.toLocaleString()}` : undefined;
+    const pendingLogBookPayment = Number((usePage().props as any).pendingLogBookPaymentCount ?? 0);
 
     // Filters state
     const [searchTerm, setSearchTerm] = useState('');
@@ -468,11 +474,17 @@ function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMov
                         <CardDescription className="text-[10px] text-zinc-500">Shortcut navigation directory</CardDescription>
                     </CardHeader>
                     <CardContent className="p-2.5">
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                             <ShortcutTile href="/attendance?section=attendance-movement" title="Daily Attendance" icon={Users} />
                             <ShortcutTile href="/attendance/report?section=attendance-movement" title="Attendance Report" icon={BarChart3} />
                             <ShortcutTile href="/attendance/devices?section=attendance-movement" title="Sync Devices" icon={MonitorSmartphone} />
                             <ShortcutTile href="/movements?section=attendance-movement" title="Movements Log" icon={MapPin} />
+                            <ShortcutTile
+                                href="/movement-log-book-payments?section=attendance-movement"
+                                title="Log Book Payment"
+                                icon={Wallet}
+                                badge={pendingLogBookPayment}
+                            />
                         </div>
                     </CardContent>
                 </Card>

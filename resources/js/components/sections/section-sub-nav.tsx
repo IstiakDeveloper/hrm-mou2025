@@ -13,6 +13,7 @@ import {
     MonitorSmartphone,
     Shield,
     Users,
+    Wallet,
 } from 'lucide-react';
 
 export type SubNavItem = {
@@ -80,6 +81,11 @@ export const ATTENDANCE_MOVEMENT_NAV_ITEMS: SubNavItem[] = [
         icon: MapPin,
     },
     {
+        title: 'Log Book Payment',
+        href: '/movement-log-book-payments?section=attendance-movement',
+        icon: Wallet,
+    },
+    {
         title: 'Sync Devices',
         href: '/attendance/devices?section=attendance-movement',
         icon: MonitorSmartphone,
@@ -127,6 +133,8 @@ interface SectionSubNavProps {
 
 export function SectionSubNav({ items = ATTENDANCE_MOVEMENT_NAV_ITEMS }: SectionSubNavProps) {
     const { url } = usePage();
+    const { pendingLogBookPaymentCount } = usePage().props as any;
+    const pendingLogBookPayment = Number(pendingLogBookPaymentCount ?? 0);
 
     const isItemActive = (item: SubNavItem) => {
         const currentUrl = url;
@@ -160,6 +168,11 @@ export function SectionSubNav({ items = ATTENDANCE_MOVEMENT_NAV_ITEMS }: Section
                 {items.map((item) => {
                     const active = isItemActive(item);
                     const Icon = item.icon;
+                    const itemBadge = item.badge !== undefined
+                        ? item.badge
+                        : (item.href.includes('/movement-log-book-payments') && pendingLogBookPayment > 0)
+                            ? pendingLogBookPayment
+                            : undefined;
 
                     return (
                         <Link
@@ -173,13 +186,13 @@ export function SectionSubNav({ items = ATTENDANCE_MOVEMENT_NAV_ITEMS }: Section
                         >
                             <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-white' : 'text-zinc-500'}`} />
                             <span className="whitespace-nowrap leading-none">{item.title}</span>
-                            {item.badge !== undefined && (
+                            {itemBadge !== undefined && (
                                 <span
                                     className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[9px] font-bold leading-tight ${
-                                        active ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
+                                        active ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-700 ring-1 ring-rose-300'
                                     }`}
                                 >
-                                    {item.badge}
+                                    {itemBadge}
                                 </span>
                             )}
                         </Link>
