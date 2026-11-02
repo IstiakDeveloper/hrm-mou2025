@@ -13,7 +13,6 @@ import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowUpRight, BarChart3, Calendar, Clock, MapPin, MonitorSmartphone, Search, Timer, User, UserX, Users } from 'lucide-react';
 import { ArrowUpRight, BarChart3, Calendar, Clock, MapPin, MonitorSmartphone, Search, Timer, User, UserX, Users, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -113,7 +112,6 @@ function KpiCard({
     return inner;
 }
 
-function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string; icon: LucideIcon }) {
 function ShortcutTile({ href, title, icon: Icon, badge = 0 }: { href: string; title: string; icon: LucideIcon; badge?: number }) {
     return (
         <Link
@@ -476,7 +474,6 @@ function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMov
                         <CardDescription className="text-[10px] text-zinc-500">Shortcut navigation directory</CardDescription>
                     </CardHeader>
                     <CardContent className="p-2.5">
-                        <div className="grid grid-cols-2 gap-1.5">
                         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                             <ShortcutTile href="/attendance?section=attendance-movement" title="Daily Attendance" icon={Users} />
                             <ShortcutTile href="/attendance/report?section=attendance-movement" title="Attendance Report" icon={BarChart3} />
