@@ -161,6 +161,20 @@ beforeEach(function () {
         $table->unsignedBigInteger('loan_policy_id');
         $table->unsignedSmallInteger('loan_cycle')->default(1);
         $table->decimal('applied_amount', 14, 2);
+        $table->unsignedBigInteger('loan_committee_id')->nullable();
+        $table->decimal('rate_yearly', 8, 2)->default(0);
+        $table->decimal('installment_amount_monthly', 14, 2)->default(0);
+        $table->decimal('max_loan_limit_amount', 14, 2)->nullable();
+        $table->decimal('max_loan_limit_percentage', 8, 2)->nullable();
+        $table->unsignedSmallInteger('total_installments')->default(0);
+        $table->unsignedTinyInteger('grace_months')->default(0);
+        $table->unsignedTinyInteger('interval_months')->default(1);
+        $table->decimal('principal_amount', 14, 2)->default(0);
+        $table->decimal('service_charge_amount', 14, 2)->default(0);
+        $table->decimal('total_payable', 14, 2)->default(0);
+        $table->text('notes')->nullable();
+        $table->unsignedBigInteger('created_by')->nullable();
+        $table->json('form_snapshot')->nullable();
         $table->string('status')->default('draft');
         $table->timestamps();
     });
@@ -450,6 +464,35 @@ test('staff self apply and the normal application stay blocked while a motorcycl
         'disbursement_date' => '2026-11-02',
         'first_installment_date' => '2026-11-30',
     ], $admin->id))->toThrow(InvalidArgumentException::class, 'already has an active');
+});
+
+test('accounts can save a second motorcycle application while one loan is active', function () {
+    $admin = secondLoanUser(secondLoanRole('Super Admin'));
+    $employee = secondLoanEmployee('Officer', '1009');
+    $policy = motorcyclePolicy('MC-APP');
+    $first = disburseMotorcycle($employee, $policy, $admin);
+    $service = app(LoanApplicationService::class);
+
+    $service->assertEmployeeCanTakeLoan($employee->id, $policy, null, true);
+
+    $application = $service->createApplication([
+        'application_number' => 'LA-SECOND-1',
+        'application_date' => '2026-11-02',
+        'employee_id' => $employee->id,
+        'loan_policy_id' => $policy->id,
+        'applied_amount' => 80000,
+    ], $admin->id, false, false, true);
+
+    expect($application->loan_cycle)->toBe(2)
+        ->and($application->form_snapshot['parallel_active'] ?? false)->toBeTrue()
+        ->and($application->form_snapshot['active_loan_number'] ?? null)->toBe($first->loan_number);
+
+    $application->update(['status' => 'approved']);
+    $second = app(EmployeeLoanService::class)->disburseFromApplication($application->fresh(), '2026-11-02', $admin->id);
+
+    expect($second->loan_cycle)->toBe(2)
+        ->and($second->notes)->toContain($first->loan_number)
+        ->and(EmployeeLoan::query()->where('employee_id', $employee->id)->where('status', 'active')->count())->toBe(2);
 });
 
 test('second motorcycle loan respects the designation cap and an open application', function () {

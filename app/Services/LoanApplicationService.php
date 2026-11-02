@@ -85,13 +85,27 @@ class LoanApplicationService
                 'loan_cycle_label' => $loan->cycleLabel(),
             ])->all(),
             'next_cycle_by_loan_type' => $nextCycleByLoanType,
+            'open_applications' => LoanApplication::query()
+                ->where('employee_id', $employee->id)
+                ->whereIn('status', ['in_review', 'pending', 'approved'])
+                ->with('policy:id,loan_type')
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (LoanApplication $application) => [
+                    'id' => $application->id,
+                    'application_number' => $application->application_number,
+                    'status' => $application->status,
+                    'loan_type' => $application->policy?->loan_type,
+                    'loan_cycle_label' => LoanCycle::label((int) ($application->loan_cycle ?? 1)),
+                ])
+                ->all(),
         ];
     }
 
     /**
      * @param  array<string, mixed>  $data
      */
-    public function createApplication(array $data, ?int $createdBy = null, bool $submit = false, bool $ignorePolicyMax = false): LoanApplication
+    public function createApplication(array $data, ?int $createdBy = null, bool $submit = false, bool $ignorePolicyMax = false, bool $allowParallelMotorcycle = false): LoanApplication
     {
         $policy = LoanPolicy::query()->findOrFail($data['loan_policy_id']);
         $this->policyService->validateAgainstPolicy($policy, [
@@ -100,7 +114,8 @@ class LoanApplicationService
             'ignore_max_amount' => $ignorePolicyMax,
         ]);
 
-        $this->assertEmployeeCanTakeLoan((int) $data['employee_id'], $policy);
+        $parallelLoan = $this->parallelMotorcycleLoan((int) $data['employee_id'], $policy, $allowParallelMotorcycle);
+        $this->assertEmployeeCanTakeLoan((int) $data['employee_id'], $policy, null, $allowParallelMotorcycle);
         $requestedCycle = (int) ($data['loan_cycle'] ?? 0);
         $nextCycle = EmployeeLoan::nextCycleFor((int) $data['employee_id'], (string) $policy->loan_type);
         $loanCycle = max($nextCycle, $requestedCycle > 0 ? $requestedCycle : $nextCycle);
@@ -128,6 +143,11 @@ class LoanApplicationService
             'status' => $submit ? 'pending' : 'draft',
             'notes' => $data['notes'] ?? null,
             'created_by' => $createdBy ?? auth()->id(),
+            'form_snapshot' => $parallelLoan ? [
+                'form' => 'motorcycle',
+                'parallel_active' => true,
+                'active_loan_number' => $parallelLoan->loan_number,
+            ] : null,
         ]);
     }
 
@@ -202,11 +222,22 @@ class LoanApplicationService
         return $application->fresh();
     }
 
-    public function assertEmployeeCanTakeLoan(int $employeeId, LoanPolicy $policy, ?int $ignoreApplicationId = null): void
+    public function assertEmployeeCanTakeLoan(int $employeeId, LoanPolicy $policy, ?int $ignoreApplicationId = null, bool $allowParallelMotorcycle = false): void
     {
         $active = EmployeeLoan::activeOfType($employeeId, (string) $policy->loan_type);
+        $parallelLoan = $this->parallelMotorcycleLoan($employeeId, $policy, $allowParallelMotorcycle);
 
-        if ($active) {
+        if ($active && ! $parallelLoan) {
+            $activeCount = EmployeeLoan::query()
+                ->where('employee_id', $employeeId)
+                ->where('loan_type', $policy->loan_type)
+                ->where('status', 'active')
+                ->count();
+
+            if ($allowParallelMotorcycle && $policy->loan_type === 'motorcycle_loan' && $activeCount >= 2) {
+                throw new InvalidArgumentException('This employee already has two active motorcycle loans.');
+            }
+
             throw new InvalidArgumentException(sprintf(
                 'This employee already has an active %s (%s, %s). Fully pay or close it before applying for the next cycle.',
                 $active->typeLabel(),
@@ -235,5 +266,24 @@ class LoanApplicationService
                 $nextStep,
             ));
         }
+    }
+
+    /**
+     * One active motorcycle loan may stay open when Accounts or Super Admin starts the next cycle.
+     */
+    public function parallelMotorcycleLoan(int $employeeId, LoanPolicy $policy, bool $allowed): ?EmployeeLoan
+    {
+        if (! $allowed || $policy->loan_type !== 'motorcycle_loan') {
+            return null;
+        }
+
+        $active = EmployeeLoan::query()
+            ->where('employee_id', $employeeId)
+            ->where('loan_type', 'motorcycle_loan')
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->get();
+
+        return $active->count() === 1 ? $active->first() : null;
     }
 }

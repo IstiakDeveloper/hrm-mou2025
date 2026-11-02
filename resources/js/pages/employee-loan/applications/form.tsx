@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,13 @@ type EmployeePreview = {
         loan_cycle_label: string;
     }[];
     next_cycle_by_loan_type?: Record<string, number>;
+    open_applications?: {
+        id: number;
+        application_number: string;
+        status: string;
+        loan_type?: string | null;
+        loan_cycle_label: string;
+    }[];
 };
 
 type Props = {
@@ -78,6 +85,9 @@ function employeeLabel(e: { id: number; pin?: string; name_en?: string; employee
 
 export default function LoanApplicationForm({ employees, policies, committees, nextApplicationNumber, application }: Props) {
     const { toast } = useToast();
+    const canIssueSecondMotorcycle = Boolean(
+        (usePage().props as { canIssueSecondMotorcycleLoan?: boolean }).canIssueSecondMotorcycleLoan,
+    );
     const isEdit = Boolean(application?.id);
     const useLookup = employees.length === 0;
     const [searchQuery, setSearchQuery] = useState('');
@@ -164,6 +174,24 @@ export default function LoanApplicationForm({ employees, policies, committees, n
 
     const selectedPolicy = policies.find((p) => String(p.id) === form.data.loan_policy_id);
     const activeLoanForType = employeeInfo?.active_loans?.find((l) => l.loan_type === selectedPolicy?.loan_type);
+    const activeMotorcycleCount = employeeInfo?.active_loans?.filter((loan) => loan.loan_type === 'motorcycle_loan').length ?? 0;
+    const openForType = employeeInfo?.open_applications?.find(
+        (row) => row.loan_type === selectedPolicy?.loan_type && String(row.id) !== String(application?.id ?? ''),
+    );
+    const secondMotorcycleAllowed = Boolean(
+        canIssueSecondMotorcycle &&
+            selectedPolicy?.loan_type === 'motorcycle_loan' &&
+            activeLoanForType &&
+            activeMotorcycleCount === 1 &&
+            !openForType,
+    );
+    const blockReason = openForType
+        ? `This employee already has a ${openForType.status} application (${openForType.application_number}, ${openForType.loan_cycle_label}) for this loan type. Finish or cancel it before starting another.`
+        : activeLoanForType && !secondMotorcycleAllowed
+          ? activeMotorcycleCount >= 2 && selectedPolicy?.loan_type === 'motorcycle_loan'
+              ? `This employee already has two active motorcycle loans (${activeLoanForType.loan_number}). A third loan cannot be created.`
+              : `An active ${activeLoanForType.loan_type_label} already exists (${activeLoanForType.loan_number}, ${activeLoanForType.loan_cycle_label}). Fully pay or close it before taking the next cycle.`
+          : null;
 
     useEffect(() => {
         if (!employeeInfo || !selectedPolicy?.loan_type) {
@@ -183,6 +211,14 @@ export default function LoanApplicationForm({ employees, policies, committees, n
     }, [employeeInfo, selectedPolicy?.loan_type, form.data.employee_id, form.data.loan_policy_id]);
 
     const submit = (forApproval: boolean) => {
+        if (blockReason) {
+            toast({
+                title: 'Loan application failed',
+                description: blockReason,
+                variant: 'destructive',
+            });
+            return;
+        }
         form.transform((d) => ({ ...d, submit_for_approval: forApproval }));
         const options = {
             onError: (errors: Record<string, string>) => {
@@ -327,11 +363,10 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                                 <p className="text-[11px] text-zinc-500">
                                     Auto-filled as 1st, 2nd, 3rd… for this employee and loan type.
                                 </p>
-                                {activeLoanForType && (
-                                    <p className="text-[11px] text-amber-700">
-                                        An active {activeLoanForType.loan_type_label} already exists (
-                                        {activeLoanForType.loan_number}, {activeLoanForType.loan_cycle_label}). Fully
-                                        pay or close it before taking the next cycle.
+                                {blockReason && <p className="text-xs text-rose-700">{blockReason}</p>}
+                                {secondMotorcycleAllowed && activeLoanForType && (
+                                    <p className="text-xs text-sky-800">
+                                        Active loan {activeLoanForType.loan_number} ({activeLoanForType.loan_cycle_label}) stays open. Save this application as the next cycle.
                                     </p>
                                 )}
                             </div>
@@ -382,14 +417,14 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                     )}
 
                     <div className="flex flex-wrap justify-end gap-2">
-                        <Button type="submit" variant="outline" className="h-9 text-xs" disabled={form.processing}>
+                        <Button type="submit" variant="outline" className="h-9 text-xs" disabled={form.processing || Boolean(blockReason)}>
                             <Save className="mr-1.5 h-4 w-4" />
                             Save draft
                         </Button>
                         <Button
                             type="button"
                             className="h-9 bg-emerald-600 text-xs hover:bg-emerald-700"
-                            disabled={form.processing}
+                            disabled={form.processing || Boolean(blockReason)}
                             onClick={() => submit(true)}
                         >
                             <Send className="mr-1.5 h-4 w-4" />

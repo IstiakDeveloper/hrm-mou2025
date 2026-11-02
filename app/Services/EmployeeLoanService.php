@@ -512,6 +512,16 @@ class EmployeeLoanService
         $graceMonths = (int) ($policy->grace_months ?? $application->grace_months ?? 0);
         $firstInstallment = $this->resolveFirstInstallmentDate($disbursementDate, $graceMonths);
 
+        $snapshot = is_array($application->form_snapshot) ? $application->form_snapshot : [];
+        $parallel = ($snapshot['parallel_active'] ?? false) === true
+            && $policy?->loan_type === 'motorcycle_loan';
+        $notes = trim((string) ($application->notes ?? ''));
+        if ($parallel) {
+            $activeNumber = (string) ($snapshot['active_loan_number'] ?? 'the earlier loan');
+            $parallelNote = 'Second motorcycle loan issued while '.$activeNumber.' is still active.';
+            $notes = $notes === '' ? $parallelNote : $notes.' '.$parallelNote;
+        }
+
         $loan = $this->createLoan([
             'employee_id' => $application->employee_id,
             'loan_policy_id' => $application->loan_policy_id,
@@ -522,10 +532,10 @@ class EmployeeLoanService
             'disbursement_date' => $disbursementDate,
             'first_installment_date' => $firstInstallment->toDateString(),
             'reference_no' => $application->application_number,
-            'notes' => $application->notes,
+            'notes' => $notes !== '' ? $notes : null,
             'is_legacy_import' => false,
             'loan_cycle' => (int) ($application->loan_cycle ?? 0),
-        ], $createdBy);
+        ], $createdBy, $parallel);
 
         $loan->update(['loan_application_id' => $application->id]);
 

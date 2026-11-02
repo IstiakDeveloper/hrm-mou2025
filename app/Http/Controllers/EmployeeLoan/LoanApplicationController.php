@@ -8,8 +8,10 @@ use App\Models\Employee;
 use App\Models\LoanApplication;
 use App\Models\LoanCommittee;
 use App\Models\LoanPolicy;
+use App\Models\User;
 use App\Services\LoanApplicationService;
 use App\Services\LoanCalculationService;
+use App\Services\MotorcycleLoanApplicationService;
 use App\Services\PfLoanApplicationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -95,7 +97,9 @@ class LoanApplicationController extends Controller
             $app = $this->applicationService->createApplication(
                 $validated,
                 auth()->id(),
-                $request->boolean('submit_for_approval')
+                $request->boolean('submit_for_approval'),
+                false,
+                $this->canAllowParallelMotorcycle((int) $validated['loan_policy_id']),
             );
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages(['application' => $e->getMessage()]);
@@ -121,7 +125,8 @@ class LoanApplicationController extends Controller
             $this->applicationService->assertEmployeeCanTakeLoan(
                 (int) $validated['employee_id'],
                 $policy,
-                $loan_application->id
+                $loan_application->id,
+                $this->canAllowParallelMotorcycle((int) $policy->id),
             );
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages(['application' => $e->getMessage()]);
@@ -152,11 +157,57 @@ class LoanApplicationController extends Controller
             'total_payable' => $calc['total_payable'],
             'status' => $request->boolean('submit_for_approval') ? 'pending' : $loan_application->status,
             'notes' => $validated['notes'] ?? null,
+            'form_snapshot' => $this->parallelSnapshot(
+                (int) $validated['employee_id'],
+                $policy,
+                is_array($loan_application->form_snapshot) ? $loan_application->form_snapshot : null,
+            ),
         ]);
 
         return redirect()
             ->route('loan-applications.edit', $loan_application)
             ->with('success', 'Application updated.');
+    }
+
+    protected function canAllowParallelMotorcycle(int $policyId): bool
+    {
+        $user = auth()->user();
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if (! app(MotorcycleLoanApplicationService::class)->canIssueSecondLoan($user)) {
+            return false;
+        }
+
+        return LoanPolicy::query()->whereKey($policyId)->where('loan_type', 'motorcycle_loan')->exists();
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $existing
+     * @return array<string, mixed>|null
+     */
+    protected function parallelSnapshot(int $employeeId, LoanPolicy $policy, ?array $existing): ?array
+    {
+        $parallel = $this->applicationService->parallelMotorcycleLoan(
+            $employeeId,
+            $policy,
+            $this->canAllowParallelMotorcycle((int) $policy->id),
+        );
+
+        if (! $parallel) {
+            if (is_array($existing) && ($existing['parallel_active'] ?? false) === true) {
+                unset($existing['parallel_active'], $existing['active_loan_number']);
+            }
+
+            return $existing;
+        }
+
+        return array_merge($existing ?? [], [
+            'form' => 'motorcycle',
+            'parallel_active' => true,
+            'active_loan_number' => $parallel->loan_number,
+        ]);
     }
 
     public function employeePreview(Employee $employee)
