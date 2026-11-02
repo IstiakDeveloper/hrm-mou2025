@@ -147,6 +147,7 @@ class HandleInertiaRequests extends Middleware
         $pendingFinalClearanceCount = 0;
         $pendingMotorcycleLoanCount = 0;
         $pendingLogBookPaymentCount = 0;
+        $canIssueSecondMotorcycleLoan = false;
         if ($user) {
             $leaveQuery = LeaveApplication::query()->where('status', 'pending');
             OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
@@ -156,7 +157,9 @@ class HandleInertiaRequests extends Middleware
                 $pendingFinalClearanceCount = app(FinalClearanceService::class)->pendingCount($user);
             }
             if (Schema::hasTable('loan_applications') && $user->canAccessSection('employee-loan')) {
-                $pendingMotorcycleLoanCount = app(MotorcycleLoanApplicationService::class)->pendingCount($user);
+                $motorcycleLoans = app(MotorcycleLoanApplicationService::class);
+                $pendingMotorcycleLoanCount = $motorcycleLoans->pendingCount($user);
+                $canIssueSecondMotorcycleLoan = $motorcycleLoans->canIssueSecondLoan($user);
             }
             if (Schema::hasTable('movement_log_book_payments') && $user->hasPermission('movements.view')) {
                 $pendingLogBookPaymentCount = app(LogBookPaymentWorkflowService::class)->pendingCount($user);
@@ -210,6 +213,7 @@ class HandleInertiaRequests extends Middleware
             'pendingAppraisalCounts' => $pendingAppraisalCounts,
             'pendingFinalClearanceCount' => $pendingFinalClearanceCount,
             'pendingMotorcycleLoanCount' => $pendingMotorcycleLoanCount,
+            'canIssueSecondMotorcycleLoan' => $canIssueSecondMotorcycleLoan,
             'pendingLogBookPaymentCount' => $pendingLogBookPaymentCount,
             'officeOpenDates' => OfficeOpenDate::dateStrings(),
         ];

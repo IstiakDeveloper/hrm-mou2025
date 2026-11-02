@@ -180,6 +180,7 @@ const getTheme = (id: string) => {
 };
 
 export default function SectionsIndex() {
+    const { auth, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount, recentNotices } = usePage().props as any;
     const { auth, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount, pendingLogBookPaymentCount, recentNotices } = usePage().props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
     const pendingAppraisal = ((pendingAppraisalCounts?.total as number) ?? 0) + (Number(pendingFinalClearanceCount) || 0);
@@ -437,6 +438,7 @@ export default function SectionsIndex() {
                                   ? pendingAppraisal
                                   : section.id === 'employee-loan'
                                     ? pendingMotorcycle
+                                    : 0;
                                     : section.id === 'attendance-movement'
                                       ? pendingLogBookPayment
                                       : 0;

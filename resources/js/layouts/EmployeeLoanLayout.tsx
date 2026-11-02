@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { ChevronRight, HandCoins } from 'lucide-react';
@@ -14,6 +14,10 @@ interface EmployeeLoanLayoutProps {
 }
 
 export default function EmployeeLoanLayout({ children, title, description, activeTab }: EmployeeLoanLayoutProps) {
+    const canIssueSecondMotorcycleLoan = Boolean(
+        (usePage().props as { canIssueSecondMotorcycleLoan?: boolean }).canIssueSecondMotorcycleLoan,
+    );
+
     return (
         <Layout>
             <Head title={title} />
@@ -51,7 +55,9 @@ export default function EmployeeLoanLayout({ children, title, description, activ
                             <span className="w-16 shrink-0 px-1 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
                                 {section.label}
                             </span>
-                            {section.items.map((item) => (
+                            {section.items
+                                .filter((item) => !item.secondMotorcycleOnly || canIssueSecondMotorcycleLoan)
+                                .map((item) => (
                                 <Link
                                     key={item.id}
                                     href={employeeLoanPath(item.href)}

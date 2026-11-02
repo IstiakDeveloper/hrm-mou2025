@@ -196,6 +196,8 @@ use Inertia\Inertia;
 
         Route::prefix('employee-loans')->name('employee-loans.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'index'])->name('index');
+            Route::get('/second-motorcycle', [\App\Http\Controllers\EmployeeLoan\SecondMotorcycleLoanController::class, 'create'])->name('second-motorcycle.create');
+            Route::post('/second-motorcycle', [\App\Http\Controllers\EmployeeLoan\SecondMotorcycleLoanController::class, 'store'])->name('second-motorcycle.store');
             Route::get('/ledger-lookup', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'ledgerLookup'])->name('ledger-lookup');
             Route::get('/create', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
             Route::post('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');

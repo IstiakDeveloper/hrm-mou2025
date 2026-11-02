@@ -11,6 +11,7 @@ use App\Models\RegionalOffice;
 use App\Models\User;
 use App\Models\Zone;
 use App\Support\BanglaTaka;
+use App\Support\LoanCycle;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +78,115 @@ class MotorcycleLoanApplicationService
         return in_array($this->rank($employee), ['abm', 'bm', 'rm', 'zm', 'director', 'ed'], true)
             ? $this->seniorMax()
             : $this->standardMax();
+    }
+
+    /**
+     * Accounts desk or Super Admin. employee-loan.edit alone is not enough.
+     */
+    public function canIssueSecondLoan(User $user): bool
+    {
+        if ($user->isSuperAdmin() || $user->isAccountant()) {
+            return true;
+        }
+
+        $roles = OrganogramAccessService::mergedRoleNames($user);
+        foreach ([
+            'Director Finance and Accounts',
+            'Director Finance and Account',
+            'Director (Finance & Accounts)',
+        ] as $name) {
+            if (in_array($name, $roles, true)) {
+                return true;
+            }
+        }
+
+        return OrganogramAccessService::isFinanceAndAccountsDepartmentHead($user);
+    }
+
+    /**
+     * Disburse a second motorcycle loan while one is still active.
+     * The parallel flag is passed only from this method, never from the browser.
+     *
+     * @param  array{employee_id: int, loan_policy_id: int, principal_amount: float|int|string, disbursement_date: string, notes?: ?string}  $input
+     */
+    public function issueSecondLoan(User $actor, array $input): EmployeeLoan
+    {
+        if (! $this->canIssueSecondLoan($actor)) {
+            throw new InvalidArgumentException('Only Accounts or Super Admin can issue a second motorcycle loan.');
+        }
+
+        $employee = Employee::query()->findOrFail((int) $input['employee_id']);
+        if ($employee->status && $employee->status !== 'active') {
+            throw new InvalidArgumentException('Only an active employee can receive a second motorcycle loan.');
+        }
+
+        $policy = $this->usablePolicy((int) $input['loan_policy_id']);
+        $amount = SalaryStructureCalculator::roundTaka((float) $input['principal_amount']);
+        $employee->loadMissing('designation:id,name');
+        $ceiling = $this->maxAmountFor($employee);
+
+        if ($amount < (float) $policy->min_amount) {
+            throw new InvalidArgumentException('এই মেয়াদে সর্বনিম্ন '.taka_fmt($policy->min_amount).' টাকা।');
+        }
+        if ($amount > $ceiling) {
+            throw new InvalidArgumentException('পদের সর্বোচ্চ '.taka_fmt($ceiling).' টাকা।');
+        }
+
+        $disbursementDate = Carbon::parse($input['disbursement_date'])->toDateString();
+        $loans = app(EmployeeLoanService::class);
+        $calc = $this->calculator->calculate($policy, $amount);
+        $firstInstallment = $loans->resolveFirstInstallmentDate($disbursementDate, (int) ($policy->grace_months ?? 0));
+
+        return DB::transaction(function () use ($actor, $employee, $policy, $amount, $disbursementDate, $firstInstallment, $calc, $loans, $input) {
+            $active = EmployeeLoan::query()
+                ->where('employee_id', $employee->id)
+                ->where('loan_type', 'motorcycle_loan')
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->orderBy('id')
+                ->get();
+
+            if ($active->isEmpty()) {
+                throw new InvalidArgumentException('A second motorcycle loan can only be issued while one motorcycle loan is still active. Use the normal application when none is active.');
+            }
+            if ($active->count() >= 2) {
+                throw new InvalidArgumentException('This employee already has two active motorcycle loans.');
+            }
+
+            $open = LoanApplication::query()
+                ->where('employee_id', $employee->id)
+                ->whereIn('status', ['in_review', 'pending', 'approved'])
+                ->whereHas('policy', fn ($query) => $query->where('loan_type', 'motorcycle_loan'))
+                ->lockForUpdate()
+                ->exists();
+
+            if ($open) {
+                throw new InvalidArgumentException('A motorcycle application is already in progress. Finish or cancel it before issuing a second loan.');
+            }
+
+            $current = $active->first();
+            $note = sprintf(
+                'Second motorcycle loan issued while %s (%s) is still active. Authorized by %s.',
+                $current->loan_number,
+                LoanCycle::label($current->cycleNumber()),
+                $actor->name,
+            );
+            $extra = trim((string) ($input['notes'] ?? ''));
+            if ($extra !== '') {
+                $note .= ' '.$extra;
+            }
+
+            return $loans->createLoan([
+                'employee_id' => $employee->id,
+                'loan_policy_id' => $policy->id,
+                'principal_amount' => $amount,
+                'installment_count' => (int) $calc['total_installments'],
+                'disbursement_date' => $disbursementDate,
+                'first_installment_date' => $firstInstallment->toDateString(),
+                'notes' => $note,
+                'is_legacy_import' => false,
+            ], $actor->id, true);
+        });
     }
 
     /**

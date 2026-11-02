@@ -72,8 +72,10 @@ export default function EmployeeLoanIndex({
     loanTypes,
     statusOptions,
 }: Props) {
-    const { auth } = usePage<SharedData>().props;
+    const page = usePage<SharedData & { canIssueSecondMotorcycleLoan?: boolean }>();
+    const { auth } = page.props;
     const canCreate = hasAppPermission(auth, 'payroll.create');
+    const canIssueSecond = Boolean(page.props.canIssueSecondMotorcycleLoan);
 
     const [filters, setFilters] = useState({
         search: init.search || '',
@@ -108,18 +110,29 @@ export default function EmployeeLoanIndex({
                     </Button>
                     <span className="text-xs text-zinc-500">{loans.length} loan(s)</span>
                 </div>
-                {canCreate && (
+                {(canCreate || canIssueSecond) && (
                     <div className="flex flex-wrap gap-2">
-                        <Link href={employeeLoanPath(route('loan-applications.create'))}>
-                            <Button size="sm" className="h-8 bg-emerald-600 text-xs hover:bg-emerald-700">
-                                <Plus className="mr-1.5 h-3.5 w-3.5" /> New application
-                            </Button>
-                        </Link>
-                        <Link href={employeeLoanPath(route('loan-migration.index'))}>
-                            <Button size="sm" variant="outline" className="h-8 text-xs">
-                                Loan migration
-                            </Button>
-                        </Link>
+                        {canCreate && (
+                            <>
+                                <Link href={employeeLoanPath(route('loan-applications.create'))}>
+                                    <Button size="sm" className="h-8 bg-emerald-600 text-xs hover:bg-emerald-700">
+                                        <Plus className="mr-1.5 h-3.5 w-3.5" /> New application
+                                    </Button>
+                                </Link>
+                                <Link href={employeeLoanPath(route('loan-migration.index'))}>
+                                    <Button size="sm" variant="outline" className="h-8 text-xs">
+                                        Loan migration
+                                    </Button>
+                                </Link>
+                            </>
+                        )}
+                        {canIssueSecond && (
+                            <Link href={employeeLoanPath('/employee-loans/second-motorcycle')}>
+                                <Button size="sm" variant="outline" className="h-8 text-xs">
+                                    Second motorcycle
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                 )}
             </div>

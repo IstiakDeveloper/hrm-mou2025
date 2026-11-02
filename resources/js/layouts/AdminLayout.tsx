@@ -160,6 +160,7 @@ interface MenuItemType {
         permission?: string;
         hrOnly?: boolean;
         superAdminOnly?: boolean;
+        secondMotorcycleOnly?: boolean;
         isGroupLabel?: boolean;
         /** Show if user has ANY of these permissions (omit to ignore). */
         anyPermissions?: string[];
@@ -335,7 +336,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
-    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount, pendingLogBookPaymentCount } = page.props as any;
+    const { auth, notifications, activeMovement, pendingLeaveCount, pendingAppraisalCounts, pendingFinalClearanceCount, pendingMotorcycleLoanCount, pendingLogBookPaymentCount, canIssueSecondMotorcycleLoan } = page.props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
     const appraisalCounts = (pendingAppraisalCounts ?? null) as AppraisalPendingCounts | null;
     const pendingAppraisal = appraisalCounts?.total ?? 0;
@@ -803,7 +804,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         path: employeeLoanPath(group.defaultPath),
                         hasSubmenu: true as const,
                         permission: 'employee-loan.view',
-                        submenu: group.items.map((item) => ({
+                        submenu: group.items
+                            .filter((item) => !item.secondMotorcycleOnly || canIssueSecondMotorcycleLoan)
+                            .map((item) => ({
                             title: item.title,
                             path: employeeLoanPath(item.path),
                             permission: item.permission ?? 'employee-loan.view',
@@ -935,7 +938,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 hasSubmenu: false,
             },
         ],
-        [],
+        [canIssueSecondMotorcycleLoan],
     );
 
     const menuItemsForLayout = useMemo(() => {

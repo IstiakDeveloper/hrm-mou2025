@@ -19,6 +19,7 @@ export type EmployeeLoanNavItem = {
     path: string;
     permission?: string;
     description?: string;
+    secondMotorcycleOnly?: boolean;
 };
 
 export type EmployeeLoanNavGroup = {
@@ -51,6 +52,12 @@ export const EMPLOYEE_LOAN_NAV_GROUPS: EmployeeLoanNavGroup[] = [
             { title: 'Application List', path: '/loan-applications', description: 'All loan applications' },
             { title: 'Loan Approval', path: '/loan-approval', permission: 'employee-loan.edit', description: 'Approve or reject applications' },
             { title: 'Loan Disburse', path: '/loan-disburse', permission: 'employee-loan.create', description: 'Disburse approved applications → active loan' },
+            {
+                title: 'Second Motorcycle',
+                path: '/employee-loans/second-motorcycle',
+                description: 'Issue a second motorcycle loan while one is still active',
+                secondMotorcycleOnly: true,
+            },
         ],
     },
     {
@@ -84,7 +91,7 @@ export const EMPLOYEE_LOAN_NAV_GROUPS: EmployeeLoanNavGroup[] = [
 
 export type EmployeeLoanLayoutSection = {
     label: string;
-    items: { id: string; label: string; href: string }[];
+    items: { id: string; label: string; href: string; secondMotorcycleOnly?: boolean }[];
 };
 
 /** Horizontal tabs inside Employee Loan pages — grouped for clarity */
@@ -103,6 +110,7 @@ export const EMPLOYEE_LOAN_LAYOUT_SECTIONS: EmployeeLoanLayoutSection[] = [
             { id: 'applications-list', label: 'Applications', href: '/loan-applications' },
             { id: 'approval', label: 'Approval', href: '/loan-approval' },
             { id: 'disburse', label: 'Disburse', href: '/loan-disburse' },
+            { id: 'second-motorcycle', label: '2nd Motorcycle', href: '/employee-loans/second-motorcycle', secondMotorcycleOnly: true },
         ],
     },
     {

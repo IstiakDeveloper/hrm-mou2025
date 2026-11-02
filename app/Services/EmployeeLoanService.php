@@ -187,8 +187,9 @@ class EmployeeLoanService
      *   reference_no?: ?string,
      *   notes?: ?string,
      * }  $data
+     * @param  bool  $allowParallelMotorcycle  Server-side only. Never read from an HTTP request.
      */
-    public function createLoan(array $data, ?int $createdBy = null): EmployeeLoan
+    public function createLoan(array $data, ?int $createdBy = null, bool $allowParallelMotorcycle = false): EmployeeLoan
     {
         $policy = LoanPolicy::query()->findOrFail($data['loan_policy_id']);
         $policyValues = $this->policyService->validateAgainstPolicy($policy, $data);
@@ -223,8 +224,27 @@ class EmployeeLoanService
             $this->assertLegacyPaidInput($data, $count);
         }
 
-        return DB::transaction(function () use ($data, $createdBy, $principal, $count, $installmentAmount, $interestRate, $totalPayable, $head, $policy, $loanType, $isLegacy) {
-            if (! $isLegacy) {
+        return DB::transaction(function () use ($data, $createdBy, $principal, $count, $installmentAmount, $interestRate, $totalPayable, $head, $policy, $loanType, $isLegacy, $allowParallelMotorcycle) {
+            if ($allowParallelMotorcycle) {
+                if ($loanType !== 'motorcycle_loan') {
+                    throw new InvalidArgumentException('A second loan while one is still active is only allowed for a motorcycle loan.');
+                }
+
+                $activeCount = EmployeeLoan::query()
+                    ->where('employee_id', (int) $data['employee_id'])
+                    ->where('loan_type', 'motorcycle_loan')
+                    ->where('status', 'active')
+                    ->lockForUpdate()
+                    ->count();
+
+                if ($activeCount < 1) {
+                    throw new InvalidArgumentException('A second motorcycle loan can only be issued while one motorcycle loan is still active.');
+                }
+
+                if ($activeCount >= 2) {
+                    throw new InvalidArgumentException('This employee already has two active motorcycle loans.');
+                }
+            } elseif (! $isLegacy) {
                 $this->assertNoActiveLoanOfType((int) $data['employee_id'], $loanType, true);
             }
 

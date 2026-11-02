@@ -3,8 +3,10 @@
 use App\Models\Branch;
 use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\MotorcycleLoanApplicationService;
+use Illuminate\Support\Collection;
 
 function motorcycleEmployee(string $designation): Employee
 {
@@ -55,6 +57,27 @@ test('head office motorcycle application uses the department head unless the app
 
     expect($service->stagesFor($staff))->toBe(['department_head', 'ed', 'accounts']);
 });
+
+test('second motorcycle loan is limited to accounts and super admin', function () {
+    $service = app(MotorcycleLoanApplicationService::class);
+
+    expect($service->canIssueSecondLoan(userWithRole('Super Admin')))->toBeTrue();
+    expect($service->canIssueSecondLoan(userWithRole('Accountant')))->toBeTrue();
+    expect($service->canIssueSecondLoan(userWithRole('Director Finance and Accounts')))->toBeTrue();
+    expect($service->canIssueSecondLoan(userWithRole('HR Admin')))->toBeFalse();
+    expect($service->canIssueSecondLoan(userWithRole('Employee')))->toBeFalse();
+});
+
+function userWithRole(string $name): User
+{
+    $user = new User;
+    $role = new Role;
+    $role->name = $name;
+    $user->setRelation('role', $role);
+    $user->setRelation('roles', new Collection([$role]));
+
+    return $user;
+}
 
 test('motorcycle recommendation is blocked when seal and signature file is missing', function () {
     $service = app(MotorcycleLoanApplicationService::class);
