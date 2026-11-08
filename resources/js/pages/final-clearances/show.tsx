@@ -1,8 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import Layout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft, HandCoins, Printer, Trash2 } from 'lucide-react';
 import ClearanceDeleteDialog from './components/ClearanceDeleteDialog';
@@ -85,6 +87,7 @@ export default function FinalClearanceShow({
     });
     const hr = useForm({
         joining_date: clearance.joining_date ?? '',
+        not_confirmed: Boolean(clearance.not_confirmed ?? !clearance.confirmation_date),
         confirmation_date: clearance.confirmation_date ?? '',
         dropout_date: clearance.dropout_date ?? '',
         leave_balance: clearance.leave_balance ?? '',
@@ -296,10 +299,46 @@ export default function FinalClearanceShow({
                                     <Input required type="date" className="mt-1 h-9 font-normal" value={hr.data.joining_date} onChange={(e) => hr.setData('joining_date', e.target.value)} />
                                     <FieldError message={hr.errors.joining_date} />
                                 </label>
-                                <label className="text-xs font-semibold text-slate-700">Confirmation date<Req />
-                                    <Input required type="date" className="mt-1 h-9 font-normal" value={hr.data.confirmation_date} onChange={(e) => hr.setData('confirmation_date', e.target.value)} />
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-semibold text-slate-700" htmlFor="hr-confirmation-date">
+                                            Confirmation date {!hr.data.not_confirmed && <Req />}
+                                        </label>
+                                        <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600 select-none hover:text-slate-900">
+                                            <Checkbox
+                                                id="hr-not-confirmed"
+                                                checked={hr.data.not_confirmed}
+                                                onCheckedChange={(checked) => {
+                                                    const isChecked = Boolean(checked);
+                                                    hr.setData((prev) => ({
+                                                        ...prev,
+                                                        not_confirmed: isChecked,
+                                                        confirmation_date: isChecked ? '' : prev.confirmation_date,
+                                                    }));
+                                                }}
+                                            />
+                                            <span>Not Confirmed</span>
+                                        </label>
+                                    </div>
+                                    <Input
+                                        id="hr-confirmation-date"
+                                        type="date"
+                                        required={!hr.data.not_confirmed}
+                                        disabled={hr.data.not_confirmed}
+                                        className={cn(
+                                            'mt-1 h-9 font-normal',
+                                            hr.data.not_confirmed && 'cursor-not-allowed border-dashed bg-slate-100 text-slate-400'
+                                        )}
+                                        value={hr.data.not_confirmed ? '' : hr.data.confirmation_date}
+                                        onChange={(e) => hr.setData('confirmation_date', e.target.value)}
+                                    />
+                                    {hr.data.not_confirmed && (
+                                        <p className="mt-1 text-[11px] font-medium text-amber-600">
+                                            Marked as Not Confirmed (Confirmation date not required)
+                                        </p>
+                                    )}
                                     <FieldError message={hr.errors.confirmation_date} />
-                                </label>
+                                </div>
                                 <label className="text-xs font-semibold text-slate-700">Dropout date<Req />
                                     <Input required type="date" className="mt-1 h-9 font-normal" value={hr.data.dropout_date} onChange={(e) => hr.setData('dropout_date', e.target.value)} />
                                     <FieldError message={hr.errors.dropout_date} />

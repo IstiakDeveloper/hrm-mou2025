@@ -30,7 +30,7 @@ class FinalClearance extends Model
         'program_project', 'workplace',
         'id_card_returned', 'sim_returned', 'member_loan_outstanding', 'savings_outstanding',
         'total_member', 'total_borrower', 'preparer_comments',
-        'joining_date', 'confirmation_date', 'dropout_date', 'leave_balance', 'hr_issue', 'hr_issue_note',
+        'joining_date', 'confirmation_date', 'not_confirmed', 'dropout_date', 'leave_balance', 'hr_issue', 'hr_issue_note',
         'service_length_label', 'confirmation_days',
         'unpaid_salary', 'unpaid_salary_remarks', 'pf_amount', 'pf_remarks',
         'gratuity_amount', 'gratuity_remarks', 'staff_security', 'staff_security_remarks',
@@ -45,6 +45,7 @@ class FinalClearance extends Model
     protected $casts = [
         'joining_date' => 'date',
         'confirmation_date' => 'date',
+        'not_confirmed' => 'boolean',
         'dropout_date' => 'date',
         'leave_balance' => 'decimal:2',
         'member_loan_outstanding' => 'decimal:2',

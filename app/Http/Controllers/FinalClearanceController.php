@@ -207,14 +207,20 @@ class FinalClearanceController extends Controller
             ]);
             $finalClearance->fill($data);
         } elseif ($finalClearance->status === FinalClearance::STATUS_HR) {
+            $notConfirmed = $request->boolean('not_confirmed');
             $data = $request->validate([
                 'joining_date' => ['nullable', 'date'],
+                'not_confirmed' => ['nullable', 'boolean'],
                 'confirmation_date' => ['nullable', 'date'],
                 'dropout_date' => ['nullable', 'date'],
                 'leave_balance' => ['nullable', 'numeric'],
                 'hr_issue' => ['nullable', 'boolean'],
                 'hr_issue_note' => ['nullable', 'string', 'max:2000'],
             ]);
+            $data['not_confirmed'] = $notConfirmed;
+            if ($notConfirmed) {
+                $data['confirmation_date'] = null;
+            }
             $finalClearance->fill($data);
             $this->clearances->recomputeService($finalClearance);
         } elseif ($finalClearance->status === FinalClearance::STATUS_ACCOUNTS) {
@@ -277,9 +283,15 @@ class FinalClearanceController extends Controller
         }
 
         if ($finalClearance->status === FinalClearance::STATUS_HR) {
+            $notConfirmed = $request->boolean('not_confirmed');
             $data = $request->validate([
                 'joining_date' => ['required', 'date'],
-                'confirmation_date' => ['required', 'date'],
+                'not_confirmed' => ['nullable', 'boolean'],
+                'confirmation_date' => [
+                    $notConfirmed ? 'nullable' : 'required',
+                    'nullable',
+                    'date',
+                ],
                 'dropout_date' => ['required', 'date'],
                 'leave_balance' => ['required', 'numeric', 'min:0'],
                 'hr_issue' => ['required', 'boolean'],
@@ -293,6 +305,10 @@ class FinalClearanceController extends Controller
                 'hr_issue' => 'Any HR issue',
                 'hr_issue_note' => 'HR note',
             ]));
+            $data['not_confirmed'] = $notConfirmed;
+            if ($notConfirmed) {
+                $data['confirmation_date'] = null;
+            }
             $finalClearance->fill(collect($data)->except('comments')->all());
             $this->clearances->recomputeService($finalClearance);
             $finalClearance->status = FinalClearance::STATUS_ACCOUNTS;
@@ -496,6 +512,7 @@ class FinalClearanceController extends Controller
             $value = $clearance->getAttribute($date);
             $data[$date] = $value ? $value->format('Y-m-d') : null;
         }
+        $data['not_confirmed'] = (bool) ($clearance->not_confirmed || empty($data['confirmation_date']));
         $clearance->loadMissing('employee');
         if ($clearance->employee) {
             $address = $this->clearances->addressFields($clearance->employee);

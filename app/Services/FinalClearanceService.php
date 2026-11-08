@@ -233,6 +233,7 @@ class FinalClearanceService
             'zone_id' => $employee->branch?->regionalOffice?->zone_id,
             'joining_date' => optional($employee->joining_date)->toDateString(),
             'confirmation_date' => optional($employee->confirmation_date)->toDateString(),
+            'not_confirmed' => empty($employee->confirmation_date),
             'dropout_date' => optional($employee->dropout_date ?? $employee->resignation_date)->toDateString(),
             'leave_balance' => $leave,
             'service_length_label' => $this->serviceLengthLabel($employee),
@@ -277,7 +278,10 @@ class FinalClearanceService
             $clearance->service_length_label = $this->ymdLabel($joining, $end);
         }
 
-        if ($clearance->confirmation_date) {
+        if ($clearance->not_confirmed || ! $clearance->confirmation_date) {
+            $clearance->confirmation_date = null;
+            $clearance->confirmation_days = null;
+        } else {
             $clearance->confirmation_days = (int) abs(Carbon::parse($clearance->confirmation_date)->diffInDays($end));
         }
     }
@@ -530,13 +534,17 @@ class FinalClearanceService
             ? Carbon::parse($clearance->dropout_date)->startOfDay()
             : Carbon::today();
 
+        $confirmationStart = ($clearance->not_confirmed || ! $clearance->confirmation_date)
+            ? null
+            : Carbon::parse($clearance->confirmation_date);
+
         return [
             'joining_length_label' => $this->ymdLabel(
                 $clearance->joining_date ? Carbon::parse($clearance->joining_date) : null,
                 $end,
             ),
             'confirmation_length_label' => $this->ymdLabel(
-                $clearance->confirmation_date ? Carbon::parse($clearance->confirmation_date) : null,
+                $confirmationStart,
                 $end,
             ),
         ];

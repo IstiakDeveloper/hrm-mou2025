@@ -36,6 +36,7 @@ export type ClearanceRecord = {
     preparer_comments?: string | null;
     joining_date?: string | null;
     confirmation_date?: string | null;
+    not_confirmed?: boolean | null;
     dropout_date?: string | null;
     leave_balance?: string | number | null;
     hr_issue?: boolean | null;
@@ -294,7 +295,9 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
                             </tr>
                             <tr>
                                 <td className={td}><span className={label}>Joining Date</span> : {dateText(clearance.joining_date)}</td>
-                                <td className={td}><span className={label}>Confirmation Date</span> : {dateText(clearance.confirmation_date)}</td>
+                                <td className={td}>
+                                    <span className={label}>Confirmation Date</span> : {clearance.confirmation_date ? dateText(clearance.confirmation_date) : (clearance.not_confirmed ? 'Not Confirmed' : '')}
+                                </td>
                                 <td className={td}><span className={label}>From Joining</span> : {text(clearance.joining_length_label)}</td>
                                 <td className={td}><span className={label}>Leave Balance</span> : {leaveDays(clearance.leave_balance)}</td>
                             </tr>
@@ -303,7 +306,9 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
                                     <span className={label}>Any HR Issue</span> : <span className={shade}>{yesNo(clearance.hr_issue)}</span>
                                 </td>
                                 <td className={td}><span className={label}>Dropout Date</span> : {dateText(clearance.dropout_date)}</td>
-                                <td className={td}><span className={label}>From Confirmation</span> : {text(clearance.confirmation_length_label)}</td>
+                                <td className={td}>
+                                    <span className={label}>From Confirmation</span> : {clearance.confirmation_date ? text(clearance.confirmation_length_label) : (clearance.not_confirmed ? '—' : '')}
+                                </td>
                                 <td className={td} />
                             </tr>
                             <tr>
