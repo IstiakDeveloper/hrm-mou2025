@@ -736,26 +736,9 @@ class PayrollReportService
         return 'Unassigned';
     }
 
-    protected function formatSalarySheetDesignation(?string $designation, ?string $department, bool $isHeadOffice): string
+    protected function formatSalarySheetDesignation(?string $designation, ?string $department = null, bool $isHeadOffice = false): string
     {
-        $designation = trim((string) $designation);
-
-        if (! $isHeadOffice) {
-            return $designation;
-        }
-
-        // For Head Office: if designation contains parentheses, strip them out (e.g. "Director (Microfinance)" -> "Director")
-        $base = trim(preg_replace('/\s*\([^)]*\)/u', '', $designation));
-        if ($base === '') {
-            $base = $designation;
-        }
-
-        $dept = trim((string) $department);
-        if ($dept !== '') {
-            return "{$base} ({$dept})";
-        }
-
-        return $base;
+        return trim((string) $designation);
     }
 
     /**

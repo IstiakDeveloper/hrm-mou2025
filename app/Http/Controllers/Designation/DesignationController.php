@@ -15,16 +15,16 @@ class DesignationController extends Controller
      */
     public function index(Request $request)
     {
-        $perPage = (int) $request->get('per_page', 10);
+        $perPage = (int) $request->get('per_page', 100);
         if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
-            $perPage = 10;
+            $perPage = 100;
         }
 
         $designationsQuery = Designation::query()
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
             })
-            ->orderBy('rank');
+            ->orderBy('name', 'asc');
 
         $designations = $designationsQuery->paginate($perPage)->withQueryString();
 

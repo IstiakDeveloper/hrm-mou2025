@@ -23,13 +23,14 @@ import { PageSurface } from '@/components/page-surface';
 import {
   Briefcase,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Edit,
   MoreHorizontal,
   Plus,
   Search,
-  Trash2,
-  ChevronRight,
   Trash,
+  Trash2,
   X
 } from 'lucide-react';
  
@@ -79,7 +80,7 @@ interface DesignationIndexProps {
 
 export default function DesignationIndex({ designations, filters }: DesignationIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
-  const [perPage, setPerPage] = useState(filters.per_page || '10');
+  const [perPage, setPerPage] = useState(filters.per_page || '100');
 
   const handleSearch = () => {
     router.get(route('designations.index'), { search, per_page: perPage }, { preserveState: true });
@@ -98,8 +99,8 @@ export default function DesignationIndex({ designations, filters }: DesignationI
 
   const resetFilters = () => {
     setSearch('');
-    setPerPage('10');
-    router.get(route('designations.index'), { per_page: '10' }, { preserveState: true });
+    setPerPage('100');
+    router.get(route('designations.index'), { per_page: '100' }, { preserveState: true });
   };
 
   const handleDelete = (id: number) => {
@@ -241,7 +242,7 @@ export default function DesignationIndex({ designations, filters }: DesignationI
                       onValueChange={handlePerPageChange}
                     >
                       <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
-                        <SelectValue placeholder="10" />
+                        <SelectValue placeholder="100" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="10">10</SelectItem>
