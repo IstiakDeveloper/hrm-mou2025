@@ -1,10 +1,12 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
+import { isSuperAdmin } from '@/lib/permissions';
+import type { SharedData } from '@/types';
 import { Plus } from 'lucide-react';
 import { formatTakaWhole } from '@/lib/taka-format';
 
@@ -22,6 +24,7 @@ type Row = {
 };
 
 export default function LoanApplicationsIndex({ applications }: { applications: Row[] }) {
+    const { auth } = usePage<SharedData>().props;
     return (
         <EmployeeLoanLayout title="Loan applications" activeTab="applications-list" description="Track all loan requests from draft to disbursement.">
             <div className="mb-3 flex justify-end">
@@ -74,6 +77,20 @@ export default function LoanApplicationsIndex({ applications }: { applications: 
                                             >
                                                 Loan
                                             </Link>
+                                        )}
+                                        {isSuperAdmin(auth) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (confirm(`Are you sure you want to permanently delete application ${row.application_number}? This cannot be undone.`)) {
+                                                        router.delete(route('loan-applications.destroy', row.id));
+                                                    }
+                                                }}
+                                                className="inline-flex items-center rounded border border-red-200 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-50"
+                                                title="Delete application"
+                                            >
+                                                Delete
+                                            </button>
                                         )}
                                     </div>
                                 </TableCell>

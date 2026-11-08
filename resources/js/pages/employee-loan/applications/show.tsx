@@ -4,14 +4,14 @@ import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Pencil, Printer } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Trash2 } from 'lucide-react';
 import { PfLoanApplicationDocument, type PfLoanFormFields } from '@/components/employee-loan/PfLoanApplicationDocument';
 import { MotorcycleLoanApplicationDocument, type MotorcycleLoanFormFields } from '@/components/employee-loan/MotorcycleLoanApplicationDocument';
 import { LoanWorkflowTimeline, type WorkflowStep } from '@/components/employee-loan/LoanWorkflowTimeline';
 import { MotorcycleLoanReviewBar, type MotorcycleReviewState } from '@/components/employee-loan/MotorcycleLoanReviewBar';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { hasAppPermission } from '@/lib/permissions';
+import { hasAppPermission, isSuperAdmin } from '@/lib/permissions';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -80,6 +80,11 @@ export default function LoanApplicationShow({ application, timeline = [], review
         router.post(route('loan-disburse.cancel', application.id));
     };
 
+    const deleteApplication = () => {
+        if (!confirm(`Are you sure you want to permanently delete application ${application.application_number}? This cannot be undone.`)) return;
+        router.delete(route('loan-applications.destroy', application.id));
+    };
+
     return (
         <EmployeeLoanLayout
             title={application.application_number}
@@ -117,6 +122,11 @@ export default function LoanApplicationShow({ application, timeline = [], review
                                 View loan {application.loan_number ? `(${application.loan_number})` : ''}
                             </Button>
                         </Link>
+                    )}
+                    {isSuperAdmin(auth) && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 hover:bg-red-50 border-red-200" onClick={deleteApplication}>
+                            <Trash2 className="mr-1 h-3 w-3" /> Delete application
+                        </Button>
                     )}
                 </div>
             </div>

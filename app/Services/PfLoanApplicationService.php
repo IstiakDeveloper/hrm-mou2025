@@ -543,6 +543,112 @@ class PfLoanApplicationService
     }
 
     /**
+     * Build or synchronize form snapshot for a PF loan application.
+     * Keeps user-provided notes/reason, amount, date, installments, employee info up-to-date.
+     *
+     * @param  array<string, mixed>|null  $existing
+     * @return array<string, mixed>
+     */
+    public function syncSnapshot(LoanApplication $application, ?array $existing = null): array
+    {
+        $existing = $existing ?? (is_array($application->form_snapshot) ? $application->form_snapshot : []);
+
+        $application->loadMissing([
+            'employee.designation:id,name',
+            'employee.user:id,employee_id,signature',
+            'policy:id,name,code,loan_type,total_installments,max_tenure_months',
+        ]);
+
+        $employee = $application->employee;
+        $policy = $application->policy;
+
+        $date = $application->application_date ? Carbon::parse($application->application_date) : Carbon::today();
+        $rawAmount = (float) ($application->principal_amount > 0 ? $application->principal_amount : $application->applied_amount);
+        $amount = (float) round($rawAmount);
+
+        $principalAmount = $amount > 0 ? taka_fmt($amount) : '';
+        $words = $amount > 0 ? BanglaTaka::taka($amount) : '';
+
+        $monthlyInstallment = (float) $application->installment_amount_monthly;
+        $installments = (int) ($application->total_installments ?: ($policy?->total_installments ?? $policy?->max_tenure_months ?? 0));
+
+        $name = $employee ? trim((string) ($employee->name_bn ?: $employee->name_en)) : '';
+        $permanentAddress = $employee ? $this->permanentAddress($employee) : '';
+        $grossSalary = $employee ? $this->grossSalaryLabel($employee) : '';
+        $basicSalary = $employee ? taka_fmt($employee->resolveBasicSalary()) : '';
+        $pfBalance = $employee ? taka_fmt((float) $employee->pf_balance) : '';
+        $signature = $employee ? ($employee->user?->signature ?: $employee->signature) : null;
+
+        $previous = $employee ? $this->previousLoanLines($employee) : [
+            'details' => 'নেই',
+            'settled' => '—',
+            'last_paid_on' => '—',
+            'remaining' => '0',
+        ];
+
+        $employeeChanged = isset($existing['employee_id']) && (int) $existing['employee_id'] !== (int) $application->employee_id;
+
+        $reason = $application->notes !== null && trim((string) $application->notes) !== ''
+            ? trim((string) $application->notes)
+            : (string) ($existing['reason'] ?? '');
+
+        return array_merge($existing, [
+            'employee_id' => $application->employee_id,
+            'day' => $date->format('d'),
+            'month' => $date->format('m'),
+            'year' => $date->format('Y'),
+            'amount' => $principalAmount,
+            'amount_in_words' => $words,
+            'reason' => $reason,
+            'pf_balance' => (! $employeeChanged && ! empty($existing['pf_balance'])) ? $existing['pf_balance'] : $pfBalance,
+            'salary_grade' => $grossSalary ?: ($existing['salary_grade'] ?? ''),
+            'basic_salary' => (! $employeeChanged && ! empty($existing['basic_salary'])) ? $existing['basic_salary'] : $basicSalary,
+            'installments' => $installments > 0 ? (string) $installments : ($existing['installments'] ?? ''),
+            'installment_amount' => $monthlyInstallment > 0 ? taka_fmt($monthlyInstallment) : ($existing['installment_amount'] ?? ''),
+            'previous_details' => (! $employeeChanged && ! empty($existing['previous_details'])) ? $existing['previous_details'] : $previous['details'],
+            'previous_settled' => (! $employeeChanged && ! empty($existing['previous_settled'])) ? $existing['previous_settled'] : $previous['settled'],
+            'previous_last_paid_on' => (! $employeeChanged && ! empty($existing['previous_last_paid_on'])) ? $existing['previous_last_paid_on'] : $previous['last_paid_on'],
+            'previous_remaining' => (! $employeeChanged && isset($existing['previous_remaining']) && $existing['previous_remaining'] !== '') ? (string) $existing['previous_remaining'] : $previous['remaining'],
+            'name' => (! $employeeChanged && ! empty($existing['name']) && $existing['name'] !== '—') ? $existing['name'] : ($name !== '' ? $name : '—'),
+            'designation' => (! $employeeChanged && ! empty($existing['designation']) && $existing['designation'] !== '—') ? $existing['designation'] : ($employee?->designation?->name ?: '—'),
+            'pin' => (! $employeeChanged && ! empty($existing['pin']) && $existing['pin'] !== '—') ? $existing['pin'] : ($employee?->pin ?: '—'),
+            'address' => (! $employeeChanged && ! empty($existing['address'])) ? $existing['address'] : $permanentAddress,
+            'signature' => (! $employeeChanged && isset($existing['signature'])) ? $existing['signature'] : $signature,
+        ]);
+    }
+
+    /**
+     * Retrieve the up-to-date official form for a loan application.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function formForApplication(LoanApplication $application): ?array
+    {
+        $application->loadMissing([
+            'employee.designation:id,name',
+            'employee.user:id,employee_id,signature',
+            'policy:id,name,code,loan_type',
+        ]);
+
+        $snapshot = is_array($application->form_snapshot) ? $application->form_snapshot : null;
+
+        if (($snapshot['form'] ?? null) === 'motorcycle') {
+            return $snapshot;
+        }
+
+        if ($application->policy?->loan_type === 'pf_loan') {
+            $synced = $this->syncSnapshot($application, $snapshot);
+            if ($snapshot === null || $snapshot !== $synced) {
+                $application->updateQuietly(['form_snapshot' => $synced]);
+            }
+
+            return $synced;
+        }
+
+        return $this->withCurrentGrossSalary($snapshot, $application->employee);
+    }
+
+    /**
      * Gross salary total (basic + additions). Net payable is excluded.
      *
      * @param  array<string, mixed>|null  $form

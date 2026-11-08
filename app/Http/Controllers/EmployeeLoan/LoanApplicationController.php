@@ -101,6 +101,13 @@ class LoanApplicationController extends Controller
                 false,
                 $this->canAllowParallelMotorcycle((int) $validated['loan_policy_id']),
             );
+
+            $policy = LoanPolicy::query()->find($validated['loan_policy_id']);
+            if ($policy && $policy->loan_type === 'pf_loan') {
+                $app->updateQuietly([
+                    'form_snapshot' => $this->pfLoans->syncSnapshot($app->fresh()),
+                ]);
+            }
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages(['application' => $e->getMessage()]);
         }
@@ -164,9 +171,38 @@ class LoanApplicationController extends Controller
             ),
         ]);
 
+        if ($policy->loan_type === 'pf_loan') {
+            $loan_application->updateQuietly([
+                'form_snapshot' => $this->pfLoans->syncSnapshot($loan_application->fresh()),
+            ]);
+        } elseif ($policy->loan_type === 'motorcycle_loan' && is_array($loan_application->form_snapshot)) {
+            $snapshot = $loan_application->form_snapshot;
+            if (($snapshot['form'] ?? null) === 'motorcycle') {
+                $snapshot['amount'] = taka_fmt($calc['principal_amount']);
+                $snapshot['amount_in_words'] = \App\Support\BanglaTaka::taka((float) $calc['principal_amount']);
+                if (! empty($validated['notes'])) {
+                    $snapshot['purpose'] = $validated['notes'];
+                }
+                $snapshot['date'] = \Carbon\Carbon::parse($validated['application_date'])->format('d-m-Y');
+                $loan_application->updateQuietly(['form_snapshot' => $snapshot]);
+            }
+        }
+
         return redirect()
             ->route('loan-applications.edit', $loan_application)
             ->with('success', 'Application updated.');
+    }
+
+    public function destroy(Request $request, LoanApplication $loan_application)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403, 'Only Super Admin can delete loan applications.');
+
+        $appNumber = $loan_application->application_number;
+        $this->applicationService->deleteApplication($loan_application);
+
+        return redirect()
+            ->route('loan-applications.index')
+            ->with('success', "Loan application {$appNumber} deleted successfully.");
     }
 
     protected function canAllowParallelMotorcycle(int $policyId): bool
@@ -376,10 +412,7 @@ class LoanApplicationController extends Controller
             ] : null,
             'committee_name' => $a->committee?->committee_name,
             'channel' => $a->channel ?: 'admin',
-            'official_form' => $this->pfLoans->withCurrentGrossSalary(
-                is_array($a->form_snapshot) ? $a->form_snapshot : null,
-                $a->employee,
-            ),
+            'official_form' => $this->pfLoans->formForApplication($a),
         ];
     }
 

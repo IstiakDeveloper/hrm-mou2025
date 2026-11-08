@@ -119,6 +119,7 @@ use Inertia\Inertia;
             Route::get('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'show'])->name('show');
             Route::get('/{loan_application}/edit', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'edit'])->name('edit')->middleware('permission:employee-loan.edit');
             Route::put('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'update'])->name('update')->middleware('permission:employee-loan.edit');
+            Route::delete('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'destroy'])->name('destroy')->middleware('permission:employee-loan.delete');
         });
 
         Route::prefix('loan-approval')->name('loan-approval.')->group(function () {
@@ -212,6 +213,7 @@ use Inertia\Inertia;
             Route::post('/{employee_loan}/cancel', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'cancel'])->name('cancel')->middleware('permission:employee-loan.edit');
             Route::post('/{employee_loan}/restore', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'restore'])->name('restore')->middleware('permission:employee-loan.edit');
             Route::post('/{employee_loan}/rollback', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'rollback'])->name('rollback')->middleware('permission:employee-loan.edit');
+            Route::delete('/{employee_loan}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'destroy'])->name('destroy')->middleware('permission:employee-loan.delete');
         });
     });
 

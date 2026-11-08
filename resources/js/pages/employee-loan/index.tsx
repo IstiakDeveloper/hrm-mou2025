@@ -14,7 +14,7 @@ import {
 import { BookOpen, Filter, HandCoins, Plus, Search } from 'lucide-react';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { hasAppPermission } from '@/lib/permissions';
+import { hasAppPermission, isSuperAdmin } from '@/lib/permissions';
 import { usePage } from '@inertiajs/react';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -260,6 +260,20 @@ export default function EmployeeLoanIndex({
                                             >
                                                 <BookOpen className="h-3 w-3" />
                                             </Link>
+                                            {isSuperAdmin(auth) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (confirm(`Are you sure you want to permanently delete loan ${loan.loan_number}? All installments and records will be deleted. This cannot be undone.`)) {
+                                                            router.delete(route('employee-loans.destroy', loan.id));
+                                                        }
+                                                    }}
+                                                    className="inline-flex items-center rounded border border-red-200 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-50"
+                                                    title="Delete loan"
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>

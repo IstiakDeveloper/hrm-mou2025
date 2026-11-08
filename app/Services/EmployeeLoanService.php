@@ -7,9 +7,11 @@ use App\Models\EmployeeLoan;
 use App\Models\EmployeeLoanInstallment;
 use App\Models\EmployeeLoanTransaction;
 use App\Models\LoanApplication;
+use App\Models\LoanCollectionItem;
 use App\Models\LoanMigration;
 use App\Models\LoanMigrationItem;
 use App\Models\LoanPolicy;
+use App\Models\LoanTransfer;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
@@ -1584,6 +1586,48 @@ class EmployeeLoanService
             $this->rollbackLoanCore($loan);
             $this->syncMigrationBatchCount($migrationId);
         });
+    }
+
+    public function deleteLoan(EmployeeLoan $loan, bool $deleteApplication = true): void
+    {
+        DB::transaction(function () use ($loan, $deleteApplication) {
+            $loan = EmployeeLoan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            $migrationId = $loan->loan_migration_id;
+
+            $this->deleteLoanCore($loan, $deleteApplication);
+            $this->syncMigrationBatchCount($migrationId);
+        });
+    }
+
+    public function deleteLoanCore(EmployeeLoan $loan, bool $deleteApplication = true): void
+    {
+        $appId = $loan->loan_application_id;
+
+        if ($appId) {
+            if ($deleteApplication) {
+                $app = LoanApplication::query()->find($appId);
+                if ($app) {
+                    $app->recommendations()->delete();
+                    $app->delete();
+                }
+            } else {
+                LoanApplication::query()->whereKey($appId)->update([
+                    'employee_loan_id' => null,
+                ]);
+            }
+        }
+
+        LoanApplication::query()->where('employee_loan_id', $loan->id)->update([
+            'employee_loan_id' => null,
+        ]);
+
+        LoanMigrationItem::query()->where('employee_loan_id', $loan->id)->delete();
+        LoanTransfer::query()->where('employee_loan_id', $loan->id)->delete();
+        LoanCollectionItem::query()->where('employee_loan_id', $loan->id)->delete();
+
+        $loan->installments()->delete();
+        $loan->transactions()->delete();
+        $loan->delete();
     }
 
     protected function rollbackLoanCore(EmployeeLoan $loan): void

@@ -6,9 +6,11 @@ use App\Models\Employee;
 use App\Models\EmployeeLoan;
 use App\Models\EmployeePfTransaction;
 use App\Models\LoanApplication;
+use App\Models\LoanApplicationRecommendation;
 use App\Models\LoanPolicy;
 use App\Support\LoanCycle;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class LoanApplicationService
@@ -221,6 +223,28 @@ class LoanApplicationService
         ]);
 
         return $application->fresh();
+    }
+
+    public function deleteApplication(LoanApplication $application): void
+    {
+        DB::transaction(function () use ($application) {
+            $application = LoanApplication::query()->whereKey($application->id)->lockForUpdate()->firstOrFail();
+
+            if ($application->employee_loan_id) {
+                $loan = EmployeeLoan::query()->whereKey($application->employee_loan_id)->lockForUpdate()->first();
+                if ($loan) {
+                    app(EmployeeLoanService::class)->deleteLoanCore($loan, false);
+                }
+            }
+
+            $linkedLoans = EmployeeLoan::query()->where('loan_application_id', $application->id)->get();
+            foreach ($linkedLoans as $l) {
+                app(EmployeeLoanService::class)->deleteLoanCore($l, false);
+            }
+
+            LoanApplicationRecommendation::query()->where('loan_application_id', $application->id)->delete();
+            $application->delete();
+        });
     }
 
     public function assertEmployeeCanTakeLoan(int $employeeId, LoanPolicy $policy, ?int $ignoreApplicationId = null, bool $allowParallelMotorcycle = false): void

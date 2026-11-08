@@ -138,7 +138,7 @@ class EmployeePfLoanApplicationController extends Controller
                 'applied_amount' => (float) $loan_application->applied_amount,
                 'rejection_reason' => $loan_application->rejection_reason,
             ],
-            'form' => $this->pfLoans->withCurrentGrossSalary($form, $loan_application->employee),
+            'form' => $this->pfLoans->formForApplication($loan_application),
             'review' => [
                 'can_act' => $this->motorcycle->canReview($user, $loan_application),
                 'has_signature' => $this->motorcycle->hasSealAndSignature($user),

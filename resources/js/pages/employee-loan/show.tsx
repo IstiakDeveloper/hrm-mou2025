@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, BookOpen, RotateCcw, XCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { hasAppPermission } from '@/lib/permissions';
+import { hasAppPermission, isSuperAdmin } from '@/lib/permissions';
 import { usePage } from '@inertiajs/react';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -96,6 +96,11 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
         router.post(route('employee-loans.rollback', loan.id));
     };
 
+    const deleteLoan = () => {
+        if (!confirm(`Are you sure you want to permanently delete loan ${loan.loan_number}? All installments and transaction records will be permanently removed. This cannot be undone.`)) return;
+        router.delete(route('employee-loans.destroy', loan.id));
+    };
+
     return (
         <EmployeeLoanLayout title={loan.loan_number} activeTab="register" description={loan.loan_type_label}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -124,6 +129,11 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                     {loan.status === 'cancelled' && loan.can_rollback && (
                         <Button size="sm" variant="outline" className="h-7 text-xs text-red-600" onClick={rollbackLoan}>
                             <RotateCcw className="mr-1 h-3 w-3" /> Rollback
+                        </Button>
+                    )}
+                    {isSuperAdmin(auth) && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 hover:bg-red-50 border-red-200" onClick={deleteLoan}>
+                            <Trash2 className="mr-1 h-3 w-3" /> Delete loan
                         </Button>
                     )}
                 </div>

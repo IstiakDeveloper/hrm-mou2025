@@ -565,6 +565,18 @@ class EmployeeLoanController extends Controller
             ->with('success', 'Loan rolled back. Schedule and ledger were removed.');
     }
 
+    public function destroy(Request $request, EmployeeLoan $employee_loan)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403, 'Only Super Admin can delete loans.');
+
+        $loanNumber = $employee_loan->loan_number;
+        $this->loanService->deleteLoan($employee_loan);
+
+        return redirect()
+            ->route('employee-loans.index')
+            ->with('success', "Loan {$loanNumber} deleted successfully.");
+    }
+
     /**
      * @return list<array{value: string, label: string}>
      */
