@@ -7,6 +7,7 @@ use App\Models\Demotion;
 use App\Models\Employee;
 use App\Models\EmployeeAssignmentHistory;
 use App\Models\Promotion;
+use App\Models\Redesignation;
 use App\Models\SalaryIncrementLine;
 use App\Models\Separation;
 use App\Models\Transfer;
@@ -678,6 +679,24 @@ class EmployeeAssignmentHistoryService
                 ];
             });
 
+        Redesignation::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('effective_date')
+            ->orderBy('id')
+            ->get()
+            ->each(function (Redesignation $redesignation) use (&$events) {
+                $events[] = [
+                    'date' => Carbon::parse($redesignation->effective_date ?? $redesignation->updated_at)->startOfDay(),
+                    'source_type' => EmployeeAssignmentHistory::SOURCE_REDESIGNATION,
+                    'source_id' => $redesignation->id,
+                    'notes' => 'Re designation',
+                    'patch' => array_filter([
+                        'department_id' => $redesignation->to_department_id,
+                        'designation_id' => $redesignation->to_designation_id,
+                    ], fn ($v) => $v !== null && $v !== ''),
+                ];
+            });
+
         Confirmation::query()
             ->where('employee_id', $employee->id)
             ->where('status', 'completed')
@@ -923,6 +942,47 @@ class EmployeeAssignmentHistoryService
             }
             if ($firstIncrement->from_basic !== null) {
                 $state['basic_salary'] = $firstIncrement->from_basic;
+            }
+        }
+
+        $firstRedesignation = Redesignation::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('effective_date')
+            ->orderBy('id')
+            ->first();
+
+        if ($firstRedesignation) {
+            $redesDate = Carbon::parse($firstRedesignation->effective_date)->startOfDay();
+            $transferDate = $firstTransfer?->effective_date
+                ? Carbon::parse($firstTransfer->effective_date)->startOfDay()
+                : null;
+
+            if (
+                $firstRedesignation->from_department_id
+                && ($transferDate === null || $redesDate->lt($transferDate))
+            ) {
+                $state['department_id'] = $firstRedesignation->from_department_id;
+            }
+
+            $designationDates = array_filter([
+                $firstTransfer?->effective_date,
+                $firstPromotion?->effective_date,
+                $firstDemotion?->effective_date,
+                $firstConfirmation?->confirmation_date,
+            ]);
+            $earliestDesignation = null;
+            foreach ($designationDates as $date) {
+                $parsed = Carbon::parse($date)->startOfDay();
+                if ($earliestDesignation === null || $parsed->lt($earliestDesignation)) {
+                    $earliestDesignation = $parsed;
+                }
+            }
+
+            if (
+                $firstRedesignation->from_designation_id
+                && ($earliestDesignation === null || $redesDate->lt($earliestDesignation))
+            ) {
+                $state['designation_id'] = $firstRedesignation->from_designation_id;
             }
         }
 

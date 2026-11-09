@@ -216,6 +216,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/probation-increment-evaluations') ||
         p.startsWith('/trainee-evaluations') ||
         p.startsWith('/employees') ||
+        p.startsWith('/redesignations') ||
         p.startsWith('/confirmations') ||
         p.startsWith('/separations') ||
         p.startsWith('/branches') ||

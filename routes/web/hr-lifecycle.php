@@ -4,6 +4,7 @@ use App\Http\Controllers\Confirmation\ConfirmationController;
 use App\Http\Controllers\Demotion\DemotionController;
 use App\Http\Controllers\Payroll\SalaryIncrementController;
 use App\Http\Controllers\Promotion\PromotionController;
+use App\Http\Controllers\Redesignation\RedesignationController;
 use App\Http\Controllers\Separation\SeparationController;
 use App\Http\Controllers\Transfer\TransferController;
 use Illuminate\Support\Facades\Route;
@@ -113,6 +114,25 @@ Route::middleware(['permission:demotions.view'])->prefix('demotions')->name('dem
     Route::middleware(['permission:demotions.approve'])->group(function () {
         Route::post('/{demotion}/approve', [DemotionController::class, 'approve'])->name('approve');
         Route::post('/{demotion}/reject', [DemotionController::class, 'reject'])->name('reject');
+    });
+});
+
+// ====================
+// RE DESIGNATION (department and designation only, no approval)
+// ====================
+Route::middleware(['permission:redesignations.view'])->prefix('redesignations')->name('redesignations.')->group(function () {
+    Route::get('/', [RedesignationController::class, 'index'])->name('index');
+
+    Route::middleware(['permission:redesignations.create'])->group(function () {
+        Route::get('/create', [RedesignationController::class, 'create'])->name('create');
+        Route::post('/', [RedesignationController::class, 'store'])->name('store');
+    });
+
+    Route::get('/{redesignation}', [RedesignationController::class, 'show'])->name('show');
+
+    Route::middleware(['permission:redesignations.edit'])->group(function () {
+        Route::get('/{redesignation}/edit', [RedesignationController::class, 'edit'])->name('edit');
+        Route::put('/{redesignation}', [RedesignationController::class, 'update'])->name('update');
     });
 });
 

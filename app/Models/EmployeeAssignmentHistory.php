@@ -17,6 +17,8 @@ class EmployeeAssignmentHistory extends Model
 
     public const SOURCE_DEMOTION = 'demotion';
 
+    public const SOURCE_REDESIGNATION = 'redesignation';
+
     public const SOURCE_CONFIRMATION = 'confirmation';
 
     public const SOURCE_INCREMENT = 'increment';
