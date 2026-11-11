@@ -16,10 +16,8 @@ class RedesignationApplyService
         $redesignation->loadMissing(['employee.designation', 'employee.branch', 'employee.user']);
         $employee = $redesignation->employee;
 
-        if ((int) $employee->designation_id !== (int) $redesignation->to_designation_id) {
-            $employee->last_designation_id = $employee->designation_id;
-            $employee->designation_id = $redesignation->to_designation_id;
-        }
+        $employee->designation_id = $redesignation->to_designation_id;
+        $employee->last_designation_id = $redesignation->to_designation_id;
 
         if ((int) $employee->department_id !== (int) $redesignation->to_department_id) {
             $employee->department_id = $redesignation->to_department_id;

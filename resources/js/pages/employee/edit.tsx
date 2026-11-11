@@ -158,6 +158,8 @@ export interface JobHistoryFormRow {
     event_date: string;
     from_designation_id: string;
     to_designation_id: string;
+    from_department_id: string;
+    to_department_id: string;
     from_branch_id: string;
     to_branch_id: string;
     remarks: string;
@@ -178,6 +180,7 @@ const JOB_HISTORY_SECTIONS = [
     { value: 'transfer', label: 'Transfer', multiple: true },
     { value: 'promotion', label: 'Promotion', multiple: true },
     { value: 'demotion', label: 'Demotion', multiple: true },
+    { value: 'redesignation', label: 'Redesignation', multiple: true },
     { value: 'left', label: 'Left / Separation', multiple: false },
     { value: 'final_payment', label: 'Final Payment', multiple: false },
 ] as const;
@@ -234,7 +237,7 @@ function jobHistoryRowHasContent(row: JobHistoryFormRow): boolean {
         return String(row.amount_received ?? '').trim() !== '';
     }
 
-    return ['from_designation_id', 'to_designation_id', 'from_branch_id', 'to_branch_id', 'remarks'].some(
+    return ['from_designation_id', 'to_designation_id', 'from_department_id', 'to_department_id', 'from_branch_id', 'to_branch_id', 'remarks'].some(
         (key) => String((row as Record<string, unknown>)[key] ?? '').trim() !== '',
     );
 }
@@ -300,6 +303,8 @@ function emptyJobHistoryFormRow(
                 : eventType === 'confirmation'
                   ? String(extras?.confirmationDesignationId ?? '')
                   : '',
+        from_department_id: '',
+        to_department_id: '',
         from_branch_id: '',
         to_branch_id: eventType === 'joining' ? String(extras?.joiningBranchId ?? '') : '',
         remarks: eventType === 'left' ? resolveSeparationType('', dropoutReason) : '',
@@ -435,10 +440,14 @@ function generalFieldsFromJobHistories(rows: JobHistoryFormRow[]): Partial<Emplo
             (row.event_type === 'joining' ||
                 row.event_type === 'confirmation' ||
                 row.event_type === 'promotion' ||
-                row.event_type === 'demotion') &&
+                row.event_type === 'demotion' ||
+                row.event_type === 'redesignation') &&
             row.to_designation_id
         ) {
             extra.last_designation_id = row.to_designation_id;
+        }
+        if (row.event_type === 'redesignation' && row.to_department_id) {
+            extra.department_id = row.to_department_id;
         }
     }
 
@@ -749,6 +758,8 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
                     event_date: String(h.event_date ?? '').slice(0, 10),
                     from_designation_id: h.from_designation_id != null ? String(h.from_designation_id) : '',
                     to_designation_id: h.to_designation_id != null ? String(h.to_designation_id) : '',
+                    from_department_id: h.from_department_id != null ? String(h.from_department_id) : '',
+                    to_department_id: h.to_department_id != null ? String(h.to_department_id) : '',
                     from_branch_id: h.from_branch_id != null ? String(h.from_branch_id) : '',
                     to_branch_id: h.to_branch_id != null ? String(h.to_branch_id) : '',
                     remarks: eventType === 'left' ? resolveSeparationType(remarks, employee.dropout_reason) : remarks,
@@ -1078,11 +1089,13 @@ function JobHistoryTypeFields({
     onPatch,
     branchItems,
     desigItems,
+    deptItems,
 }: {
     row: JobHistoryFormRow;
     onPatch: (patch: Partial<JobHistoryFormRow>) => void;
     branchItems: ComboSelectItem<string>[];
     desigItems: ComboSelectItem<string>[];
+    deptItems: ComboSelectItem<string>[];
 }) {
     const type = row.event_type;
 
@@ -1161,6 +1174,43 @@ function JobHistoryTypeFields({
 
             {(type === 'promotion' || type === 'demotion') && (
                 <>
+                    <FormField label="From Designation">
+                        <ComboSelect
+                            items={desigItems}
+                            value={row.from_designation_id || null}
+                            onChange={(val) => onPatch({ from_designation_id: val ? String(val) : '' })}
+                            placeholder="From Designation"
+                        />
+                    </FormField>
+                    <FormField label="To Designation">
+                        <ComboSelect
+                            items={desigItems}
+                            value={row.to_designation_id || null}
+                            onChange={(val) => onPatch({ to_designation_id: val ? String(val) : '' })}
+                            placeholder="To Designation"
+                        />
+                    </FormField>
+                </>
+            )}
+
+            {type === 'redesignation' && (
+                <>
+                    <FormField label="From Department">
+                        <ComboSelect
+                            items={deptItems}
+                            value={row.from_department_id || null}
+                            onChange={(val) => onPatch({ from_department_id: val ? String(val) : '' })}
+                            placeholder="From Department"
+                        />
+                    </FormField>
+                    <FormField label="To Department">
+                        <ComboSelect
+                            items={deptItems}
+                            value={row.to_department_id || null}
+                            onChange={(val) => onPatch({ to_department_id: val ? String(val) : '' })}
+                            placeholder="To Department"
+                        />
+                    </FormField>
                     <FormField label="From Designation">
                         <ComboSelect
                             items={desigItems}
@@ -2818,7 +2868,7 @@ export default function EmployeeEdit({
                                                     Branch, joining designation, last designation, joining date and confirmation date are updated from this tab.
                                                 </p>
                                                 <p className="mt-1 text-xs text-zinc-500">
-                                                    Fill the 7 history types below. Transfer, promotion and demotion can have extra rows with +.
+                                                    Fill the 8 history types below. Transfer, promotion, demotion and redesignation can have extra rows with +.
                                                 </p>
                                             </div>
                                         </div>
@@ -2831,7 +2881,7 @@ export default function EmployeeEdit({
                                                         <Clock className="h-4 w-4 text-emerald-600" /> Job History
                                                     </h3>
                                                     <p className="mt-0.5 text-xs text-zinc-400">
-                                                        One row per type. Delete clears the fields but keeps them visible; empty sections are not saved. Use + only for extra transfer, promotion or demotion.
+                                                        One row per type. Delete clears the fields but keeps them visible; empty sections are not saved. Use + only for extra transfer, promotion, demotion or redesignation.
                                                     </p>
                                                 </div>
 
@@ -2918,6 +2968,7 @@ export default function EmployeeEdit({
                                                                             row={row}
                                                                             branchItems={branchItems}
                                                                             desigItems={desigItems}
+                                                                            deptItems={deptItems}
                                                                             onPatch={(patch) => {
                                                                                 setData((prev) => {
                                                                                     const updated = [...prev.job_histories];

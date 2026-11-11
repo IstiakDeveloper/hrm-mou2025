@@ -15,6 +15,8 @@ class EmployeeJobHistory extends Model
         'event_date',
         'from_designation_id',
         'to_designation_id',
+        'from_department_id',
+        'to_department_id',
         'from_branch_id',
         'to_branch_id',
         'remarks',
@@ -43,6 +45,16 @@ class EmployeeJobHistory extends Model
     public function toDesignation()
     {
         return $this->belongsTo(Designation::class, 'to_designation_id');
+    }
+
+    public function fromDepartment()
+    {
+        return $this->belongsTo(Department::class, 'from_department_id');
+    }
+
+    public function toDepartment()
+    {
+        return $this->belongsTo(Department::class, 'to_department_id');
     }
 
     public function fromBranch()

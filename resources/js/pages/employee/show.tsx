@@ -142,10 +142,12 @@ interface Employee extends EmployeeNameFields {
 
 export type JobHistoryTimelineItem = {
     id: string;
-    event_type: 'joining' | 'confirmation' | 'transfer' | 'promotion' | 'demotion' | 'left' | 'final_payment';
+    event_type: 'joining' | 'confirmation' | 'transfer' | 'promotion' | 'demotion' | 'redesignation' | 'left' | 'final_payment';
     event_date: string;
     from_designation_name?: string | null;
     to_designation_name?: string | null;
+    from_department_name?: string | null;
+    to_department_name?: string | null;
     from_branch_name?: string | null;
     to_branch_name?: string | null;
     remarks?: string | null;
@@ -155,6 +157,7 @@ export type JobHistoryTimelineItem = {
     transfer_id?: number | null;
     promotion_id?: number | null;
     demotion_id?: number | null;
+    redesignation_id?: number | null;
     is_manual: boolean;
 };
 
@@ -762,6 +765,8 @@ export default function EmployeeShow({
                                                     return <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 text-[9px] py-0 px-1.5 font-bold">Promotion</Badge>;
                                                 case 'demotion':
                                                     return <Badge className="bg-orange-100 text-orange-900 border-orange-300 text-[9px] py-0 px-1.5 font-bold">Demotion</Badge>;
+                                                case 'redesignation':
+                                                    return <Badge className="bg-cyan-100 text-cyan-900 border-cyan-300 text-[9px] py-0 px-1.5 font-bold">Redesignation</Badge>;
                                                 case 'left':
                                                     return <Badge className="bg-rose-100 text-rose-900 border-rose-300 text-[9px] py-0 px-1.5 font-bold">Left / Separation</Badge>;
                                                 case 'final_payment':
@@ -784,6 +789,7 @@ export default function EmployeeShow({
                                                                 {item.event_type === 'transfer' && `Transferred from ${item.from_branch_name || '—'} to ${item.to_branch_name || '—'}`}
                                                                 {item.event_type === 'promotion' && `Promoted ${item.from_designation_name ? `from ${item.from_designation_name}` : ''} as ${item.to_designation_name || 'Designation'}`}
                                                                 {item.event_type === 'demotion' && `Demoted ${item.from_designation_name ? `from ${item.from_designation_name}` : ''} as ${item.to_designation_name || 'Designation'}`}
+                                                                {item.event_type === 'redesignation' && `Redesignated from ${item.from_department_name || '—'} / ${item.from_designation_name || '—'} to ${item.to_department_name || '—'} / ${item.to_designation_name || '—'}`}
                                                                 {item.event_type === 'left' && `Left from Branch ${item.from_branch_name || '—'}`}
                                                                 {item.event_type === 'final_payment' && `Final Payment Settled`}
                                                             </span>
@@ -832,6 +838,13 @@ export default function EmployeeShow({
                                                     ) : null}
                                                     {item.demotion_id ? (
                                                         <Link href={route('demotions.show', item.demotion_id)} className="shrink-0 no-print">
+                                                            <Button variant="outline" size="sm" className="h-6 text-[10px] border-slate-300 font-bold text-slate-800 px-2">
+                                                                View Order
+                                                            </Button>
+                                                        </Link>
+                                                    ) : null}
+                                                    {item.redesignation_id ? (
+                                                        <Link href={route('redesignations.show', item.redesignation_id)} className="shrink-0 no-print">
                                                             <Button variant="outline" size="sm" className="h-6 text-[10px] border-slate-300 font-bold text-slate-800 px-2">
                                                                 View Order
                                                             </Button>

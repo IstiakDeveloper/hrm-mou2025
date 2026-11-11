@@ -21,6 +21,7 @@ use App\Models\Payslip;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\PromotionHistory;
+use App\Models\RedesignationHistory;
 use App\Models\RegionalOffice;
 use App\Models\Role;
 use App\Models\SalaryGrade;
@@ -987,7 +988,7 @@ class EmployeeController extends Controller
             return $amount !== null && $amount !== '';
         }
 
-        foreach (['from_designation_id', 'to_designation_id', 'from_branch_id', 'to_branch_id', 'remarks'] as $key) {
+        foreach (['from_designation_id', 'to_designation_id', 'from_department_id', 'to_department_id', 'from_branch_id', 'to_branch_id', 'remarks'] as $key) {
             if (trim((string) ($row[$key] ?? '')) !== '') {
                 return true;
             }
@@ -3043,6 +3044,8 @@ class EmployeeController extends Controller
                 'event_date' => $h->event_date?->format('Y-m-d') ?? '',
                 'from_designation_id' => $h->from_designation_id ? (string) $h->from_designation_id : '',
                 'to_designation_id' => $h->to_designation_id ? (string) $h->to_designation_id : '',
+                'from_department_id' => $h->from_department_id ? (string) $h->from_department_id : '',
+                'to_department_id' => $h->to_department_id ? (string) $h->to_department_id : '',
                 'from_branch_id' => $h->from_branch_id ? (string) $h->from_branch_id : '',
                 'to_branch_id' => $h->to_branch_id ? (string) $h->to_branch_id : '',
                 'remarks' => $h->remarks ?? '',
@@ -3141,6 +3144,34 @@ class EmployeeController extends Controller
                     'from_branch_id' => '',
                     'to_branch_id' => '',
                     'remarks' => 'System Demotion',
+                ];
+            }
+        }
+
+        $sysRedesignations = RedesignationHistory::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('redesignation_date', 'asc')
+            ->get();
+        foreach ($sysRedesignations as $rh) {
+            $rDate = $rh->redesignation_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryRows as $row) {
+                if ($row['event_type'] === 'redesignation' && $row['event_date'] === $rDate) {
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded && $rDate) {
+                $jobHistoryRows[] = [
+                    'event_type' => 'redesignation',
+                    'event_date' => $rDate,
+                    'from_designation_id' => $rh->from_designation_id ? (string) $rh->from_designation_id : '',
+                    'to_designation_id' => $rh->to_designation_id ? (string) $rh->to_designation_id : '',
+                    'from_department_id' => $rh->from_department_id ? (string) $rh->from_department_id : '',
+                    'to_department_id' => $rh->to_department_id ? (string) $rh->to_department_id : '',
+                    'from_branch_id' => '',
+                    'to_branch_id' => '',
+                    'remarks' => 'System Re designation',
                 ];
             }
         }
@@ -3421,6 +3452,8 @@ class EmployeeController extends Controller
                 'job_histories.*.event_date' => 'nullable|date',
                 'job_histories.*.from_designation_id' => 'nullable|exists:designations,id',
                 'job_histories.*.to_designation_id' => 'nullable|exists:designations,id',
+                'job_histories.*.from_department_id' => 'nullable|exists:departments,id',
+                'job_histories.*.to_department_id' => 'nullable|exists:departments,id',
                 'job_histories.*.from_branch_id' => 'nullable|exists:branches,id',
                 'job_histories.*.to_branch_id' => 'nullable|exists:branches,id',
                 'job_histories.*.remarks' => 'nullable|string',
@@ -3772,6 +3805,8 @@ class EmployeeController extends Controller
                         'event_date' => $date,
                         'from_designation_id' => ! empty($jh['from_designation_id']) ? $jh['from_designation_id'] : null,
                         'to_designation_id' => ! empty($jh['to_designation_id']) ? $jh['to_designation_id'] : null,
+                        'from_department_id' => ! empty($jh['from_department_id']) ? $jh['from_department_id'] : null,
+                        'to_department_id' => ! empty($jh['to_department_id']) ? $jh['to_department_id'] : null,
                         'from_branch_id' => ! empty($jh['from_branch_id']) ? $jh['from_branch_id'] : null,
                         'to_branch_id' => ! empty($jh['to_branch_id']) ? $jh['to_branch_id'] : null,
                         'remarks' => $type === 'left'
@@ -3813,9 +3848,12 @@ class EmployeeController extends Controller
                         }
                         $coreUpdates['current_branch_id'] = $jh['to_branch_id'];
                     }
-                    if (in_array($type, ['joining', 'confirmation', 'promotion', 'demotion'], true) && ! empty($jh['to_designation_id'])) {
+                    if (in_array($type, ['joining', 'confirmation', 'promotion', 'demotion', 'redesignation'], true) && ! empty($jh['to_designation_id'])) {
                         $coreUpdates['last_designation_id'] = $jh['to_designation_id'];
                         $coreUpdates['designation_id'] = $jh['to_designation_id'];
+                    }
+                    if ($type === 'redesignation' && ! empty($jh['to_department_id'])) {
+                        $coreUpdates['department_id'] = $jh['to_department_id'];
                     }
                 }
 
@@ -3993,8 +4031,28 @@ class EmployeeController extends Controller
             ->limit(50)
             ->get();
 
+        $redesignationHistories = RedesignationHistory::query()
+            ->with([
+                'fromDepartment:id,name',
+                'toDepartment:id,name',
+                'fromDesignation:id,name',
+                'toDesignation:id,name',
+                'redesignation:id,order_no,effective_date',
+            ])
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('redesignation_date')
+            ->limit(50)
+            ->get();
+
         $manualJobHistories = EmployeeJobHistory::query()
-            ->with(['fromDesignation:id,name', 'toDesignation:id,name', 'fromBranch:id,name', 'toBranch:id,name'])
+            ->with([
+                'fromDesignation:id,name',
+                'toDesignation:id,name',
+                'fromDepartment:id,name',
+                'toDepartment:id,name',
+                'fromBranch:id,name',
+                'toBranch:id,name',
+            ])
             ->where('employee_id', $employee->id)
             ->get();
 
@@ -4015,6 +4073,8 @@ class EmployeeController extends Controller
                 'event_date' => $mDate,
                 'from_designation_name' => $mh->fromDesignation?->name,
                 'to_designation_name' => $mh->toDesignation?->name,
+                'from_department_name' => $mh->fromDepartment?->name,
+                'to_department_name' => $mh->toDepartment?->name,
                 'from_branch_name' => $mh->fromBranch?->name,
                 'to_branch_name' => $mh->toBranch?->name,
                 'remarks' => $mh->remarks,
@@ -4135,6 +4195,50 @@ class EmployeeController extends Controller
                     'to_designation_name' => $dh->toDesignation?->name,
                     'order_no' => $dh->demotion?->demotion_order_no,
                     'demotion_id' => $dh->demotion_id,
+                    'is_manual' => false,
+                ];
+            }
+        }
+
+        foreach ($redesignationHistories as $rh) {
+            $rDate = $rh->redesignation_date?->format('Y-m-d');
+            if (! $rDate) {
+                continue;
+            }
+            $alreadyAdded = false;
+            foreach ($jobHistoryTimeline as $index => $item) {
+                if ($item['event_type'] === 'redesignation' && $item['event_date'] === $rDate) {
+                    if (empty($item['redesignation_id'])) {
+                        $jobHistoryTimeline[$index]['order_no'] = $rh->redesignation?->order_no;
+                        $jobHistoryTimeline[$index]['redesignation_id'] = $rh->redesignation_id;
+                    }
+                    if (empty($item['from_department_name'])) {
+                        $jobHistoryTimeline[$index]['from_department_name'] = $rh->fromDepartment?->name;
+                    }
+                    if (empty($item['to_department_name'])) {
+                        $jobHistoryTimeline[$index]['to_department_name'] = $rh->toDepartment?->name;
+                    }
+                    if (empty($item['from_designation_name'])) {
+                        $jobHistoryTimeline[$index]['from_designation_name'] = $rh->fromDesignation?->name;
+                    }
+                    if (empty($item['to_designation_name'])) {
+                        $jobHistoryTimeline[$index]['to_designation_name'] = $rh->toDesignation?->name;
+                    }
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded) {
+                $jobHistoryTimeline[] = [
+                    'id' => 'sys-redesignation-'.$rh->id,
+                    'event_type' => 'redesignation',
+                    'event_date' => $rDate,
+                    'from_department_name' => $rh->fromDepartment?->name,
+                    'to_department_name' => $rh->toDepartment?->name,
+                    'from_designation_name' => $rh->fromDesignation?->name,
+                    'to_designation_name' => $rh->toDesignation?->name,
+                    'order_no' => $rh->redesignation?->order_no,
+                    'redesignation_id' => $rh->redesignation_id,
                     'is_manual' => false,
                 ];
             }
