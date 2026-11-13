@@ -85,8 +85,10 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
   });
 
   const syncForm = useForm({});
+  const resetForm = useForm({ confirmed: true });
   const lineRoleForm = useForm({});
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +100,13 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
   const handleSyncDefaults = () => {
     syncForm.post(route('admin.roles.sync-defaults'), {
       preserveScroll: true,
+    });
+  };
+
+  const handleResetDefaults = () => {
+    resetForm.post(route('admin.roles.reset-defaults'), {
+      preserveScroll: true,
+      onSuccess: () => setResetOpen(false),
     });
   };
 
@@ -130,35 +139,31 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
       <PageSurface>
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
-            <p className="mt-1 text-gray-500">
-              Assign Line Roles syncs BM / RM / ZM, Head Office department heads, and removes wrongly mapped Microfinance Director / AD roles. Sync Default Roles refreshes permissions only.
+            <h1 className="text-3xl font-bold text-gray-900">Roles</h1>
+            <p className="mt-1 max-w-xl text-gray-500">
+              A role is a set of menus. Open a role to choose which modules and pages that role can use.
             </p>
           </div>
           <div className="flex items-center gap-2">
             {can_sync_defaults && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex items-center gap-1"
-                  disabled={lineRoleForm.processing}
-                  onClick={handleSyncLineRoles}
-                >
-                  <UserPlus className="h-4 w-4" />
-                  <span>{lineRoleForm.processing ? 'Assigning…' : 'Assign Line Roles'}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex items-center gap-1"
-                  disabled={syncForm.processing}
-                  onClick={handleSyncDefaults}
-                >
-                  <Shield className="h-4 w-4" />
-                  <span>{syncForm.processing ? 'Syncing…' : 'Sync Default Roles'}</span>
-                </Button>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline">Role tools</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem className="cursor-pointer" disabled={lineRoleForm.processing} onClick={handleSyncLineRoles}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Assign line roles
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" disabled={syncForm.processing} onClick={handleSyncDefaults}>
+                    <Shield className="mr-2 h-4 w-4" />
+                    Create missing default roles
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" disabled={resetForm.processing} onClick={() => setResetOpen(true)}>
+                    Restore default permissions
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             <Link href={route('admin.roles.create')}>
               <Button className="flex items-center gap-1">
@@ -386,6 +391,29 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
       </PageSurface>
 
       {/* Delete Confirmation Dialog */}
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset default role permissions?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This rewrites permissions and the payroll block for every default role from config. Custom roles and section access are left unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleResetDefaults();
+              }}
+              disabled={resetForm.processing}
+            >
+              {resetForm.processing ? 'Resetting…' : 'Reset permissions'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!roleToDelete} onOpenChange={(open) => !open && setRoleToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

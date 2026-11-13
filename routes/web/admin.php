@@ -234,6 +234,9 @@ use Inertia\Inertia;
             Route::post('/sync-defaults', [RoleController::class, 'syncDefaultRoles'])
                 ->name('sync-defaults')
                 ->middleware('permission:roles.edit');
+            Route::post('/reset-defaults', [RoleController::class, 'resetDefaultRoles'])
+                ->name('reset-defaults')
+                ->middleware('permission:roles.edit');
             Route::post('/sync-line-roles', [RoleController::class, 'syncLineRoles'])
                 ->name('sync-line-roles')
                 ->middleware('permission:roles.edit');

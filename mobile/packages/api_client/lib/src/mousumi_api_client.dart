@@ -434,6 +434,14 @@ class MousumiApiClient {
         .toList(growable: false);
   }
 
+  Future<List<Map<String, dynamic>>> myLogBook() async {
+    final response = await _dio.get<Map<String, dynamic>>('log-book/mine');
+    return (response.data?['data'] as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: false);
+  }
+
   Future<Map<String, dynamic>> employeeMe() async {
     final response = await _dio.get<Map<String, dynamic>>('employees/me');
     return Map<String, dynamic>.from(response.data?['employee'] as Map? ?? {});

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 class OfficeOpenDate extends Model
@@ -20,9 +21,20 @@ class OfficeOpenDate extends Model
     /** @var array<string, true>|null */
     private static ?array $openDates = null;
 
+    protected static function booted(): void
+    {
+        $forget = static function (): void {
+            self::forgetCache();
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
+
     public static function forgetCache(): void
     {
         self::$openDates = null;
+        Cache::forget('office-open-dates:v1');
     }
 
     public static function isOpen(Carbon|string $date): bool
@@ -49,6 +61,13 @@ class OfficeOpenDate extends Model
             return self::$openDates;
         }
 
+        if (! app()->runningUnitTests()) {
+            $cached = Cache::get('office-open-dates:v1');
+            if (is_array($cached)) {
+                return self::$openDates = $cached;
+            }
+        }
+
         if (! Schema::hasTable('office_open_dates')) {
             return self::$openDates = [];
         }
@@ -61,6 +80,12 @@ class OfficeOpenDate extends Model
             $set[$ymd] = true;
         }
 
-        return self::$openDates = $set;
+        self::$openDates = $set;
+
+        if (! app()->runningUnitTests()) {
+            Cache::put('office-open-dates:v1', $set, 600);
+        }
+
+        return self::$openDates;
     }
 }

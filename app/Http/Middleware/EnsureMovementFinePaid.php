@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\MovementPenalty;
+use App\Support\MovementFineGate;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,7 +13,7 @@ class EnsureMovementFinePaid
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -45,18 +45,7 @@ class EnsureMovementFinePaid
             return $next($request);
         }
 
-        // Check if this user or employee has an active unpaid/pending/rejected movement penalty
-        $activePenalty = MovementPenalty::query()
-            ->where(function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-                if ($user->employee_id) {
-                    $query->orWhere('employee_id', $user->employee_id);
-                }
-            })
-            ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
-            ->first();
-
-        if ($activePenalty) {
+        if (MovementFineGate::blockingPenaltyId($user)) {
             // Redirect to the movement fine payment page
             return redirect()->route('movement.penalty.payment');
         }

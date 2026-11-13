@@ -1,12 +1,11 @@
 <?php
 
-use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
 test('password can be updated', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)
@@ -25,7 +24,7 @@ test('password can be updated', function () {
 });
 
 test('password page can be rendered', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)
@@ -35,7 +34,7 @@ test('password page can be rendered', function () {
 });
 
 test('password can be updated to a short employee password', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)
@@ -54,7 +53,7 @@ test('password can be updated to a short employee password', function () {
 });
 
 test('correct password must be provided to update password', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)

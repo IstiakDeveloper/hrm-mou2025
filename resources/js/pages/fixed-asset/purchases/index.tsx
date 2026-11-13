@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
-import { isAccountant, isSuperAdmin, hasAppPermission } from '@/lib/permissions';
+import { hasAppPermission } from '@/lib/permissions';
 import { formatDisplayDate } from '@/lib/display-date';
 import type { SharedData } from '@/types';
 import { formatTakaWhole } from '@/lib/taka-format';
@@ -58,9 +58,9 @@ export default function AssetPurchaseIndex({
     const [search, setSearch] = useState(filters.search || '');
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    const canCreate = hasAppPermission(auth, 'fixed-assets.create') || isAccountant(auth) || isSuperAdmin(auth);
-    const canEdit = hasAppPermission(auth, 'fixed-assets.edit') || isAccountant(auth) || isSuperAdmin(auth);
-    const canDelete = hasAppPermission(auth, 'fixed-assets.delete') || isAccountant(auth) || isSuperAdmin(auth);
+    const canCreate = hasAppPermission(auth, 'fixed-assets.create');
+    const canEdit = hasAppPermission(auth, 'fixed-assets.edit');
+    const canDelete = hasAppPermission(auth, 'fixed-assets.delete');
 
     const apply = (extra: Record<string, string | undefined> = {}) =>
         router.get(route('fixed-asset.purchases.index'), { search, ...extra }, { preserveState: true });

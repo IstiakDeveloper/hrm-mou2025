@@ -96,7 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bootstrap = session.bootstrap;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('নিরাপত্তা')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [

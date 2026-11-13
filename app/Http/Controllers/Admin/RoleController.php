@@ -46,14 +46,29 @@ class RoleController extends Controller
     }
 
     /**
-     * Re-apply permissions for all roles defined in config/default_roles.php.
+     * Create default roles that are missing. Does not overwrite saved permissions.
      */
     public function syncDefaultRoles()
     {
         $roles = PermissionRegistry::syncDefaultRoles();
 
         return redirect()->route('admin.roles.index')
-            ->with('success', 'Synced '.count($roles).' default role(s) from config/default_roles.php.');
+            ->with('success', 'Checked '.count($roles).' default role(s). Existing permission choices were left unchanged.');
+    }
+
+    /**
+     * Rewrite default-role permissions from config. Requires an explicit confirmation.
+     */
+    public function resetDefaultRoles(Request $request)
+    {
+        $request->validate([
+            'confirmed' => 'accepted',
+        ]);
+
+        $roles = PermissionRegistry::resetDefaultRoles();
+
+        return redirect()->route('admin.roles.index')
+            ->with('success', 'Reset permissions for '.count($roles).' default role(s) from config/default_roles.php. Section access was not changed.');
     }
 
     /**
@@ -79,8 +94,7 @@ class RoleController extends Controller
     {
         return Inertia::render('admin/roles/create', [
             'permissions' => PermissionRegistry::labels(),
-            'permissions_by_category' => PermissionRegistry::labelsGroupedByCategory(),
-            'permission_categories' => PermissionRegistry::categories(),
+            'permission_sections' => PermissionRegistry::editorSections(),
             'sections' => SectionRegistry::sections(),
             'supports_section_locks' => SectionRegistry::supportsRoleSectionLocks(),
         ]);
@@ -96,6 +110,7 @@ class RoleController extends Controller
             'description' => 'nullable|string|max:500',
             'permissions' => 'nullable|array',
             'permissions.*' => ['string', Rule::in(PermissionRegistry::keys())],
+            'block_payroll_module' => 'nullable|boolean',
         ];
         if (SectionRegistry::supportsRoleSectionLocks()) {
             $rules['blocked_sections'] = 'nullable|array';
@@ -118,6 +133,7 @@ class RoleController extends Controller
             'name' => $request->name,
             'description' => $request->description,
             'permissions' => $permissions,
+            'block_payroll_module' => $request->boolean('block_payroll_module'),
         ];
         if (SectionRegistry::supportsRoleSectionLocks()) {
             $payload['blocked_sections'] = $blockedSections;
@@ -172,8 +188,7 @@ class RoleController extends Controller
                 'is_default' => PermissionRegistry::isDefaultRoleName($role->name),
             ]),
             'permissions' => PermissionRegistry::labels(),
-            'permissions_by_category' => PermissionRegistry::labelsGroupedByCategory(),
-            'permission_categories' => PermissionRegistry::categories(),
+            'permission_sections' => PermissionRegistry::editorSections(),
             'sections' => SectionRegistry::sections(),
             'supports_section_locks' => SectionRegistry::supportsRoleSectionLocks(),
         ]);
@@ -229,6 +244,7 @@ class RoleController extends Controller
             'description' => 'nullable|string|max:500',
             'permissions' => 'nullable|array',
             'permissions.*' => ['string', Rule::in(PermissionRegistry::keys())],
+            'block_payroll_module' => 'nullable|boolean',
         ];
         if (SectionRegistry::supportsRoleSectionLocks()) {
             $rules['blocked_sections'] = 'nullable|array';
@@ -236,25 +252,10 @@ class RoleController extends Controller
         }
         $request->validate($rules);
 
-        if ($isDefault) {
-            // Default roles: permissions come from sync; section access is independently editable.
-            if ($request->name !== $role->name) {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'Default system role names cannot be changed. Use Sync Default Roles to refresh permissions.');
-            }
-
-            $payload = [
-                'description' => $request->description,
-            ];
-            if (SectionRegistry::supportsRoleSectionLocks()) {
-                $payload['blocked_sections'] = SectionRegistry::filterValid($request->blocked_sections ?? []);
-            }
-
-            $role->update($payload);
-
-            return redirect()->route('admin.roles.index')
-                ->with('success', "Role '{$role->name}' updated. Permissions stay locked to Sync Default Roles; section access was saved.");
+        if ($isDefault && $request->name !== $role->name) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Default system role names cannot be changed.');
         }
 
         $oldPermissionCount = count($role->permissionList());
@@ -265,10 +266,13 @@ class RoleController extends Controller
         $newPermissionCount = count($permissions);
 
         $payload = [
-            'name' => $request->name,
             'description' => $request->description,
             'permissions' => $permissions,
+            'block_payroll_module' => $request->boolean('block_payroll_module'),
         ];
+        if (! $isDefault) {
+            $payload['name'] = $request->name;
+        }
         if (SectionRegistry::supportsRoleSectionLocks()) {
             $payload['blocked_sections'] = $blockedSections;
         }
@@ -346,7 +350,11 @@ class RoleController extends Controller
             try {
                 $role = Role::find($update['role_id']);
                 if ($role && PermissionRegistry::isDefaultRoleName($role->name)) {
-                    $errors[] = "Role ID {$update['role_id']}: default role permissions are locked; use Sync Default Roles.";
+                    $permissions = PermissionRegistry::filterValid($update['permissions']);
+                    $role->update([
+                        'permissions' => $permissions,
+                    ]);
+                    $updated++;
 
                     continue;
                 }

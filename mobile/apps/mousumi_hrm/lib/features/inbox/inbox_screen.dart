@@ -63,7 +63,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const SkeletonList()
               : _error != null
                   ? AppErrorPanel(message: _error!, onRetry: _load)
                   : TabBarView(
@@ -90,21 +90,32 @@ class _List extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: rows.isEmpty
-          ? ListView(children: const [SizedBox(height: 120), AppEmptyState(title: 'খালি')])
+          ? ListView(
+              children: const [
+                SizedBox(height: 80),
+                AppEmptyState(title: 'এখন কিছু নেই', icon: Icons.notifications_none),
+              ],
+            )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: rows.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final row = rows[index];
-                return ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: MousumiColors.border),
+                return SoftCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text('${row['title']}', style: Theme.of(context).textTheme.titleMedium)),
+                          if (row['read'] != true) const StatusChip(label: 'Unread', tone: StatusTone.warning),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text('${row['message'] ?? row['body'] ?? ''}', style: Theme.of(context).textTheme.bodyMedium),
+                    ],
                   ),
-                  title: Text('${row['title']}'),
-                  subtitle: Text('${row['message']}'),
-                  trailing: row['read'] == true ? null : const StatusChip(label: 'Unread'),
                 );
               },
             ),

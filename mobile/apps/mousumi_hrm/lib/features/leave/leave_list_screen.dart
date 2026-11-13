@@ -49,36 +49,47 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.reviewMode ? 'Leave অনুমোদন' : 'আমার Leave'),
-        actions: [
-          if (!widget.reviewMode)
-            IconButton(
-              onPressed: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LeaveApplyScreen()),
-                );
-                _load();
-              },
-              icon: const Icon(Icons.add),
-            ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? AppErrorPanel(message: _error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: _items.isEmpty
-                      ? ListView(
-                          children: const [
-                            SizedBox(height: 120),
-                            AppEmptyState(title: 'কোনো আবেদন নেই'),
-                          ],
-                        )
-                      : ListView.separated(
+    return EmployeePage(
+      title: widget.reviewMode ? 'অনুমোদন' : 'ছুটি',
+      subtitle: widget.reviewMode ? 'আপনার সিদ্ধান্তের অপেক্ষায়' : 'নিজের আবেদন',
+      loading: _loading,
+      error: _error,
+      onRetry: _load,
+      onRefresh: _load,
+      actions: [
+        if (!widget.reviewMode)
+          IconButton(
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const LeaveApplyScreen()),
+              );
+              _load();
+            },
+            icon: const Icon(Icons.add),
+          ),
+      ],
+      body: _items.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const SizedBox(height: 80),
+                AppEmptyState(
+                  title: widget.reviewMode ? 'এখন কিছু অপেক্ষায় নেই' : 'কোনো আবেদন নেই',
+                  message: widget.reviewMode ? null : 'নতুন ছুটির আবেদন করতে পারেন।',
+                  icon: Icons.event_busy,
+                  actionLabel: widget.reviewMode ? null : 'আবেদন করুন',
+                  onAction: widget.reviewMode
+                      ? null
+                      : () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const LeaveApplyScreen()),
+                          );
+                          _load();
+                        },
+                ),
+              ],
+            )
+          : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _items.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -121,7 +132,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                             );
                           },
                         ),
-                ),
     );
   }
 }

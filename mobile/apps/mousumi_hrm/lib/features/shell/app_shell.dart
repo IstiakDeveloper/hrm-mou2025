@@ -2,6 +2,7 @@ import 'package:app_core/app_core.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 
+import '../profile/profile_screen.dart';
 import '../attendance/attendance_screen.dart';
 import '../inbox/inbox_screen.dart';
 import '../leave/leave_list_screen.dart';
@@ -40,7 +41,15 @@ class _AppShellState extends State<AppShell> {
 
     return Scaffold(
       backgroundColor: MousumiColors.canvas,
-      body: SafeArea(child: pages[_index]),
+      body: SafeArea(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: KeyedSubtree(
+            key: ValueKey(_index),
+            child: pages[_index],
+          ),
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
@@ -65,7 +74,6 @@ class _HomeTab extends StatelessWidget {
     final role = bootstrap?.employee?.designation ??
         (bootstrap?.user.roleNames.isNotEmpty == true ? bootstrap!.user.roleNames.first : 'Employee');
     final branch = bootstrap?.employee?.branchName ?? '';
-    final reviews = bootstrap?.pendingLeaveReviews ?? 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -128,33 +136,8 @@ class _HomeTab extends StatelessWidget {
             ],
           ),
         ),
-        if (reviews > 0) ...[
-          const SizedBox(height: 14),
-          SoftCard(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LeaveListScreen(reviewMode: true)),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  backgroundColor: MousumiColors.primarySubtle,
-                  child: Icon(Icons.fact_check_outlined, color: MousumiColors.brandPrimary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Approval waiting', style: Theme.of(context).textTheme.titleMedium),
-                      Text('$reviews leave request pending', style: Theme.of(context).textTheme.bodyMedium),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
-          ),
-        ],
+        const SizedBox(height: 14),
+        const _PendingCard(),
         const SizedBox(height: 22),
         const SectionLabel(title: 'আমার কাজ'),
         const SizedBox(height: 10),
@@ -201,7 +184,8 @@ class _WorkTab extends StatelessWidget {
     const items = [
       (Icons.fingerprint, 'Attendance', 'চেক-ইন, চেক-আউট, ইতিহাস', 'attendance'),
       (Icons.event_note_outlined, 'Leave', 'আবেদন ও নিজের স্ট্যাটাস', 'leave'),
-      (Icons.alt_route, 'Movement', 'মুভমেন্ট ও লগবুক', 'movement'),
+      (Icons.alt_route, 'Movement', 'মুভমেন্ট আবেদন', 'movement'),
+      (Icons.menu_book_outlined, 'Log book', 'নিজের ট্রিপ ও কিমি', 'logbook'),
       (Icons.payments_outlined, 'Payslip', 'নিজের বেতন স্লিপ', 'payroll'),
       (Icons.account_balance_outlined, 'Loans', 'নিজের লোন', 'loan'),
       (Icons.savings_outlined, 'Staff fund', 'PF ও গ্র্যাচুইটি', 'staff-fund'),
@@ -284,6 +268,18 @@ class _MeTab extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         SoftCard(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+          child: const Row(
+            children: [
+              Icon(Icons.badge_outlined, color: MousumiColors.brandPrimary),
+              SizedBox(width: 12),
+              Expanded(child: Text('My profile')),
+              Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SoftCard(
           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
           child: const Row(
             children: [
@@ -340,6 +336,59 @@ class _QuickTile extends StatelessWidget {
           Icon(icon, color: MousumiColors.brandPrimary),
           const SizedBox(height: 10),
           Text(label, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingCard extends StatefulWidget {
+  const _PendingCard();
+
+  @override
+  State<_PendingCard> createState() => _PendingCardState();
+}
+
+class _PendingCardState extends State<_PendingCard> {
+  int _count = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final payload = await ServiceLocator.api.tasks();
+      final reviews = (payload['reviews'] as List?)?.length ?? 0;
+      if (!mounted) return;
+      setState(() => _count = reviews);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_count == 0) return const SizedBox.shrink();
+    return SoftCard(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TasksScreen())),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Color(0xFFFFF7ED),
+            child: Icon(Icons.fact_check_outlined, color: MousumiColors.warning),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Approval waiting', style: Theme.of(context).textTheme.titleMedium),
+                Text('$_count pending · leave, appraisal, log book, loan', style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right),
         ],
       ),
     );

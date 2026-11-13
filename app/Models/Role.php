@@ -16,11 +16,13 @@ class Role extends Model
         'description',
         'permissions',
         'blocked_sections',
+        'block_payroll_module',
     ];
 
     protected $casts = [
         'permissions' => 'array',
         'blocked_sections' => 'array',
+        'block_payroll_module' => 'boolean',
     ];
 
     public function users()

@@ -5,10 +5,27 @@ namespace App\Services;
 use App\Models\AssetFinancialYear;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class AssetFinancialYearService
 {
     public function current(): ?AssetFinancialYear
+    {
+        if (app()->runningUnitTests()) {
+            return $this->queryCurrent();
+        }
+
+        $id = Cache::remember('asset-fy:current-id', 600, fn () => $this->queryCurrent()?->id ?? 0);
+
+        return $id ? AssetFinancialYear::query()->find($id) : null;
+    }
+
+    public static function forgetCurrentCache(): void
+    {
+        Cache::forget('asset-fy:current-id');
+    }
+
+    private function queryCurrent(): ?AssetFinancialYear
     {
         return AssetFinancialYear::query()
             ->where('is_active', true)
@@ -65,5 +82,6 @@ class AssetFinancialYearService
             ->update(['is_active' => false]);
 
         $year->update(['is_active' => true]);
+        self::forgetCurrentCache();
     }
 }

@@ -68,6 +68,34 @@ class MobileApprovalsService
     }
 
     /**
+     * @return array{data: list<array<string, mixed>>}
+     */
+    public function myLogBook(User $user): array
+    {
+        if (! $user->employee_id) {
+            return ['data' => []];
+        }
+
+        $rows = MovementLogBook::query()
+            ->where('employee_id', $user->employee_id)
+            ->orderByDesc('date')
+            ->limit(60)
+            ->get();
+
+        return [
+            'data' => $rows->map(fn (MovementLogBook $row) => [
+                'id' => $row->id,
+                'date' => optional($row->date)->toDateString(),
+                'destination' => $row->destination,
+                'purpose' => $row->purpose,
+                'official_km' => (string) $row->official_km,
+                'payment_status' => $row->payment_status,
+                'status' => $row->status,
+            ])->values()->all(),
+        ];
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function mineTasks(User $user): array
@@ -162,6 +190,27 @@ class MobileApprovalsService
             throw ValidationException::withMessages([
                 'signature' => ['Approve করার আগে ওয়েব প্রোফাইলে ডিজিটাল স্বাক্ষর আপলোড করুন।'],
             ]);
+        }
+
+        if ($action === 'reject') {
+            if (! $this->logBooks->userCanReject($user, $payment)) {
+                throw ValidationException::withMessages(['payment' => ['আপনি এই পেমেন্ট reject করতে পারবেন না।']]);
+            }
+            if ($remarks === null || trim($remarks) === '') {
+                throw ValidationException::withMessages(['remarks' => ['Reject reason লিখুন।']]);
+            }
+            DB::transaction(function () use ($payment, $user, $remarks) {
+                MovementLogBook::where('log_book_payment_id', $payment->id)
+                    ->update(['log_book_payment_id' => null]);
+                $payment->update([
+                    'status' => 'rejected',
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                    'approval_remarks' => $remarks,
+                ]);
+            });
+
+            return ['ok' => true, 'status' => 'rejected'];
         }
 
         if ($action === 'recommend') {
@@ -264,6 +313,7 @@ class MobileApprovalsService
         $employee = $payment->employee;
         $canRecommend = $this->logBooks->userCanRecommend($user, $payment);
         $canApprove = $this->logBooks->userCanApprove($user, $payment);
+        $canReject = $this->logBooks->userCanReject($user, $payment);
 
         return [
             'module' => 'logbook',
@@ -274,7 +324,8 @@ class MobileApprovalsService
             'amount' => (string) $payment->total_amount,
             'can_recommend' => $canRecommend,
             'can_approve' => $canApprove,
-            'can_act' => $canRecommend || $canApprove,
+            'can_reject' => $canReject,
+            'can_act' => $canRecommend || $canApprove || $canReject,
         ];
     }
 

@@ -1,3 +1,4 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
@@ -63,7 +64,7 @@ class _BiometricGateState extends State<BiometricGate> {
   @override
   Widget build(BuildContext context) {
     if (_checking) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: SkeletonList(count: 3));
     }
     if (!_unlocked) {
       return Scaffold(

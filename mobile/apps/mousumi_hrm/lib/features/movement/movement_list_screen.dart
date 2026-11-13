@@ -43,8 +43,13 @@ class _MovementListScreenState extends State<MovementListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Movement')),
+    return EmployeePage(
+      title: 'মুভমেন্ট',
+      subtitle: 'নিজের আবেদন',
+      loading: _loading,
+      error: _error,
+      onRetry: _load,
+      onRefresh: _load,
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await Navigator.of(context).push(
@@ -54,15 +59,15 @@ class _MovementListScreenState extends State<MovementListScreen> {
         },
         child: const Icon(Icons.add),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? AppErrorPanel(message: _error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: _rows.isEmpty
-                      ? ListView(children: const [SizedBox(height: 120), AppEmptyState(title: 'কোনো movement নেই')])
-                      : ListView.separated(
+      body: _rows.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 80),
+                AppEmptyState(title: 'কোনো মুভমেন্ট নেই', icon: Icons.route),
+              ],
+            )
+          : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _rows.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -95,7 +100,6 @@ class _MovementListScreenState extends State<MovementListScreen> {
                             );
                           },
                         ),
-                ),
     );
   }
 }

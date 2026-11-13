@@ -66,7 +66,7 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SkeletonList();
     }
     if (_error != null) {
       return AppErrorPanel(message: _error!, onRetry: _load);
@@ -90,9 +90,12 @@ class _TasksScreenState extends State<TasksScreen> {
           const SectionLabel(title: 'Needs your approval'),
           const SizedBox(height: 8),
           if (reviews.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('কোনো অনুমোদন বাকি নেই।'),
+            const SizedBox(
+              height: 200,
+              child: AppEmptyState(
+                title: 'এখন কিছু অপেক্ষায় নেই',
+                icon: Icons.task_alt,
+              ),
             )
           else
             for (final row in reviews) ...[

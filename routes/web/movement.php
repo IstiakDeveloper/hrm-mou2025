@@ -191,10 +191,10 @@ use Inertia\Inertia;
     Route::post('/movement/penalty-submit', [MovementPenaltyController::class, 'submitTransaction'])->name('movement.penalty.submit');
 
     Route::prefix('movement-penalties')->name('movement-penalties.')->group(function () {
-        Route::get('/', [MovementPenaltyController::class, 'adminIndex'])->name('index');
-        Route::post('/sync', [MovementPenaltyController::class, 'syncPenalties'])->name('sync');
-        Route::post('/bulk', [MovementPenaltyController::class, 'bulkAction'])->name('bulk');
-        Route::post('/{id}/approve', [MovementPenaltyController::class, 'approvePenalty'])->name('approve');
-        Route::post('/{id}/reject', [MovementPenaltyController::class, 'rejectPenalty'])->name('reject');
+        Route::get('/', [MovementPenaltyController::class, 'adminIndex'])->name('index')->middleware('permission:movements.view');
+        Route::post('/sync', [MovementPenaltyController::class, 'syncPenalties'])->name('sync')->middleware('permission:movements.edit,movements.approve');
+        Route::post('/bulk', [MovementPenaltyController::class, 'bulkAction'])->name('bulk')->middleware('permission:movements.edit,movements.approve');
+        Route::post('/{id}/approve', [MovementPenaltyController::class, 'approvePenalty'])->name('approve')->middleware('permission:movements.approve,movements.edit');
+        Route::post('/{id}/reject', [MovementPenaltyController::class, 'rejectPenalty'])->name('reject')->middleware('permission:movements.approve,movements.edit');
     });
 

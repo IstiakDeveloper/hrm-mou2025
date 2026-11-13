@@ -2,23 +2,20 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\LeaveApplication;
 use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\OfficeOpenDate;
 use App\Models\User;
-use App\Services\Appraisal\AppraisalPendingCountService;
 use App\Services\AssetFinancialYearService;
-use App\Services\FinalClearanceService;
-use App\Services\LogBookPaymentWorkflowService;
-use App\Services\MotorcycleLoanApplicationService;
-use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
+use App\Support\CachedSchema;
+use App\Support\InertiaNavBadges;
+use App\Support\InertiaShellCache;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -59,10 +56,45 @@ class HandleInertiaRequests extends Middleware
 
         /** @var User|null $user */
         $user = Auth::user();
-        $roleColumns = Schema::hasTable('roles') && Schema::hasColumn('roles', 'blocked_sections')
-            ? 'id,name,permissions,blocked_sections'
-            : 'id,name,permissions';
-        $user?->loadMissing(["role:{$roleColumns}", "roles:{$roleColumns}"]);
+        [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $shell = $user
+            ? InertiaShellCache::remember($user, fn () => $this->shellFor($user))
+            : $this->shellFor(null);
+
+        return [
+            ...parent::share($request),
+            'csrf_token' => csrf_token(),
+            'name' => config('app.name'),
+            'quote' => [
+                'message' => trim($message),
+                'author' => trim($author),
+            ],
+            'flash' => [
+                'success' => $request->session()->get('success'),
+                'error' => $request->session()->get('error'),
+                'warning' => $request->session()->get('warning'),
+                'info' => $request->session()->get('info'),
+                'import_summary' => $request->session()->get('import_summary'),
+                'import_row_errors' => $request->session()->get('import_row_errors'),
+            ],
+            ...$shell,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function shellFor(?User $user): array
+    {
+        $roleColumns = ['id', 'name', 'permissions'];
+        if (CachedSchema::hasColumn('roles', 'blocked_sections')) {
+            $roleColumns[] = 'blocked_sections';
+        }
+        if (CachedSchema::hasColumn('roles', 'block_payroll_module')) {
+            $roleColumns[] = 'block_payroll_module';
+        }
+        $roleColumnList = implode(',', $roleColumns);
+        $user?->loadMissing(["role:{$roleColumnList}", "roles:{$roleColumnList}"]);
 
         $employee = null;
         $activeMovement = null;
@@ -87,10 +119,10 @@ class HandleInertiaRequests extends Middleware
                 'status',
             ];
 
-            if (Schema::hasColumn('movements', 'start_meter_reading')) {
+            if (CachedSchema::hasColumn('movements', 'start_meter_reading')) {
                 $selectCols[] = 'start_meter_reading';
             }
-            if (Schema::hasColumn('movements', 'start_place')) {
+            if (CachedSchema::hasColumn('movements', 'start_place')) {
                 $selectCols[] = 'start_place';
             }
 
@@ -105,7 +137,7 @@ class HandleInertiaRequests extends Middleware
                     (int) $employee->id,
                     (int) $activeMovement->id
                 );
-                $legacyStart = Schema::hasColumn('movements', 'start_meter_reading')
+                $legacyStart = CachedSchema::hasColumn('movements', 'start_meter_reading')
                     ? ($activeMovement->getAttribute('start_meter_reading') !== null
                         ? (float) $activeMovement->getAttribute('start_meter_reading')
                         : null)
@@ -117,14 +149,12 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
-
         $vapidPublic = (string) config('webpush.public_key', '');
         $pushConfigured = WebPushService::isConfigured();
-        $subscriptionCount = $user ? $user->pushSubscriptions()->count() : 0;
+        $subscriptionCount = $user ? (int) $user->pushSubscriptions()->count() : 0;
 
         $assetFinancialYear = null;
-        if (Schema::hasTable('asset_financial_years')) {
+        if (CachedSchema::hasTable('asset_financial_years')) {
             $currentYear = app(AssetFinancialYearService::class)->current();
             if ($currentYear) {
                 $assetFinancialYear = [
@@ -136,87 +166,95 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        $pendingLeaveCount = 0;
-        $pendingAppraisalCounts = [
-            'promotion' => 0,
-            'confirmation' => 0,
-            'probation_increment' => 0,
-            'trainee' => 0,
-            'total' => 0,
+        $badges = $user ? InertiaNavBadges::forUser($user) : [
+            'pendingLeaveCount' => 0,
+            'pendingAppraisalCounts' => [
+                'promotion' => 0,
+                'confirmation' => 0,
+                'probation_increment' => 0,
+                'trainee' => 0,
+                'total' => 0,
+            ],
+            'pendingFinalClearanceCount' => 0,
+            'pendingMotorcycleLoanCount' => 0,
+            'canIssueSecondMotorcycleLoan' => false,
+            'pendingLogBookPaymentCount' => 0,
         ];
-        $pendingFinalClearanceCount = 0;
-        $pendingMotorcycleLoanCount = 0;
-        $pendingLogBookPaymentCount = 0;
-        $canIssueSecondMotorcycleLoan = false;
-        if ($user) {
-            $leaveQuery = LeaveApplication::query()->where('status', 'pending');
-            OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
-            $pendingLeaveCount = $leaveQuery->count();
-            $pendingAppraisalCounts = app(AppraisalPendingCountService::class)->countsFor($user);
-            if (Schema::hasTable('final_clearances')) {
-                $pendingFinalClearanceCount = app(FinalClearanceService::class)->pendingCount($user);
-            }
-            if (Schema::hasTable('loan_applications') && $user->canAccessSection('employee-loan')) {
-                $motorcycleLoans = app(MotorcycleLoanApplicationService::class);
-                $pendingMotorcycleLoanCount = $motorcycleLoans->pendingCount($user);
-                $canIssueSecondMotorcycleLoan = $motorcycleLoans->canIssueSecondLoan($user);
-            }
-            if (Schema::hasTable('movement_log_book_payments') && $user->hasPermission('movements.view')) {
-                $pendingLogBookPaymentCount = app(LogBookPaymentWorkflowService::class)->pendingCount($user);
-            }
-        }
+
+        $primaryRole = ($user?->roles && $user->roles->isNotEmpty())
+            ? ($user->roles->firstWhere('id', $user->role_id) ?? $user->roles->first())
+            : $user?->role;
 
         return [
-            ...parent::share($request),
-            'csrf_token' => csrf_token(),
-            'name' => config('app.name'),
-            'quote' => [
-                'message' => trim($message),
-                'author' => trim($author),
-            ],
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
                     'username' => $user->username,
-                    'email_verified_at' => $user->email_verified_at,
+                    'email_verified_at' => $user->email_verified_at?->toIso8601String(),
                     'employee_id' => $user->employee_id,
                     'account_type' => $user->account_type,
                     'branch_id' => $user->branch_id,
                     'is_department_head' => $user->isDepartmentHead(),
                     'blocked_sections' => $user->effectiveBlockedSections(),
-                    'role' => ($user->roles && $user->roles->isNotEmpty())
-                        ? ($user->roles->firstWhere('id', $user->role_id) ?? $user->roles->first())
-                        : $user->role,
-                    'roles' => $user->roles,
+                    'role' => $this->rolePayload($primaryRole),
+                    'roles' => $user->roles
+                        ? $user->roles->map(fn ($role) => $this->rolePayload($role))->filter()->values()->all()
+                        : [],
                     'signature' => $user->getSignaturePath(),
                 ] : null,
-                'employee' => $employee,
+                'employee' => $employee?->toArray(),
             ],
-            'activeMovement' => $activeMovement,
+            'activeMovement' => $activeMovement?->toArray(),
             'push' => [
                 'vapidPublicKey' => $pushConfigured ? $vapidPublic : null,
                 'configured' => $pushConfigured,
                 'subscriptionCount' => $subscriptionCount,
             ],
-            'flash' => [
-                'success' => $request->session()->get('success'),
-                'error' => $request->session()->get('error'),
-                'warning' => $request->session()->get('warning'),
-                'info' => $request->session()->get('info'),
-                'import_summary' => $request->session()->get('import_summary'),
-                'import_row_errors' => $request->session()->get('import_row_errors'),
-            ],
             'assetFinancialYear' => $assetFinancialYear,
-            'pendingLeaveCount' => $pendingLeaveCount,
-            'pendingAppraisalCounts' => $pendingAppraisalCounts,
-            'pendingFinalClearanceCount' => $pendingFinalClearanceCount,
-            'pendingMotorcycleLoanCount' => $pendingMotorcycleLoanCount,
-            'canIssueSecondMotorcycleLoan' => $canIssueSecondMotorcycleLoan,
-            'pendingLogBookPaymentCount' => $pendingLogBookPaymentCount,
+            'pendingLeaveCount' => $badges['pendingLeaveCount'],
+            'pendingAppraisalCounts' => $badges['pendingAppraisalCounts'],
+            'pendingFinalClearanceCount' => $badges['pendingFinalClearanceCount'],
+            'pendingMotorcycleLoanCount' => $badges['pendingMotorcycleLoanCount'],
+            'canIssueSecondMotorcycleLoan' => $badges['canIssueSecondMotorcycleLoan'],
+            'pendingLogBookPaymentCount' => $badges['pendingLogBookPaymentCount'],
             'officeOpenDates' => OfficeOpenDate::dateStrings(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function rolePayload(mixed $role): ?array
+    {
+        if (! $role) {
+            return null;
+        }
+
+        return [
+            'id' => $role->id,
+            'name' => $role->name,
+            'permissions' => $role->permissions,
+            'blocked_sections' => $role->blocked_sections ?? [],
+            'block_payroll_module' => (bool) ($role->block_payroll_module ?? false),
+        ];
+    }
+
+    /**
+     * Counts are cached before the controller runs. Drop them after a write so the next page is fresh.
+     */
+    public function terminate(Request $request, Response $response): void
+    {
+        if (! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return;
+        }
+
+        $userId = Auth::id();
+        if (is_numeric($userId)) {
+            InertiaNavBadges::forget((int) $userId);
+            InertiaShellCache::forget((int) $userId);
+        }
     }
 
     /**

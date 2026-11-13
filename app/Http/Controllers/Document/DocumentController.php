@@ -23,44 +23,16 @@ class DocumentController extends Controller
             return false;
         }
 
-        // Super Admin
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        // Admin roles or direct management permissions
-        if ($user->hasPermission('admin.access')
-            || $user->hasPermission('employees.admin')
-            || $user->hasPermission('documents.manage')) {
-            return true;
-        }
-
-        $roleName = strtolower($user->role?->name ?? '');
-        if (in_array($roleName, ['admin', 'super admin', 'administrator', 'hr admin'], true)) {
-            return true;
-        }
-
-        if ($user->roles && $user->roles->contains(function ($r) {
-            return in_array(strtolower($r->name ?? ''), ['admin', 'super admin', 'administrator', 'hr admin'], true);
-        })) {
-            return true;
-        }
-
-        // Department Head
-        if ($user->isDepartmentHead()) {
-            return true;
-        }
-
-        return false;
+        return $user->hasPermission('documents.manage');
     }
 
     /**
      * Determine if the user has authority to edit, delete, or pin documents.
-     * Strictly restricted to Super Admin only.
+     * Edit, pin, or delete a document. Granted by documents.delete (Super Admin by default).
      */
     public static function canUserEditOrDelete(?User $user): bool
     {
-        return $user ? $user->isSuperAdmin() : false;
+        return $user ? $user->hasPermission('documents.delete') : false;
     }
 
     /**

@@ -34,6 +34,17 @@ export function isAccountant(
   return !!auth.user.roles?.some((r) => r.name && ACCOUNTANT_ROLE_NAMES.includes(r.name));
 }
 
+function payrollModuleIsBlocked(
+  auth: { user?: { role?: { block_payroll_module?: boolean | number }; roles?: { block_payroll_module?: boolean | number }[] } } | null | undefined,
+): boolean {
+  if (!auth?.user || isSuperAdmin(auth)) return false;
+  const roles = auth.user.roles && auth.user.roles.length > 0
+    ? auth.user.roles
+    : auth.user.role
+      ? [auth.user.role]
+      : [];
+  return roles.some((role) => role?.block_payroll_module === true || role?.block_payroll_module === 1);
+}
 export function isDepartmentHead(
   auth: { user?: { is_department_head?: boolean } } | null | undefined,
 ): boolean {
@@ -134,11 +145,16 @@ export function hasAppPermission(
   if (!permission) return true;
   if (isSuperAdmin(auth)) return true;
 
+  if (payrollModuleIsBlocked(auth) && PAYROLL_MODULE_PERMISSIONS.has(permission)) {
+    return false;
+  }
+
   const granted = collectGrantedPermissions(auth);
   if (granted.has(permission)) return true;
 
   if (
-    permission.startsWith('promotion-evaluations.') || 
+    permission.startsWith('resignation-applications.') ||
+    permission.startsWith('promotion-evaluations.') ||
     permission.startsWith('confirmation-evaluations.') ||
     permission.startsWith('probation-increment-evaluations.') ||
     permission.startsWith('trainee-evaluations.')
@@ -153,7 +169,7 @@ export function hasAppPermission(
       names.add(auth.user.role.name);
     }
     if (
-      names.has('Director Finance and Accounts') || 
+      names.has('Director Finance and Accounts') ||
       names.has('Director Finance and Account') ||
       names.has('Branch Manager') ||
       names.has('Regional Manager') ||
@@ -163,7 +179,7 @@ export function hasAppPermission(
       names.has('Executive Director') ||
       names.has('HR Manager') ||
       names.has('HR Admin') ||
-      names.has('Administrator')
+      names.has('Assistant Director (HR)')
     ) {
       return true;
     }
@@ -178,14 +194,6 @@ export function hasAppPermission(
     ) {
       return true;
     }
-  }
-
-  if (isDepartmentHead(auth) && PAYROLL_MODULE_PERMISSIONS.has(permission)) {
-    return false;
-  }
-
-  if (hasOrganogramLineRole(auth) && PAYROLL_MODULE_PERMISSIONS.has(permission)) {
-    return false;
   }
 
   for (const group of PERMISSION_ALIAS_GROUPS) {

@@ -306,9 +306,187 @@ class PermissionRegistry
     }
 
     /**
+     * Role editor tree: ERP sections, then permission groups inside each section.
+     * Store, training, and office map have no catalog keys, so they are omitted.
+     *
+     * @return array<string, array{label: string, description: string, color: string, groups: list<array{id: string, label: string, permissions: array<string, string>}>}>
+     */
+    public static function editorSections(): array
+    {
+        $buckets = [];
+        foreach (self::keys() as $key) {
+            $placement = self::placementFor($key);
+            $buckets[$placement['section']][$placement['group']][$key] = self::labelFor($key);
+        }
+
+        $colors = [
+            'human-resources' => 'blue',
+            'attendance-movement' => 'green',
+            'leave' => 'yellow',
+            'employee-loan' => 'amber',
+            'staff-fund' => 'cyan',
+            'payroll' => 'violet',
+            'fixed-asset' => 'orange',
+            'inventory' => 'teal',
+            'documents' => 'teal',
+            'administration' => 'red',
+        ];
+
+        $tree = [];
+        foreach (SectionRegistry::sections() as $sectionId => $meta) {
+            $groups = [];
+            $emitted = [];
+            foreach (array_keys(self::placementRules()[$sectionId] ?? []) as $groupLabel) {
+                $permissions = $buckets[$sectionId][$groupLabel] ?? [];
+                if ($permissions === []) {
+                    continue;
+                }
+                $groups[] = self::editorGroup($sectionId, $groupLabel, $permissions);
+                $emitted[$groupLabel] = true;
+            }
+            foreach ($buckets[$sectionId] ?? [] as $groupLabel => $permissions) {
+                if ($permissions === [] || isset($emitted[$groupLabel])) {
+                    continue;
+                }
+                $groups[] = self::editorGroup($sectionId, $groupLabel, $permissions);
+            }
+            if ($groups === []) {
+                continue;
+            }
+            $tree[$sectionId] = [
+                'label' => $meta['label'],
+                'description' => $meta['description'],
+                'color' => $colors[$sectionId] ?? 'gray',
+                'groups' => $groups,
+            ];
+        }
+
+        return $tree;
+    }
+
+    /**
+     * @param  array<string, string>  $permissions
+     * @return array{id: string, label: string, hint: string|null, permissions: array<string, string>}
+     */
+    private static function editorGroup(string $sectionId, string $groupLabel, array $permissions): array
+    {
+        $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $groupLabel) ?? $groupLabel);
+
+        return [
+            'id' => trim($sectionId.'-'.$slug, '-'),
+            'label' => $groupLabel,
+            'hint' => $groupLabel === 'Reports'
+                ? 'These keys open reports in every section.'
+                : null,
+            'permissions' => $permissions,
+        ];
+    }
+
+    /**
+     * @return array{section: string, group: string}
+     */
+    public static function placementFor(string $permission): array
+    {
+        foreach (self::placementRules() as $section => $groups) {
+            foreach ($groups as $group => $needles) {
+                foreach ($needles as $needle) {
+                    if ($permission === $needle || str_starts_with($permission, $needle)) {
+                        return ['section' => $section, 'group' => $group];
+                    }
+                }
+            }
+        }
+
+        return ['section' => 'administration', 'group' => 'Other'];
+    }
+
+    /**
+     * Group order inside each section follows the ERP menus.
+     *
+     * @return array<string, array<string, list<string>>>
+     */
+    private static function placementRules(): array
+    {
+        return [
+            'human-resources' => [
+                'Employees' => ['employees.'],
+                'Organization' => ['branches.', 'zones.', 'regional-offices.', 'departments.', 'designations.'],
+                'Re designation' => ['redesignations.'],
+                'Confirmations' => ['confirmations.'],
+                'Separations' => ['separations.'],
+                'Holidays' => ['holidays.'],
+                'Transfer & promotion' => ['transfers.', 'promotions.', 'demotions.', 'salary-increments.'],
+                'Promotion evaluation' => ['promotion-evaluations.'],
+                'Confirmation evaluation' => ['confirmation-evaluations.'],
+                'Probation increment evaluation' => ['probation-increment-evaluations.'],
+                'Trainee evaluation' => ['trainee-evaluations.'],
+                'Final clearance' => ['final-clearances.'],
+                'Line authority' => ['department_head', 'branch_manager', 'organogram.'],
+            ],
+            'attendance-movement' => [
+                'Attendance' => ['attendance.'],
+                'Movement' => ['movements.'],
+            ],
+            'leave' => [
+                'Leave types' => ['leave-types.'],
+                'Leave balances' => ['leave-balances.'],
+                'Leave applications' => ['leave-applications.'],
+            ],
+            'employee-loan' => [
+                'Employee loan' => ['employee-loan.'],
+            ],
+            'staff-fund' => [
+                'Staff fund' => ['staff-fund.'],
+            ],
+            'payroll' => [
+                'Payroll' => ['payroll.'],
+            ],
+            'fixed-asset' => [
+                'Fixed asset' => ['fixed-assets.'],
+            ],
+            'inventory' => [
+                'Inventory' => ['inventory.'],
+            ],
+            'documents' => [
+                'Documents' => ['documents.'],
+            ],
+            'administration' => [
+                'System access' => ['admin.access'],
+                'Users' => ['users.'],
+                'Sessions' => ['sessions.'],
+                'Roles' => ['roles.'],
+                'Reports' => ['reports.'],
+                'Own profile' => ['profile.'],
+            ],
+        ];
+    }
+
+    /**
+     * Create default roles that are not in the database yet.
+     * Saved permissions and block_payroll_module are left alone.
+     *
      * @return array<string, \App\Models\Role>
      */
     public static function syncDefaultRoles(): array
+    {
+        return self::applyDefaultRoles(false);
+    }
+
+    /**
+     * Rewrite default-role permissions and block_payroll_module from config.
+     * blocked_sections are not changed.
+     *
+     * @return array<string, \App\Models\Role>
+     */
+    public static function resetDefaultRoles(): array
+    {
+        return self::applyDefaultRoles(true);
+    }
+
+    /**
+     * @return array<string, \App\Models\Role>
+     */
+    private static function applyDefaultRoles(bool $overwrite): array
     {
         $roles = [];
         $definitions = config('default_roles.roles', []);
@@ -318,15 +496,32 @@ class PermissionRegistry
             $permissions = is_string($permissionInput)
                 ? $permissionInput
                 : (is_array($permissionInput) ? $permissionInput : []);
+            $resolved = self::resolvePermissionList($permissions);
+            $block = (bool) ($definition['block_payroll_module'] ?? false);
 
-            // Permissions only — blocked_sections are UI-managed and must not reset on sync.
-            $roles[$name] = \App\Models\Role::updateOrCreate(
-                ['name' => $name],
-                [
-                    'description' => $definition['description'] ?? null,
-                    'permissions' => self::resolvePermissionList($permissions),
-                ]
-            );
+            $existing = \App\Models\Role::query()->where('name', $name)->first();
+            if ($existing && ! $overwrite) {
+                $roles[$name] = $existing;
+
+                continue;
+            }
+
+            $payload = [
+                'description' => $definition['description'] ?? null,
+                'permissions' => $resolved,
+                'block_payroll_module' => $block,
+            ];
+
+            if ($existing) {
+                $existing->update($payload);
+                $roles[$name] = $existing->fresh() ?? $existing;
+
+                continue;
+            }
+
+            $roles[$name] = \App\Models\Role::query()->create(array_merge($payload, [
+                'name' => $name,
+            ]));
         }
 
         return $roles;

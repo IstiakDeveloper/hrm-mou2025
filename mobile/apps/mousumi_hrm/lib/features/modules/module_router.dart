@@ -34,6 +34,19 @@ void openModule(BuildContext context, String sectionIdOrLabel) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MovementListScreen()));
     return;
   }
+  if (key.contains('log')) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SimpleListScreen(
+          title: 'Log book',
+          loader: () => ServiceLocator.api.myLogBook(),
+          titleOf: (row) => '${row['date'] ?? ''} · ${row['destination'] ?? 'Trip'}',
+          subtitleOf: (row) => '${row['purpose'] ?? ''} · ${row['official_km'] ?? '0'} km · ${row['payment_status'] ?? row['status'] ?? ''}',
+        ),
+      ),
+    );
+    return;
+  }
   if (key.contains('payroll') || key.contains('payslip')) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PayslipListScreen()));
     return;

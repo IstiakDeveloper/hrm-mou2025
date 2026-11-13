@@ -40,6 +40,7 @@ Route::prefix('v1')
             Route::post('/auth/password', [AuthController::class, 'changePassword'])->middleware('throttle:10,1')->name('api.v1.auth.password');
 
             Route::get('/tasks', TasksController::class)->name('api.v1.tasks');
+            Route::get('/log-book/mine', [ApprovalsController::class, 'myLogBook'])->name('api.v1.log-book.mine');
             Route::post('/approvals/appraisal', [ApprovalsController::class, 'appraisal'])->name('api.v1.approvals.appraisal');
             Route::post('/approvals/log-book/{payment}', [ApprovalsController::class, 'logBook'])->name('api.v1.approvals.log-book');
             Route::post('/approvals/loans/{loanApplication}', [ApprovalsController::class, 'loan'])->name('api.v1.approvals.loans');

@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'mousumi_colors.dart';
 
 abstract final class MousumiTypography {
+  static const family = 'Noto Sans Bengali';
+
   static TextTheme textTheme({required bool banglaPreferred}) {
-    // Use platform fonts until licensed brand fonts are bundled.
-    // Requesting missing font families can break text layout on some devices.
-    final base = TextStyle(
-      fontFamily: banglaPreferred ? null : null,
-      height: banglaPreferred ? 1.55 : 1.4,
+    final base = const TextStyle(
+      fontFamily: family,
+      height: 1.55,
     );
 
     return TextTheme(

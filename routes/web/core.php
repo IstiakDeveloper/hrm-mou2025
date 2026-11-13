@@ -60,16 +60,16 @@ Route::get('/sections/inventory', InventoryDashboardController::class)
     ->name('sections.inventory');
 
 // Document Center (View/Download for all authenticated users; Upload/Edit/Delete/Pin for Admin, Super Admin, Department Head)
-Route::get('/sections/documents', [DocumentController::class, 'index'])->name('sections.documents');
-Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
-Route::match(['put', 'patch', 'post'], '/documents/{document}', [DocumentController::class, 'update'])->name('documents.update');
-Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
-Route::post('/documents/{document}/toggle-pin', [DocumentController::class, 'togglePin'])->name('documents.toggle-pin');
-Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
-Route::get('/documents/{document}/preview', [DocumentController::class, 'preview'])->name('documents.preview');
+Route::get('/sections/documents', [DocumentController::class, 'index'])->middleware('permission:documents.view')->name('sections.documents');
+Route::post('/documents', [DocumentController::class, 'store'])->middleware('permission:documents.manage')->name('documents.store');
+Route::match(['put', 'patch', 'post'], '/documents/{document}', [DocumentController::class, 'update'])->middleware('permission:documents.delete')->name('documents.update');
+Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->middleware('permission:documents.delete')->name('documents.destroy');
+Route::post('/documents/{document}/toggle-pin', [DocumentController::class, 'togglePin'])->middleware('permission:documents.delete')->name('documents.toggle-pin');
+Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->middleware('permission:documents.view')->name('documents.download');
+Route::get('/documents/{document}/preview', [DocumentController::class, 'preview'])->middleware('permission:documents.view')->name('documents.preview');
 
-Route::post('/document-categories', [DocumentCategoryController::class, 'store'])->name('document-categories.store');
-Route::delete('/document-categories/{category}', [DocumentCategoryController::class, 'destroy'])->name('document-categories.destroy');
+Route::post('/document-categories', [DocumentCategoryController::class, 'store'])->middleware('permission:documents.manage')->name('document-categories.store');
+Route::delete('/document-categories/{category}', [DocumentCategoryController::class, 'destroy'])->middleware('permission:documents.manage')->name('document-categories.destroy');
 
 // Section Dashboard (Overview) - role-aware (employee vs admin)
 Route::get('/sections/{section}', function (Request $request, string $section) {

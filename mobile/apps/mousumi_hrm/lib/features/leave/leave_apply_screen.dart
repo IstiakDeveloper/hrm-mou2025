@@ -80,6 +80,19 @@ class _LeaveApplyScreenState extends State<LeaveApplyScreen> {
       return;
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('আবেদন দেখুন'),
+        content: Text('${_selected!.name}\n${_fmt(_range!.start)} → ${_fmt(_range!.end)}\n${_reason.text.trim()}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('বাতিল')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('জমা দিন')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() {
       _submitting = true;
       _error = null;
@@ -92,6 +105,8 @@ class _LeaveApplyScreenState extends State<LeaveApplyScreen> {
         reason: _reason.text.trim(),
         contact: _contact.text.trim(),
       );
+      if (!mounted) return;
+      await MousumiFeedback.flash(context, 'আবেদন জমা হয়েছে');
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -117,7 +132,7 @@ class _LeaveApplyScreenState extends State<LeaveApplyScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Leave আবেদন')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonList(count: 4)
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
@@ -132,10 +147,7 @@ class _LeaveApplyScreenState extends State<LeaveApplyScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (balance != null)
-                  Text(
-                    'Remaining: ${balance.remainingDays} / ${balance.allocatedDays}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  StatusChip(label: 'বাকি ${balance.remainingDays} / ${balance.allocatedDays} দিন'),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\AssetFinancialYearService;
 use Illuminate\Database\Eloquent\Model;
 
 class AssetFinancialYear extends Model
@@ -20,6 +21,16 @@ class AssetFinancialYear extends Model
         'is_active' => 'boolean',
         'is_closed' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        $forget = static function (): void {
+            AssetFinancialYearService::forgetCurrentCache();
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
 
     public function containsDate(\DateTimeInterface|string $date): bool
     {

@@ -15,10 +15,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="apple-touch-icon" href="{{ asset('icons/icon-192x192.png') }}">
 
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript>
+        <link rel="stylesheet" href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600&display=swap">
+    </noscript>
 
-    @routes
+    {!! \App\Support\CachedZiggyScript::render() !!}
     @viteReactRefresh
     @vite(['resources/css/app.css', 'resources/js/app.tsx'])
     @inertiaHead

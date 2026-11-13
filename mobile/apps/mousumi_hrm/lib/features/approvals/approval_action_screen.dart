@@ -33,6 +33,8 @@ class _ApprovalActionScreenState extends State<ApprovalActionScreen> {
     try {
       await action();
       if (!mounted) return;
+      await MousumiFeedback.flash(context, 'সিদ্ধান্ত সেভ হয়েছে');
+      if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
@@ -175,6 +177,15 @@ class _ApprovalActionScreenState extends State<ApprovalActionScreen> {
           onPressed: _busy
               ? null
               : () => _run(() => ServiceLocator.api.actLogBook(id: id, action: 'approve', remarks: _note.text.trim())),
+        ));
+      }
+      if (widget.row['can_reject'] == true) {
+        buttons.add(const SizedBox(height: 8));
+        buttons.add(OutlinedButton(
+          onPressed: _busy
+              ? null
+              : () => _run(() => ServiceLocator.api.actLogBook(id: id, action: 'reject', remarks: _note.text.trim())),
+          child: const Text('Reject'),
         ));
       }
       return buttons;

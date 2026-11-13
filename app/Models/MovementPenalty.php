@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\MovementFineGate;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -33,6 +34,21 @@ class MovementPenalty extends Model
         'payment_submitted_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        $forget = static function (MovementPenalty $penalty): void {
+            MovementFineGate::forget($penalty->user_id ? (int) $penalty->user_id : null);
+
+            if ($penalty->employee_id) {
+                $loginId = User::query()->where('employee_id', $penalty->employee_id)->value('id');
+                MovementFineGate::forget($loginId ? (int) $loginId : null);
+            }
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
 
     public function movement()
     {

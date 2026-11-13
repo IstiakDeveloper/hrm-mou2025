@@ -1,29 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Shield, Check, AlertTriangle, Users, Building2, ClipboardList, Calendar, Activity, BarChart, Settings, Award } from 'lucide-react';
+import { ArrowLeft, Shield, Check, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-
-// Types matching the RoleController structure
-interface PermissionCategory {
-  label: string;
-  description: string;
-  color: string;
-}
-
-interface PermissionCategories {
-  [key: string]: PermissionCategory;
-}
+import { PermissionPicker, type PermissionSectionTree } from './permission-picker';
 
 interface AvailablePermissions {
   [key: string]: string;
@@ -38,8 +25,7 @@ interface AvailableSections {
 
 interface RoleCreateProps {
   permissions: AvailablePermissions;
-  permissions_by_category: Record<string, AvailablePermissions>;
-  permission_categories: PermissionCategories;
+  permission_sections: PermissionSectionTree;
   sections: AvailableSections;
   supports_section_locks: boolean;
   errors: {
@@ -47,28 +33,14 @@ interface RoleCreateProps {
   };
 }
 
-export default function RoleCreate({ permissions, permissions_by_category, permission_categories, sections, supports_section_locks, errors }: RoleCreateProps) {
+export default function RoleCreate({ permissions, permission_sections, sections, supports_section_locks, errors }: RoleCreateProps) {
   const { data, setData, post, processing } = useForm({
     name: '',
     description: '',
     permissions: [] as string[],
     blocked_sections: [] as string[],
+    block_payroll_module: false,
   });
-
-  const [activeTab, setActiveTab] = useState<string>(Object.keys(permission_categories)[0] || 'admin');
-
-  // Full catalog from config/permissions.php (via PermissionRegistry)
-  const getPermissionsByCategory = (category: string): AvailablePermissions => {
-    return permissions_by_category[category] || {};
-  };
-
-  const handlePermissionChange = (permission: string, checked: boolean) => {
-    const newPermissions = checked
-      ? [...data.permissions, permission]
-      : data.permissions.filter(p => p !== permission);
-
-    setData('permissions', newPermissions);
-  };
 
   const handleSectionChange = (sectionId: string, checked: boolean) => {
     const newSections = checked
@@ -76,72 +48,6 @@ export default function RoleCreate({ permissions, permissions_by_category, permi
       : data.blocked_sections.filter(id => id !== sectionId);
 
     setData('blocked_sections', newSections);
-  };
-
-  const handleSelectAllInCategory = (category: string, checked: boolean) => {
-    const categoryPermissions = Object.keys(getPermissionsByCategory(category));
-
-    if (checked) {
-      // Add all permissions from this category
-      const newPermissions = [...data.permissions];
-      categoryPermissions.forEach(permission => {
-        if (!newPermissions.includes(permission)) {
-          newPermissions.push(permission);
-        }
-      });
-      setData('permissions', newPermissions);
-    } else {
-      // Remove all permissions from this category
-      const newPermissions = data.permissions.filter(
-        permission => !categoryPermissions.includes(permission)
-      );
-      setData('permissions', newPermissions);
-    }
-  };
-
-  const isCategoryFullySelected = (category: string): boolean => {
-    const categoryPermissions = Object.keys(getPermissionsByCategory(category));
-    return categoryPermissions.length > 0 && categoryPermissions.every(permission => data.permissions.includes(permission));
-  };
-
-  const isCategoryPartiallySelected = (category: string): boolean => {
-    const categoryPermissions = Object.keys(getPermissionsByCategory(category));
-    return categoryPermissions.some(permission => data.permissions.includes(permission)) &&
-           !isCategoryFullySelected(category);
-  };
-
-  const getCategoryIcon = (category: string) => {
-    const iconMap: { [key: string]: React.ReactNode } = {
-      admin: <Shield className="h-4 w-4" />,
-      users: <Users className="h-4 w-4" />,
-      roles: <Settings className="h-4 w-4" />,
-      employees: <Users className="h-4 w-4" />,
-      organization: <Building2 className="h-4 w-4" />,
-      attendance: <ClipboardList className="h-4 w-4" />,
-      leave: <Calendar className="h-4 w-4" />,
-      movement: <Activity className="h-4 w-4" />,
-      holidays: <Award className="h-4 w-4" />,
-      reports: <BarChart className="h-4 w-4" />
-    };
-
-    return iconMap[category] || <Shield className="h-4 w-4" />;
-  };
-
-  const getCategoryColorClasses = (color: string) => {
-    const colorMap: { [key: string]: string } = {
-      red: 'bg-red-100 text-red-700 border-red-200',
-      purple: 'bg-purple-100 text-purple-700 border-purple-200',
-      indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-      blue: 'bg-blue-100 text-blue-700 border-blue-200',
-      gray: 'bg-gray-100 text-gray-700 border-gray-200',
-      green: 'bg-green-100 text-green-700 border-green-200',
-      yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-      orange: 'bg-orange-100 text-orange-700 border-orange-200',
-      pink: 'bg-pink-100 text-pink-700 border-pink-200',
-      teal: 'bg-teal-100 text-teal-700 border-teal-200'
-    };
-
-    return colorMap[color] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
   const submit = (e: React.FormEvent) => {
@@ -160,6 +66,7 @@ export default function RoleCreate({ permissions, permissions_by_category, permi
       description: data.description.trim(),
       permissions: cleanPermissions,
       blocked_sections: cleanBlockedSections,
+      block_payroll_module: data.block_payroll_module,
     };
 
     // Debug log to check data
@@ -266,6 +173,22 @@ export default function RoleCreate({ permissions, permissions_by_category, permi
                     )}
                   </div>
 
+                  <div className="flex items-start space-x-3 rounded-lg border border-gray-200 p-4">
+                    <Checkbox
+                      id="block_payroll_module"
+                      checked={data.block_payroll_module}
+                      onCheckedChange={(checked) => setData('block_payroll_module', checked === true)}
+                    />
+                    <div>
+                      <Label htmlFor="block_payroll_module" className="text-sm font-medium cursor-pointer">
+                        Block payroll, loan, and staff fund
+                      </Label>
+                      <p className="mt-1 text-xs text-gray-500">
+                        When on, this role cannot open payroll, employee loan, or staff fund even if those keys are checked.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Permission Count Info */}
                   <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
                     <div className="flex items-center space-x-2">
@@ -316,7 +239,7 @@ export default function RoleCreate({ permissions, permissions_by_category, permi
                       </div>
                       <div>
                         <CardTitle className="text-lg">Role Permissions</CardTitle>
-                        <CardDescription>Configure system access permissions by category</CardDescription>
+                        <CardDescription>Tick a menu group to open those pages for this role</CardDescription>
                       </div>
                     </div>
                     <Badge variant="outline" className="bg-white">
@@ -325,129 +248,11 @@ export default function RoleCreate({ permissions, permissions_by_category, permi
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <Tabs
-                    value={activeTab}
-                    onValueChange={setActiveTab}
-                    className="w-full"
-                  >
-                    {/* Category Tabs - Proper Horizontal Scrolling */}
-                    <div className="border-b bg-gray-50/30 overflow-x-auto">
-                      <div className="flex min-w-max">
-                        <TabsList className="flex h-auto w-auto justify-start rounded-none bg-transparent p-0 min-w-max">
-                          {Object.entries(permission_categories).map(([categoryKey, category]) => {
-                            const categoryPermissions = getPermissionsByCategory(categoryKey);
-                            const permissionCount = Object.keys(categoryPermissions).length;
-
-                            return (
-                              <TabsTrigger
-                                key={categoryKey}
-                                value={categoryKey}
-                                className="relative flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-blue-500 data-[state=active]:bg-white data-[state=active]:shadow-sm whitespace-nowrap flex-shrink-0"
-                              >
-                                {getCategoryIcon(categoryKey)}
-                                <div className="flex flex-col items-start">
-                                  <span className="font-medium text-sm">{category.label}</span>
-                                  <span className="text-xs text-gray-500">{permissionCount} permissions</span>
-                                </div>
-
-                                {/* Status indicator */}
-                                {isCategoryFullySelected(categoryKey) && (
-                                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-500 border-2 border-white" />
-                                )}
-                                {isCategoryPartiallySelected(categoryKey) && (
-                                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-500 border-2 border-white" />
-                                )}
-                              </TabsTrigger>
-                            );
-                          })}
-                        </TabsList>
-                      </div>
-                    </div>
-
-                    {/* Permission Content for each Category */}
-                    {Object.entries(permission_categories).map(([categoryKey, category]) => {
-                      const categoryPermissions = getPermissionsByCategory(categoryKey);
-
-                      return (
-                        <TabsContent
-                          key={categoryKey}
-                          value={categoryKey}
-                          className="border-none p-0 mt-0"
-                        >
-                          {/* Category Header with Select All */}
-                          <div className={`border-b px-6 py-4 ${getCategoryColorClasses(category.color)}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <Checkbox
-                                  id={`select-all-${categoryKey}`}
-                                  checked={isCategoryFullySelected(categoryKey)}
-                                  onCheckedChange={(checked) =>
-                                    handleSelectAllInCategory(categoryKey, checked === true)
-                                  }
-                                />
-                                <div>
-                                  <Label
-                                    htmlFor={`select-all-${categoryKey}`}
-                                    className="font-semibold cursor-pointer"
-                                  >
-                                    Select All {category.label}
-                                  </Label>
-                                  <p className="text-sm opacity-90 mt-0.5">
-                                    {category.description}
-                                  </p>
-                                </div>
-                              </div>
-                              <Badge variant="outline" className="bg-white/50">
-                                {Object.keys(categoryPermissions).length} permissions
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {/* Permissions Grid */}
-                          <div className="p-6">
-                            {Object.keys(categoryPermissions).length > 0 ? (
-                              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                {Object.entries(categoryPermissions).map(([key, label]) => (
-                                  <div
-                                    key={key}
-                                    className={`flex items-center space-x-3 rounded-lg border p-4 transition-colors hover:bg-gray-50 ${
-                                      data.permissions.includes(key)
-                                        ? 'border-blue-300 bg-blue-50'
-                                        : 'border-gray-200'
-                                    }`}
-                                  >
-                                    <Checkbox
-                                      id={key}
-                                      checked={data.permissions.includes(key)}
-                                      onCheckedChange={(checked) =>
-                                        handlePermissionChange(key, checked === true)
-                                      }
-                                    />
-                                    <div className="flex-1">
-                                      <Label
-                                        htmlFor={key}
-                                        className="cursor-pointer text-sm font-medium"
-                                      >
-                                        {label}
-                                      </Label>
-                                      <p className="text-xs text-gray-500 mt-0.5">
-                                        {key}
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-center py-8 text-gray-500">
-                                <Shield className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                <p>No permissions available in this category</p>
-                              </div>
-                            )}
-                          </div>
-                        </TabsContent>
-                      );
-                    })}
-                  </Tabs>
+                  <PermissionPicker
+                    sections={permission_sections}
+                    selected={data.permissions}
+                    onChange={(next) => setData('permissions', next)}
+                  />
 
                   {/* Global permission error */}
                   {errors.permissions && (

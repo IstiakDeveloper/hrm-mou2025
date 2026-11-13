@@ -1,11 +1,9 @@
 <?php
 
-use App\Models\User;
-
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
 test('profile page is displayed', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)
@@ -15,7 +13,7 @@ test('profile page is displayed', function () {
 });
 
 test('profile information can be updated', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)
@@ -36,7 +34,7 @@ test('profile information can be updated', function () {
 });
 
 test('email verification status is unchanged when the email address is unchanged', function () {
-    $user = User::factory()->create();
+    $user = userWithProfileAccess();
 
     $response = $this
         ->actingAs($user)

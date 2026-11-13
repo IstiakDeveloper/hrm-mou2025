@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ArrowLeft, Edit2, ShoppingCart, Trash2 } from 'lucide-react';
-import { isAccountant, isSuperAdmin, hasAppPermission } from '@/lib/permissions';
+import { hasAppPermission } from '@/lib/permissions';
 import { employeeDisplayName } from '@/lib/employee-name';
 import { formatDisplayDate } from '@/lib/display-date';
 import { formatTakaWhole } from '@/lib/taka-format';
@@ -46,8 +46,8 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
     const { auth } = usePage<SharedData>().props;
     const [confirmDelete, setConfirmDelete] = useState(false);
 
-    const canEdit = hasAppPermission(auth, 'fixed-assets.edit') || isAccountant(auth) || isSuperAdmin(auth);
-    const canDelete = hasAppPermission(auth, 'fixed-assets.delete') || isAccountant(auth) || isSuperAdmin(auth);
+    const canEdit = hasAppPermission(auth, 'fixed-assets.edit');
+    const canDelete = hasAppPermission(auth, 'fixed-assets.delete');
 
     const p = purchase as {
         id: number;

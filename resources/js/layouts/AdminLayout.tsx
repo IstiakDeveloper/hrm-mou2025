@@ -125,10 +125,10 @@ import { getActiveSectionId, getMenuKeysForSection, getSectionById, withSectionP
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
 import { employeeLoanEmployeePath } from '@/lib/employee-loan-employee-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
-import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath, isBranchFixedAssetMenuPath } from '@/lib/fixed-asset-nav';
+import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
-import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
+import { hasAppPermission, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { useNavLayout } from '@/lib/nav-layout';
@@ -408,12 +408,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
     ].some((p) => hasPermission(p));
 
-    const isAccountsDeskUser =
-        isAccountant(auth) ||
-        (['employee-loan.view', 'staff-fund.view', 'fixed-assets.view', 'inventory.view'] as const).some((p) => hasPermission(p));
-
-    const canSeeHrOnlyMenu = isHRUser || isAccountsDeskUser;
-
     // Collect all unique role names (primary role + pivot roles)
     const allRoleNames = useMemo(() => {
         const set = new Set<string>();
@@ -518,6 +512,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 icon: <FolderArchive className="h-5 w-5" />,
                 path: '/sections/documents',
                 hasSubmenu: false,
+                permission: 'documents.view',
             },
             {
                 title: 'My Notices',
@@ -937,26 +932,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 icon: <FolderArchive className="h-5 w-5" />,
                 path: withSectionParam('/sections/documents', 'documents'),
                 hasSubmenu: false,
+                permission: 'documents.view',
             },
         ],
         [canIssueSecondMotorcycleLoan],
     );
 
     const menuItemsForLayout = useMemo(() => {
-        const sub = buildReportsSubmenu(activeSectionId);
-        const reportsSub = branchAccount
-            ? activeSectionId === 'payroll'
-                ? sub.filter(
-                      (item) =>
-                          item.path === '/payroll/reports/salary-sheet-posted' ||
-                          item.path === '/payroll/reports/salary-sheet-unposted',
-                  )
-                : sub.filter(
-                      (item) =>
-                          item.path === '/attendance/daily-branch-summary' ||
-                          item.path === '/attendance/monthly',
-                  )
-            : sub;
+        const reportsSub = buildReportsSubmenu(activeSectionId);
 
         if (reportsSub.length === 0) {
             return baseMenuItems;
@@ -976,66 +959,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             return [...baseMenuItems, reportsItem];
         }
         return [...baseMenuItems.slice(0, idx), reportsItem, ...baseMenuItems.slice(idx)];
-    }, [activeSectionId, baseMenuItems, branchAccount]);
+    }, [activeSectionId, baseMenuItems]);
 
     const visibleMenuItems = useMemo(() => {
-        if (branchAccount) {
-            if (activeSectionId === 'attendance-movement') {
-                const reports = menuItemsForLayout.find((m) => m.menuKey === 'section-reports');
-                return reports ? [reports] : [];
-            }
-            if (activeSectionId === 'inventory') {
-                const allowedKeys = new Set(['inv-products', 'inv-operations', 'inv-reports']);
-                return menuItemsForLayout.filter((m) => m.menuKey != null && allowedKeys.has(m.menuKey));
-            }
-            if (activeSectionId === 'fixed-asset') {
-                const allowedKeys = new Set(['fa-purchase', 'fa-stock', 'fa-depreciation', 'fa-reports']);
-                return menuItemsForLayout
-                    .filter((m) => m.menuKey != null && allowedKeys.has(m.menuKey))
-                    .map((item) => {
-                        if (!item.hasSubmenu || !item.submenu) {
-                            return item;
-                        }
-                        const submenu = item.submenu.filter((sub) =>
-                            isBranchFixedAssetMenuPath(sub.path ?? '', item.menuKey ?? ''),
-                        );
-                        return {
-                            ...item,
-                            submenu,
-                            path: submenu[0]?.path ?? item.path,
-                            hasSubmenu: submenu.length > 1,
-                        };
-                    });
-            }
-            if (activeSectionId === 'payroll') {
-                const reports = menuItemsForLayout.find((m) => m.menuKey === 'section-reports');
-                return reports ? [reports] : [];
-            }
-            if (activeSectionId === 'leave') {
-                const leaveMenu = menuItemsForLayout.find((m) => m.menuKey === 'leave-management');
-                if (!leaveMenu) {
-                    return [];
-                }
-                const allowedPaths = new Set(['/leave/applications', '/leave/balances']);
-                const submenu = (leaveMenu.submenu ?? [])
-                    .filter((sub) => allowedPaths.has(sub.path ?? ''))
-                    .map((sub) => ({ ...sub, hrOnly: false }));
-                return [
-                    {
-                        ...leaveMenu,
-                        submenu,
-                        hasSubmenu: submenu.length > 1,
-                        path: submenu[0]?.path ?? leaveMenu.path,
-                    },
-                ];
-            }
-            if (activeSectionId === 'documents') {
-                const docsItem = menuItemsForLayout.find((m) => m.menuKey === 'documents-dashboard');
-                return docsItem ? [docsItem] : [];
-            }
-            return [];
-        }
-
         const keys = getMenuKeysForSection(activeSectionId);
         if (!keys) {
             return menuItemsForLayout;
@@ -1107,7 +1033,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return undefined;
             })
             .filter((x): x is MenuItemType => Boolean(x));
-    }, [activeSectionId, menuItemsForLayout, employee?.id, branchAccount]);
+    }, [activeSectionId, menuItemsForLayout, employee?.id]);
 
     /** Sidebar paths in the current section — longest-prefix wins within visible items only. */
     const menuNavPaths = useMemo(() => {
@@ -1273,7 +1199,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
         visibleMenuItems.forEach((item) => {
             if (item.superAdminOnly && !isSuperAdmin(auth)) return;
-            if (item.hrOnly && !canSeeHrOnlyMenu) return;
             if (item.employeeOnly && !employee?.id) return;
             if (item.anyPermissions?.length) {
                 if (!item.anyPermissions.some((p) => hasPermission(p))) return;
@@ -1286,7 +1211,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     (subItem) =>
                         !subItem.isGroupLabel &&
                         (!subItem.superAdminOnly || isSuperAdmin(auth)) &&
-                        (!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
                         (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p))),
@@ -1316,7 +1240,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             seen.add(clean);
             return true;
         });
-    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment]);
+    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, employee?.id, appraisalCounts, pendingFinalClearance, pendingMotorcycle, pendingLogBookPayment]);
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
@@ -1330,7 +1254,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
         if (item.superAdminOnly && !isSuperAdmin(auth)) return null;
-        if (item.hrOnly && !canSeeHrOnlyMenu) return null;
         if (item.employeeOnly && !employee?.id) return null;
         if (item.anyPermissions?.length) {
             if (!item.anyPermissions.some((p) => hasPermission(p))) return null;
@@ -1343,7 +1266,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 (subItem) =>
                     subItem.isGroupLabel ||
                     ((!subItem.superAdminOnly || isSuperAdmin(auth)) &&
-                        (!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
                         (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),
@@ -1499,7 +1421,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         }, []);
 
         if (item.superAdminOnly && !isSuperAdmin(auth)) return null;
-        if (item.hrOnly && !canSeeHrOnlyMenu) return null;
         if (item.employeeOnly && !employee?.id) return null;
         if (item.anyPermissions?.length) {
             if (!item.anyPermissions.some((p) => hasPermission(p))) return null;
@@ -1512,7 +1433,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 (subItem) =>
                     subItem.isGroupLabel ||
                     ((!subItem.superAdminOnly || isSuperAdmin(auth)) &&
-                        (!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
                         (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),

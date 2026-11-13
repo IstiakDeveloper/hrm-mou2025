@@ -19,9 +19,17 @@ abstract final class MousumiTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: MousumiTypography.family,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: MousumiColors.canvas,
       textTheme: textTheme,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: MousumiColors.brandPrimary),
       appBarTheme: AppBarTheme(
         backgroundColor: MousumiColors.surface,
         foregroundColor: MousumiColors.textPrimary,

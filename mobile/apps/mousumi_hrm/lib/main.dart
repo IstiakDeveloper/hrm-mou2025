@@ -37,7 +37,67 @@ class MousumiApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const _RootGate(),
+      home: const _BrandFrame(child: _RootGate()),
+    );
+  }
+}
+
+class _BrandFrame extends StatefulWidget {
+  const _BrandFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_BrandFrame> createState() => _BrandFrameState();
+}
+
+class _BrandFrameState extends State<_BrandFrame> with SingleTickerProviderStateMixin {
+  late final AnimationController _scale = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  )..forward();
+  bool _show = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _show = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scale.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        if (_show)
+          Positioned.fill(
+            child: ColoredBox(
+              color: MousumiColors.canvas,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ScaleTransition(
+                    scale: CurvedAnimation(parent: _scale, curve: Curves.easeOutBack),
+                    child: Image.asset('assets/branding/logo.png', width: 96, height: 96),
+                  ),
+                  const SizedBox(height: 22),
+                  const SizedBox(
+                    width: 120,
+                    child: LinearProgressIndicator(minHeight: 3),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

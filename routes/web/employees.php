@@ -103,16 +103,19 @@ use Inertia\Inertia;
     // EMPLOYEE MANAGEMENT
     // ====================
     Route::get('employees/lookup', [EmployeeLookupController::class, 'lookup'])
-        ->name('employees.lookup');
+        ->name('employees.lookup')
+        ->middleware('permission:employees.view,attendance.view,reports.view');
 
     Route::get('employees/global-search', [EmployeeLookupController::class, 'globalSearch'])
         ->name('employees.global-search');
 
     Route::get('employees/locations/upazilas', [EmployeeLookupController::class, 'locationsUpazilas'])
-        ->name('employees.locations.upazilas');
+        ->name('employees.locations.upazilas')
+        ->middleware('permission:employees.view');
 
     Route::get('employees/locations/unions', [EmployeeLookupController::class, 'locationsUnions'])
-        ->name('employees.locations.unions');
+        ->name('employees.locations.unions')
+        ->middleware('permission:employees.view');
 
     Route::get('employees/salary-assignment-preview', [EmployeeController::class, 'salaryAssignmentPreview'])
         ->name('employees.salary-assignment-preview')

@@ -43,7 +43,14 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+function userWithProfileAccess(): \App\Models\User
 {
-    // ..
+    $role = \App\Models\Role::query()->create([
+        'name' => 'Profile access '.uniqid(),
+        'permissions' => ['profile.view', 'profile.edit'],
+    ]);
+
+    return \App\Models\User::factory()->create([
+        'role_id' => $role->id,
+    ]);
 }

@@ -7,9 +7,9 @@ use App\Models\User;
 use App\Models\Zone;
 use App\Services\OrganogramAccessService;
 use App\Services\PromotionEvaluationWorkflowService;
+use App\Support\CachedSchema;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Counts performance appraisals waiting on the current user only.
@@ -46,7 +46,7 @@ class AppraisalPendingCountService
         $actor = $this->actor($user);
 
         foreach (self::MODULES as $key => [$table, $signatureTable, $foreignKey]) {
-            if (! Schema::hasTable($table)) {
+            if (! CachedSchema::hasTable($table)) {
                 continue;
             }
 
@@ -64,7 +64,7 @@ class AppraisalPendingCountService
      */
     private function countTable(User $user, array $actor, string $table, string $signatureTable, string $foreignKey): int
     {
-        $hasSignatures = Schema::hasTable($signatureTable);
+        $hasSignatures = CachedSchema::hasTable($signatureTable);
 
         return (int) DB::table($table)
             ->where(function (Builder $query) use ($user, $actor, $table, $signatureTable, $foreignKey, $hasSignatures) {
@@ -137,11 +137,11 @@ class AppraisalPendingCountService
         $items = [];
 
         foreach (self::MODULES as $key => [$table, $signatureTable, $foreignKey]) {
-            if (! Schema::hasTable($table)) {
+            if (! CachedSchema::hasTable($table)) {
                 continue;
             }
 
-            $hasSignatures = Schema::hasTable($signatureTable);
+            $hasSignatures = CachedSchema::hasTable($signatureTable);
             $rows = DB::table($table)
                 ->leftJoin('employees', 'employees.id', '=', $table.'.employee_id')
                 ->where(function (Builder $query) use ($user, $actor, $table, $signatureTable, $foreignKey, $hasSignatures) {

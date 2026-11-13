@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\InertiaShellCache;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -35,6 +36,16 @@ class Movement extends Model
         'is_returned' => 'boolean',
         'start_meter_reading' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        $forget = static function (Movement $movement): void {
+            InertiaShellCache::forgetForEmployee($movement->employee_id ? (int) $movement->employee_id : null);
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
 
     public function employee()
     {

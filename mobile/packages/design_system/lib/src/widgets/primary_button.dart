@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -25,7 +26,12 @@ class PrimaryButton extends StatelessWidget {
         : Text(label);
 
     final button = FilledButton(
-      onPressed: loading ? null : onPressed,
+      onPressed: loading || onPressed == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onPressed!();
+            },
       child: child,
     );
 

@@ -82,7 +82,7 @@ class _PenaltyLockScreenState extends State<PenaltyLockScreen> {
     return Scaffold(
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const SkeletonList(count: 3)
             : ListView(
                 padding: const EdgeInsets.all(24),
                 children: [

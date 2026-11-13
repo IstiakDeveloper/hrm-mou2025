@@ -1,7 +1,7 @@
 name: mousumi_hrm
 description: Mousumi ERP Flutter client for Android and iOS.
 publish_to: "none"
-version: 1.0.4+5
+version: 1.0.6+7
 
 environment:
   sdk: ^3.5.4
@@ -39,3 +39,14 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/logo.png
+  fonts:
+    - family: Noto Sans Bengali
+      fonts:
+        - asset: fonts/NotoSansBengali-Regular.ttf
+          weight: 400
+        - asset: fonts/NotoSansBengali-Medium.ttf
+          weight: 500
+        - asset: fonts/NotoSansBengali-Medium.ttf
+          weight: 600
+        - asset: fonts/NotoSansBengali-Bold.ttf
+          weight: 700

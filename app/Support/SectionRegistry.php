@@ -2,8 +2,6 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Facades\Schema;
-
 class SectionRegistry
 {
     /**
@@ -74,7 +72,7 @@ class SectionRegistry
     public static function supportsRoleSectionLocks(): bool
     {
         try {
-            return Schema::hasTable('roles') && Schema::hasColumn('roles', 'blocked_sections');
+            return CachedSchema::hasTable('roles') && CachedSchema::hasColumn('roles', 'blocked_sections');
         } catch (\Throwable) {
             return false;
         }

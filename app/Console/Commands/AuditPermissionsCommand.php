@@ -13,10 +13,15 @@ class AuditPermissionsCommand extends Command
 
     public function handle(): int
     {
-        $files = [
-            base_path('routes/web.php'),
-            base_path('routes/api.php'),
-        ];
+        $files = array_merge(
+            glob(base_path('routes/web/*.php')) ?: [],
+            [
+                base_path('routes/web.php'),
+                base_path('routes/settings.php'),
+                base_path('routes/api.php'),
+                base_path('routes/api_v1.php'),
+            ]
+        );
 
         $routePerms = [];
         foreach ($files as $file) {
@@ -27,9 +32,13 @@ class AuditPermissionsCommand extends Command
             if (! is_string($content)) {
                 continue;
             }
-            preg_match_all("/permission:([a-zA-Z0-9_.-]+)/", $content, $matches);
-            foreach ($matches[1] as $key) {
-                $routePerms[$key] = true;
+            preg_match_all('/permission:([a-zA-Z0-9_.,-]+)/', $content, $matches);
+            foreach ($matches[1] as $group) {
+                foreach (explode(',', $group) as $key) {
+                    if ($key !== '') {
+                        $routePerms[$key] = true;
+                    }
+                }
             }
         }
 

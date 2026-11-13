@@ -9,7 +9,7 @@ class SyncDefaultRolesCommand extends Command
 {
     protected $signature = 'permissions:sync-default-roles';
 
-    protected $description = 'Upsert default system roles and permissions from config/default_roles.php';
+    protected $description = 'Create missing default roles from config/default_roles.php without overwriting saved permissions';
 
     public function handle(): int
     {

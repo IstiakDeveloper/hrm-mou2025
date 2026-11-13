@@ -181,7 +181,8 @@ use Inertia\Inertia;
                 ->middleware('permission:leave-applications.view');
 
             Route::get('/{application}/pdf', [LeaveApplicationController::class, 'generatePdf'])
-                ->name('pdf');
+                ->name('pdf')
+                ->middleware('permission:leave-applications.view');
 
             // Create leave application (employees can apply for themselves)
             Route::middleware(['permission:leave-applications.create'])->group(function () {

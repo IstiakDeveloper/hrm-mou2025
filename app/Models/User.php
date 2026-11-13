@@ -211,6 +211,30 @@ class User extends Authenticatable
     }
 
     /**
+     * Organogram line roles block payroll, loan, and staff fund until Super Admin turns this off.
+     * Super Admin is exempt. A role with employees.admin is not flagged.
+     */
+    public function payrollModuleIsBlocked(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return false;
+        }
+
+        $this->loadMissing(['role', 'roles']);
+        $roles = ($this->roles && $this->roles->isNotEmpty())
+            ? $this->roles
+            : collect([$this->role])->filter();
+
+        foreach ($roles as $role) {
+            if ($role && (bool) $role->block_payroll_module) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Role-granted permission only (no alias expansion). Used by organogram scoping to avoid recursion.
      */
     public function hasDirectPermission(string $permission): bool
@@ -237,13 +261,13 @@ class User extends Authenticatable
             return true;
         }
 
+        if (self::isPayrollModulePermission($permission) && $this->payrollModuleIsBlocked()) {
+            return false;
+        }
+
         $granted = $this->allPermissionsFromRoles();
 
         if (in_array($permission, $granted, true)) {
-            return true;
-        }
-
-        if ($this->isAccountant() && str_starts_with($permission, 'fixed-assets.')) {
             return true;
         }
 
@@ -281,17 +305,6 @@ class User extends Authenticatable
                 ) {
                     return true;
                 }
-            }
-        }
-
-        // Check payroll guard first — short-circuit before calling isDepartmentHead / hasOrganogramLineRole.
-        if (self::isPayrollModulePermission($permission)) {
-            if ($this->isDepartmentHead()) {
-                return false;
-            }
-
-            if (OrganogramAccessService::hasOrganogramLineRole($this)) {
-                return false;
             }
         }
 

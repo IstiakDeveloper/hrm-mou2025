@@ -76,12 +76,75 @@ createInertiaApp({
             </>,
         );
     },
-    progress: {
-        color: '#4B5563',
-    },
+    progress: false,
 });
 
 // This will set light / dark mode on load...
 initializeTheme();
 
 installPreventNumberInputWheelScroll();
+installHoverPrefetch();
+
+function installHoverPrefetch(): void {
+    let timer = 0;
+    let lastHref = '';
+
+    const schedule = (anchor: HTMLAnchorElement, immediate: boolean) => {
+        if (anchor.target === '_blank' || anchor.hasAttribute('download')) {
+            return;
+        }
+
+        const raw = anchor.getAttribute('href');
+        if (!raw || raw.startsWith('#') || raw.startsWith('mailto:') || raw.startsWith('tel:')) {
+            return;
+        }
+
+        let url: URL;
+        try {
+            url = new URL(raw, window.location.href);
+        } catch {
+            return;
+        }
+
+        if (url.origin !== window.location.origin || url.pathname === '/logout') {
+            return;
+        }
+
+        if (/\.(pdf|xlsx|xls|csv|zip)$/i.test(url.pathname) || /\/(export|download|print|pdf)(\/|$)/i.test(url.pathname)) {
+            return;
+        }
+
+        const next = `${url.pathname}${url.search}`;
+        if (next === window.location.pathname + window.location.search || next === lastHref) {
+            return;
+        }
+
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+            lastHref = next;
+            router.prefetch(next, {}, { cacheFor: 15_000 });
+        }, immediate ? 0 : 90);
+    };
+
+    document.addEventListener(
+        'mouseover',
+        (event) => {
+            const anchor = (event.target as Element | null)?.closest?.('a');
+            if (anchor instanceof HTMLAnchorElement) {
+                schedule(anchor, false);
+            }
+        },
+        { passive: true },
+    );
+
+    document.addEventListener(
+        'touchstart',
+        (event) => {
+            const anchor = (event.target as Element | null)?.closest?.('a');
+            if (anchor instanceof HTMLAnchorElement) {
+                schedule(anchor, true);
+            }
+        },
+        { passive: true },
+    );
+}

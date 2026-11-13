@@ -210,6 +210,10 @@ return [
         'probation-increment-evaluations.review' => ['label' => 'Review Probation Increment Evaluations (RM/ZM/Directors)', 'category' => 'movement'],
         'probation-increment-evaluations.hr_verify' => ['label' => 'HR Verify Probation Increment Evaluations', 'category' => 'movement'],
         'probation-increment-evaluations.approve' => ['label' => 'Approve/Reject Probation Increment Evaluations (ED)', 'category' => 'movement'],
+        'trainee-evaluations.view' => ['label' => 'View Trainee Evaluations', 'category' => 'movement'],
+        'trainee-evaluations.create' => ['label' => 'Create Trainee Evaluations', 'category' => 'movement'],
+        'trainee-evaluations.hr_verify' => ['label' => 'HR Verify Trainee Evaluations', 'category' => 'movement'],
+        'trainee-evaluations.approve' => ['label' => 'Approve/Reject Trainee Evaluations (ED)', 'category' => 'movement'],
         'final-clearances.view' => ['label' => 'View Final Payment Clearances', 'category' => 'movement'],
         'final-clearances.create' => ['label' => 'Create Final Payment Clearances', 'category' => 'movement'],
         'final-clearances.hr' => ['label' => 'Process Final Payment Clearances (HR)', 'category' => 'movement'],
@@ -264,7 +268,8 @@ return [
         'inventory.delete' => ['label' => 'Delete Inventory Records', 'category' => 'inventory'],
 
         'documents.view' => ['label' => 'View & Download Documents', 'category' => 'documents'],
-        'documents.manage' => ['label' => 'Upload, Edit, Pin & Delete Documents', 'category' => 'documents'],
+        'documents.manage' => ['label' => 'Upload Documents & Categories', 'category' => 'documents'],
+        'documents.delete' => ['label' => 'Edit, Pin & Delete Documents', 'category' => 'documents'],
     ],
 
     /** Map legacy role JSON keys to current catalog keys. */

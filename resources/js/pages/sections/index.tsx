@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import NotificationDropdown from '@/components/notification-dropdown';
 import NoticeNewsTicker from '@/components/sections/notice-news-ticker';
 import { hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
+import { canOpenSection } from '@/lib/section-access';
 
 // Curated themes for each module to create a vibrant, professional layout
 const SECTION_THEMES: Record<string, {
@@ -311,124 +312,11 @@ export default function SectionsIndex() {
                     {ADMIN_SECTIONS.map((section) => {
                         const Icon = section.icon;
                         const moduleActive = Boolean(section.href);
-                        const hasAccess = (() => {
-                            if (blockedSections.has(section.id)) {
-                                return false;
-                            }
-
-                            if (isBranchAccount(auth)) {
-                                if (section.id === 'office-map') {
-                                    return true;
-                                }
-                                if (section.id === 'attendance-movement') {
-                                    return true;
-                                }
-                                if (section.id === 'payroll') {
-                                    return (
-                                        hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access')
-                                    );
-                                }
-                                if (section.id === 'inventory') {
-                                    return (
-                                        hasAppPermission(auth, 'inventory.view') ||
-                                        hasAppPermission(auth, 'inventory.create')
-                                    );
-                                }
-                                if (section.id === 'fixed-asset') {
-                                    return (
-                                        hasAppPermission(auth, 'fixed-assets.view') ||
-                                        hasAppPermission(auth, 'fixed-assets.create')
-                                    );
-                                }
-                                if (section.id === 'leave') {
-                                    return true;
-                                }
-                                if (section.id === 'documents') {
-                                    return true;
-                                }
-                                return false;
-                            }
-
-                            if (isSuperAdmin(auth)) {
-                                return true;
-                            }
-
-                            // Section Access (role blocked_sections) already applied above.
-                            // No hardcoded Department Head / Accountant denylist — customize per role in Admin → Roles.
-
-                            switch (section.id) {
-                                case 'human-resources':
-                                    return (
-                                        hasAppPermission(auth, 'employees.admin') ||
-                                        hasAppPermission(auth, 'employees.create') ||
-                                        hasAppPermission(auth, 'employees.edit') ||
-                                        hasAppPermission(auth, 'transfers.view') ||
-                                        hasAppPermission(auth, 'holidays.view') ||
-                                        hasAppPermission(auth, 'branches.view') ||
-                                        hasAppPermission(auth, 'departments.view') ||
-                                        hasAppPermission(auth, 'designations.view') ||
-                                        hasAppPermission(auth, 'attendance.admin') ||
-                                        hasAppPermission(auth, 'promotion-evaluations.view') ||
-                                        hasAppPermission(auth, 'confirmation-evaluations.view') ||
-                                        hasAppPermission(auth, 'probation-increment-evaluations.view') ||
-                                        hasAppPermission(auth, 'trainee-evaluations.view') ||
-                                        hasAppPermission(auth, 'final-clearances.view') ||
-                                        hasAppPermission(auth, 'admin.access')
-                                    );
-                                case 'attendance-movement':
-                                    return hasAppPermission(auth, 'attendance.view') || hasAppPermission(auth, 'movements.view');
-                                case 'leave':
-                                    return hasAppPermission(auth, 'leave-applications.view') || hasAppPermission(auth, 'leaves.view');
-                                case 'administration':
-                                    return (
-                                        hasAppPermission(auth, 'admin.access') ||
-                                        hasAppPermission(auth, 'users.view') ||
-                                        hasAppPermission(auth, 'roles.view')
-                                    );
-                                case 'payroll':
-                                    return (
-                                        hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access') ||
-                                        Boolean(employee?.id)
-                                    );
-                                case 'fixed-asset':
-                                    return (
-                                        hasAppPermission(auth, 'fixed-assets.view') ||
-                                        hasAppPermission(auth, 'fixed-assets.create') ||
-                                        hasAppPermission(auth, 'fixed-assets.edit') ||
-                                        hasAppPermission(auth, 'admin.access')
-                                    );
-                                case 'inventory':
-                                    return (
-                                        hasAppPermission(auth, 'inventory.view') ||
-                                        hasAppPermission(auth, 'inventory.create') ||
-                                        hasAppPermission(auth, 'inventory.edit') ||
-                                        hasAppPermission(auth, 'admin.access')
-                                    );
-                                case 'staff-fund':
-                                    return (
-                                        hasAppPermission(auth, 'staff-fund.view') ||
-                                        hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access') ||
-                                        Boolean(employee?.id)
-                                    );
-                                case 'employee-loan':
-                                    return (
-                                        hasAppPermission(auth, 'employee-loan.view') ||
-                                        hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access') ||
-                                        Boolean(employee?.id)
-                                    );
-                                case 'office-map':
-                                    return true;
-                                case 'documents':
-                                    return true;
-                                default:
-                                    return false;
-                            }
-                        })();
-
+                        const hasAccess = !blockedSections.has(section.id) && canOpenSection(
+                            section.id,
+                            (permission) => hasAppPermission(auth, permission),
+                            { superAdmin: isSuperAdmin(auth), employeeId: employee?.id },
+                        );
                         const enabled = moduleActive && hasAccess;
                         const sectionPending =
                             section.id === 'leave'

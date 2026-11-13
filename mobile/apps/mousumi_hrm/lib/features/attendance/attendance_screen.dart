@@ -142,6 +142,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final history = await ServiceLocator.api.attendanceHistory();
       if (!mounted) return;
       setState(() => _history = history);
+      await MousumiFeedback.receipt(
+        context,
+        title: checkIn ? 'চেক-ইন হয়েছে' : 'চেক-আউট হয়েছে',
+        message: result.message.isEmpty ? (_status?.serverTime ?? '') : result.message,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = mapDioError(error).message);
@@ -162,7 +167,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonList(count: 3)
           : _error != null && _status == null
               ? AppErrorPanel(message: _error!, onRetry: _refresh)
               : RefreshIndicator(
@@ -182,7 +187,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         _StatusCard(status: _status!),
                       ],
                       const SizedBox(height: 12),
-                      if (_info != null)
+                      if (_info != null && _position == null && _info!.contains('পাওয়া'))
+                        LocationPulse(label: _info!)
+                      else if (_info != null)
                         Text(_info!, style: Theme.of(context).textTheme.bodyMedium),
                       if (_error != null) ...[
                         const SizedBox(height: 8),
@@ -195,7 +202,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                       const SizedBox(height: 10),
                       PrimaryButton(
-                        label: 'Check in',
+                        label: 'চেক-ইন',
                         loading: _punching && (_status?.canCheckIn ?? false),
                         onPressed: (!_punching && (_status?.canCheckIn ?? false))
                             ? () => _punch(checkIn: true)
@@ -203,7 +210,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                       const SizedBox(height: 10),
                       PrimaryButton(
-                        label: 'Check out',
+                        label: 'চেক-আউট',
                         loading: _punching && (_status?.canCheckOut ?? false),
                         onPressed: (!_punching && (_status?.canCheckOut ?? false))
                             ? () => _punch(checkIn: false)

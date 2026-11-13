@@ -70,17 +70,22 @@ class _PayslipListScreenState extends State<PayslipListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Payslips')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? AppErrorPanel(message: _error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: _rows.isEmpty
-                      ? ListView(children: const [SizedBox(height: 120), AppEmptyState(title: 'কোনো payslip নেই')])
-                      : ListView.separated(
+    return EmployeePage(
+      title: 'পে-স্লিপ',
+      subtitle: 'পোস্ট করা বেতন',
+      loading: _loading,
+      error: _error,
+      onRetry: _load,
+      onRefresh: _load,
+      body: _rows.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 80),
+                AppEmptyState(title: 'কোনো পে-স্লিপ নেই', icon: Icons.receipt_long),
+              ],
+            )
+          : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _rows.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -106,7 +111,6 @@ class _PayslipListScreenState extends State<PayslipListScreen> {
                             );
                           },
                         ),
-                ),
     );
   }
 }

@@ -13,6 +13,11 @@ class ApprovalsController extends Controller
 {
     public function __construct(private readonly MobileApprovalsService $approvals) {}
 
+    public function myLogBook(Request $request): JsonResponse
+    {
+        return response()->json($this->approvals->myLogBook($request->user()));
+    }
+
     public function appraisal(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -34,7 +39,7 @@ class ApprovalsController extends Controller
     public function logBook(Request $request, MovementLogBookPayment $payment): JsonResponse
     {
         $data = $request->validate([
-            'action' => 'required|string|in:recommend,approve',
+            'action' => 'required|string|in:recommend,approve,reject',
             'remarks' => 'nullable|string|max:1000',
         ]);
 
