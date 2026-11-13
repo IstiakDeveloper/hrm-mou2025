@@ -33,20 +33,36 @@ class MousumiApiClient {
           ),
         );
 
+    // QueuedInterceptorsWrapper is required for async onRequest; plain
+    // InterceptorsWrapper can hang forever on Android release builds.
     _dio.interceptors.add(
-      InterceptorsWrapper(
+      QueuedInterceptorsWrapper(
         onRequest: (options, handler) async {
-          final headers = await deviceHeaders();
-          options.headers.addAll(headers);
-          final token = await _tokenReader();
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+          try {
+            final headers = await deviceHeaders();
+            options.headers.addAll(headers);
+            final token = await _tokenReader();
+            if (token != null && token.isNotEmpty) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
+            if (_mutating(options.method) &&
+                options.headers['Idempotency-Key'] == null) {
+              options.headers['Idempotency-Key'] = const Uuid().v4();
+            }
+            handler.next(options);
+          } catch (error) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.unknown,
+                error: ApiException(
+                  code: 'client_error',
+                  message: 'অ্যাপ সেটআপে সমস্যা হয়েছে। আবার চেষ্টা করুন।',
+                  retryable: true,
+                ),
+              ),
+            );
           }
-          if (_mutating(options.method) &&
-              options.headers['Idempotency-Key'] == null) {
-            options.headers['Idempotency-Key'] = const Uuid().v4();
-          }
-          handler.next(options);
         },
         onError: (error, handler) {
           final response = error.response;
@@ -310,6 +326,44 @@ class MousumiApiClient {
     return response.data ?? {};
   }
 
+  Future<void> actAppraisal({
+    required String kind,
+    required int id,
+    required String comments,
+    String recommendationStatus = 'recommended',
+    bool approved = true,
+  }) async {
+    await _dio.post<void>('approvals/appraisal', data: {
+      'kind': kind,
+      'id': id,
+      'comments': comments,
+      'recommendation_status': recommendationStatus,
+      'approved': approved,
+    });
+  }
+
+  Future<void> actLogBook({
+    required int id,
+    required String action,
+    String? remarks,
+  }) async {
+    await _dio.post<void>('approvals/log-book/$id', data: {
+      'action': action,
+      'remarks': remarks,
+    });
+  }
+
+  Future<void> actLoan({
+    required int id,
+    required String action,
+    String? reason,
+  }) async {
+    await _dio.post<void>('approvals/loans/$id', data: {
+      'action': action,
+      'reason': reason,
+    });
+  }
+
   Future<List<Map<String, dynamic>>> movementsMine({String? status}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       'movements/mine',
@@ -465,6 +519,24 @@ ApiException mapDioError(Object error) {
   }
   if (error is ApiException) {
     return error;
+  }
+  if (error is DioException &&
+      (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout)) {
+    return ApiException(
+      code: 'timeout',
+      message: 'সার্ভার থেকে উত্তর আসতে দেরি হচ্ছে। আবার চেষ্টা করুন।',
+      retryable: true,
+    );
+  }
+  final text = error.toString();
+  if (text.contains('TimeoutException')) {
+    return ApiException(
+      code: 'timeout',
+      message: 'সার্ভার থেকে উত্তর আসতে দেরি হচ্ছে। আবার চেষ্টা করুন।',
+      retryable: true,
+    );
   }
   return ApiException(
     code: 'unknown',

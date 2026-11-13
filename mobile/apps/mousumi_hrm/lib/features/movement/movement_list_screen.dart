@@ -68,15 +68,7 @@ class _MovementListScreenState extends State<MovementListScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final row = _rows[index];
-                            return ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: const BorderSide(color: MousumiColors.border),
-                              ),
-                              title: Text('${row['destination'] ?? 'Movement'}'),
-                              subtitle: Text('${row['purpose'] ?? ''}\n${row['from_datetime'] ?? ''}'),
-                              isThreeLine: true,
-                              trailing: StatusChip(label: '${row['status']}'),
+                            return SoftCard(
                               onTap: () async {
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -85,6 +77,21 @@ class _MovementListScreenState extends State<MovementListScreen> {
                                 );
                                 _load();
                               },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text('${row['destination'] ?? 'Movement'}', style: Theme.of(context).textTheme.titleMedium),
+                                      ),
+                                      StatusChip(label: '${row['status']}'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text('${row['purpose'] ?? ''}\n${row['from_datetime'] ?? ''}', style: Theme.of(context).textTheme.bodyMedium),
+                                ],
+                              ),
                             );
                           },
                         ),

@@ -14,6 +14,10 @@ class BiometricGate extends StatefulWidget {
 
 class _BiometricGateState extends State<BiometricGate> {
   static const _key = 'mousumi.biometric_unlock';
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
   bool _unlocked = false;
   bool _checking = true;
   String? _error;
@@ -25,22 +29,21 @@ class _BiometricGateState extends State<BiometricGate> {
   }
 
   Future<void> _maybeUnlock() async {
-    const storage = FlutterSecureStorage();
-    final enabled = await storage.read(key: _key);
-    if (enabled != '1') {
-      if (!mounted) return;
-      setState(() {
-        _unlocked = true;
-        _checking = false;
-      });
-      return;
-    }
-
-    final auth = LocalAuthentication();
     try {
+      final enabled = await _storage.read(key: _key).timeout(const Duration(seconds: 3));
+      if (enabled != '1') {
+        if (!mounted) return;
+        setState(() {
+          _unlocked = true;
+          _checking = false;
+        });
+        return;
+      }
+
+      final auth = LocalAuthentication();
       final ok = await auth.authenticate(
         localizedReason: 'Unlock Mousumi HRM',
-        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+        options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),
       );
       if (!mounted) return;
       setState(() {
@@ -51,7 +54,7 @@ class _BiometricGateState extends State<BiometricGate> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _unlocked = true; // fail open to password session already on device
+        _unlocked = true; // fail open — server session already established
         _checking = false;
       });
     }

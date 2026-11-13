@@ -3,6 +3,7 @@ import 'package:app_core/app_core.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 
+import '../approvals/approval_action_screen.dart';
 import '../leave/leave_list_screen.dart';
 import '../movement/movement_list_screen.dart';
 
@@ -41,16 +42,25 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _list(String key) =>
-      ((_payload[key] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  List<Map<String, dynamic>> _list(String key) => ((_payload[key] as List?) ?? const [])
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList();
 
-  void _open(Map<String, dynamic> row) {
+  Future<void> _open(Map<String, dynamic> row, {required bool review}) async {
     final module = '${row['module']}';
     if (module == 'leave') {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LeaveListScreen()));
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => LeaveListScreen(reviewMode: review)),
+      );
     } else if (module == 'movement') {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MovementListScreen()));
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MovementListScreen()));
+    } else if (module == 'appraisal' || module == 'logbook' || module == 'loan') {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ApprovalActionScreen(row: row)),
+      );
     }
+    if (mounted) _load();
   }
 
   @override
@@ -68,27 +78,74 @@ class _TasksScreenState extends State<TasksScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
         children: [
           Text('Tasks', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 4),
+          Text(
+            'নিজের pending, আর যেগুলো আপনি অনুমোদন করতে পারেন।',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+          const SectionLabel(title: 'Needs your approval'),
+          const SizedBox(height: 8),
+          if (reviews.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('কোনো অনুমোদন বাকি নেই।'),
+            )
+          else
+            for (final row in reviews) ...[
+              _TaskCard(row: row, review: true, onTap: () => _open(row, review: true)),
+              const SizedBox(height: 10),
+            ],
           const SizedBox(height: 12),
-          Text('Mine (${mine.length})', style: Theme.of(context).textTheme.titleMedium),
-          ...mine.map((row) => ListTile(
-                title: Text('${row['title']}'),
-                subtitle: Text('${row['subtitle']}'),
-                trailing: StatusChip(label: '${row['status']}'),
-                onTap: () => _open(row),
-              )),
-          if (mine.isEmpty) const AppEmptyState(title: 'নিজের pending নেই'),
-          const SizedBox(height: 16),
-          Text('Reviews (${reviews.length})', style: Theme.of(context).textTheme.titleMedium),
-          ...reviews.map((row) => ListTile(
-                title: Text('${row['title']}'),
-                subtitle: Text('${row['subtitle']}'),
-                trailing: StatusChip(label: '${row['status']}'),
-                onTap: () => _open(row),
-              )),
-          if (reviews.isEmpty) const AppEmptyState(title: 'Review pending নেই'),
+          const SectionLabel(title: 'My requests'),
+          const SizedBox(height: 8),
+          if (mine.isEmpty) const Text('নিজের pending নেই।')
+          else
+            for (final row in mine) ...[
+              _TaskCard(row: row, review: false, onTap: () => _open(row, review: false)),
+              const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskCard extends StatelessWidget {
+  const _TaskCard({required this.row, required this.review, required this.onTap});
+
+  final Map<String, dynamic> row;
+  final bool review;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SoftCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: review ? const Color(0xFFFFF7ED) : MousumiColors.primarySubtle,
+            child: Icon(
+              review ? Icons.how_to_reg_outlined : Icons.pending_actions_outlined,
+              color: review ? MousumiColors.warning : MousumiColors.brandPrimary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${row['title']}', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text('${row['subtitle']}', style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          StatusChip(label: '${row['status']}', tone: review ? StatusTone.warning : StatusTone.info),
         ],
       ),
     );

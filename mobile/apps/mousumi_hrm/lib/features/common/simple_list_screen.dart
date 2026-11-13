@@ -78,15 +78,18 @@ class _SimpleListScreenState extends State<SimpleListScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final row = _rows[index];
-                            return ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: const BorderSide(color: MousumiColors.border),
-                              ),
-                              tileColor: MousumiColors.surface,
-                              title: Text(widget.titleOf(row)),
-                              subtitle: widget.subtitleOf == null ? null : Text(widget.subtitleOf!(row)),
+                            return SoftCard(
                               onTap: widget.onTap == null ? null : () => widget.onTap!(context, row),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(widget.titleOf(row), style: Theme.of(context).textTheme.titleMedium),
+                                  if (widget.subtitleOf != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(widget.subtitleOf!(row), style: Theme.of(context).textTheme.bodyMedium),
+                                  ],
+                                ],
+                              ),
                             );
                           },
                         ),

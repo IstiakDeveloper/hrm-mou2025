@@ -4,11 +4,12 @@ import 'mousumi_colors.dart';
 
 abstract final class MousumiTypography {
   static TextTheme textTheme({required bool banglaPreferred}) {
-    // Source Sans / Noto Sans Bengali should be bundled after license review.
-    // Until then we use a readable platform fallback with blueprint sizes.
-    final base = banglaPreferred
-        ? const TextStyle(fontFamily: 'Noto Sans Bengali', height: 1.55)
-        : const TextStyle(fontFamily: 'Source Sans 3', height: 1.4);
+    // Use platform fonts until licensed brand fonts are bundled.
+    // Requesting missing font families can break text layout on some devices.
+    final base = TextStyle(
+      fontFamily: banglaPreferred ? null : null,
+      height: banglaPreferred ? 1.55 : 1.4,
+    );
 
     return TextTheme(
       displaySmall: base.copyWith(

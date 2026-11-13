@@ -86,15 +86,23 @@ class _PayslipListScreenState extends State<PayslipListScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final row = _rows[index];
-                            return ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: const BorderSide(color: MousumiColors.border),
-                              ),
-                              title: Text('${row['month']}/${row['year']} · ${row['salary_type']}'),
-                              subtitle: Text('Net ${row['net']}'),
-                              trailing: const Icon(Icons.chevron_right),
+                            return SoftCard(
                               onTap: () => _open((row['id'] as num).toInt()),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${row['month']}/${row['year']} · ${row['salary_type']}', style: Theme.of(context).textTheme.titleMedium),
+                                        const SizedBox(height: 4),
+                                        Text('Net ${row['net']}', style: Theme.of(context).textTheme.bodyMedium),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.chevron_right),
+                                ],
+                              ),
                             );
                           },
                         ),

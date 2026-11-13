@@ -121,6 +121,106 @@ class AppraisalPendingCountService
     }
 
     /**
+     * Appraisals waiting on this user.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function pendingItems(User $user): array
+    {
+        $actor = $this->actor($user);
+        $labels = [
+            'promotion' => 'Promotion appraisal',
+            'confirmation' => 'Confirmation appraisal',
+            'probation_increment' => 'Probation increment',
+            'trainee' => 'Trainee appraisal',
+        ];
+        $items = [];
+
+        foreach (self::MODULES as $key => [$table, $signatureTable, $foreignKey]) {
+            if (! Schema::hasTable($table)) {
+                continue;
+            }
+
+            $hasSignatures = Schema::hasTable($signatureTable);
+            $rows = DB::table($table)
+                ->leftJoin('employees', 'employees.id', '=', $table.'.employee_id')
+                ->where(function (Builder $query) use ($user, $actor, $table, $signatureTable, $foreignKey, $hasSignatures) {
+                    $query->where(function (Builder $draft) use ($user, $table) {
+                        $draft->where($table.'.status', 'draft')
+                            ->where($table.'.initiator_id', $user->id);
+                    });
+
+                    if ($actor['stages'] === []) {
+                        return;
+                    }
+
+                    $query->orWhere(function (Builder $approval) use ($user, $actor, $table, $signatureTable, $foreignKey, $hasSignatures) {
+                        $approval->where(function (Builder $stages) use ($actor, $table) {
+                            foreach ($actor['stages'] as $stage) {
+                                $stages->orWhere(function (Builder $one) use ($stage, $table) {
+                                    $one->where($table.'.status', $stage['status']);
+                                    if ($stage['column'] !== null && $stage['ids'] !== []) {
+                                        $column = $table.'.'.$stage['column'];
+                                        $ids = $stage['ids'];
+                                        $one->where(function (Builder $office) use ($column, $ids) {
+                                            $office->whereIn($column, $ids)->orWhereNull($column);
+                                        });
+                                    }
+                                });
+                            }
+                        });
+
+                        $approval->where(function (Builder $initiator) use ($user, $table) {
+                            $initiator->whereNull($table.'.initiator_id')
+                                ->orWhere($table.'.initiator_id', '!=', $user->id);
+                        });
+
+                        if ($user->employee_id) {
+                            $employeeId = (int) $user->employee_id;
+                            $approval->where(function (Builder $self) use ($employeeId, $table) {
+                                $self->whereNull($table.'.employee_id')
+                                    ->orWhere($table.'.employee_id', '!=', $employeeId);
+                            });
+                        }
+
+                        if ($hasSignatures) {
+                            $approval->whereNotExists(function (Builder $signed) use ($signatureTable, $foreignKey, $table, $user) {
+                                $signed->selectRaw('1')
+                                    ->from($signatureTable)
+                                    ->whereColumn($signatureTable.'.'.$foreignKey, $table.'.id')
+                                    ->where($signatureTable.'.user_id', $user->id)
+                                    ->whereIn($signatureTable.'.action', ['submitted', 'forwarded', 'approved']);
+                            });
+                        }
+                    });
+                })
+                ->orderByDesc($table.'.id')
+                ->limit(40)
+                ->get([
+                    $table.'.id',
+                    $table.'.status',
+                    'employees.pin',
+                    'employees.name_en',
+                ]);
+
+            foreach ($rows as $row) {
+                $items[] = [
+                    'module' => 'appraisal',
+                    'kind' => $key,
+                    'id' => (int) $row->id,
+                    'title' => $labels[$key] ?? 'Appraisal',
+                    'subtitle' => trim(($row->pin ? $row->pin.' — ' : '').($row->name_en ?? '')),
+                    'status' => $row->status,
+                    'can_act' => $row->status !== 'draft' && $row->status !== 'submitted_to_hr',
+                    'needs_decision' => $row->status === 'submitted_to_ed',
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
      * Super Admin is not treated as every approver. Only the role, posting,
      * or office assignment that actually holds the file is counted.
      *

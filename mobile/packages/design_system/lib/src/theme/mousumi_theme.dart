@@ -54,9 +54,12 @@ abstract final class MousumiTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
+        height: 68,
         backgroundColor: MousumiColors.surface,
         indicatorColor: MousumiColors.primarySubtle,
-        labelTextStyle: MaterialStatePropertyAll(textTheme.labelSmall),
+        labelTextStyle: WidgetStatePropertyAll(
+          textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
       ),
       cardTheme: CardTheme(
         color: MousumiColors.surface,

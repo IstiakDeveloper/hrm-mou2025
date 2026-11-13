@@ -9,6 +9,7 @@ class MobileTasksService
     public function __construct(
         private readonly MobileLeaveService $leave,
         private readonly MobileMovementService $movement,
+        private readonly MobileApprovalsService $approvals,
     ) {}
 
     /**
@@ -43,6 +44,10 @@ class MobileTasksService
                     'deep_link' => '/movements/'.$row['id'],
                 ];
             }
+
+            foreach ($this->approvals->mineTasks($user) as $row) {
+                $mine[] = $row;
+            }
         }
 
         if ($user->hasPermission('leave-applications.approve') || $user->isSuperAdmin()) {
@@ -69,6 +74,10 @@ class MobileTasksService
                     'deep_link' => '/movements/'.$row['id'],
                 ];
             }
+        }
+
+        foreach ($this->approvals->reviewTasks($user) as $row) {
+            $reviews[] = $row;
         }
 
         return [

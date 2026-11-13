@@ -1,4 +1,3 @@
-import 'package:api_client/api_client.dart';
 import 'package:app_core/app_core.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
@@ -27,59 +26,20 @@ class _AppShellState extends State<AppShell> {
     if (bootstrap?.forceUpdate == true || bootstrap?.maintenanceEnabled == true) {
       return Scaffold(
         body: AppErrorPanel(
-          message: bootstrap?.maintenanceMessage ??
-              'অ্যাপ আপডেট প্রয়োজন অথবা সার্ভিস সাময়িক বন্ধ।',
+          message: bootstrap?.maintenanceMessage ?? 'অ্যাপ আপডেট প্রয়োজন অথবা সার্ভিস সাময়িক বন্ধ।',
         ),
       );
     }
 
-    final userName = bootstrap?.user.name ?? 'User';
-    final branch = bootstrap?.employee?.branchName ?? bootstrap?.user.roleNames.join(', ') ?? '';
-    final isReviewer = bootstrap?.isReviewerHome ?? false;
-    final width = MediaQuery.sizeOf(context).width;
-    final useRail = width >= 600;
-    final sections = bootstrap?.sections
-            .where((s) => s.accessible && s.implemented)
-            .toList(growable: false) ??
-        const [];
-
-    final pages = [
-      _HomeTab(
-        userName: userName,
-        contextLine: branch,
-        isReviewer: isReviewer,
-        pendingLeaveReviews: bootstrap?.pendingLeaveReviews ?? 0,
-      ),
-      const TasksScreen(),
-      _ModulesTab(sections: sections),
-      const InboxScreen(),
-      _MeTab(userName: userName),
+    const pages = [
+      _HomeTab(),
+      TasksScreen(),
+      _WorkTab(),
+      _MeTab(),
     ];
 
-    if (useRail) {
-      return Scaffold(
-        body: Row(
-          children: [
-            NavigationRail(
-              selectedIndex: _index,
-              onDestinationSelected: (value) => setState(() => _index = value),
-              labelType: NavigationRailLabelType.all,
-              destinations: const [
-                NavigationRailDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: Text('Home')),
-                NavigationRailDestination(icon: Icon(Icons.task_alt_outlined), selectedIcon: Icon(Icons.task_alt), label: Text('Tasks')),
-                NavigationRailDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: Text('Modules')),
-                NavigationRailDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications), label: Text('Inbox')),
-                NavigationRailDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: Text('Me')),
-              ],
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(child: SafeArea(child: pages[_index])),
-          ],
-        ),
-      );
-    }
-
     return Scaffold(
+      backgroundColor: MousumiColors.canvas,
       body: SafeArea(child: pages[_index]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -87,8 +47,7 @@ class _AppShellState extends State<AppShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.task_alt_outlined), selectedIcon: Icon(Icons.task_alt), label: 'Tasks'),
-          NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: 'Modules'),
-          NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications), label: 'Inbox'),
+          NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: 'Work'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Me'),
         ],
       ),
@@ -97,68 +56,135 @@ class _AppShellState extends State<AppShell> {
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab({
-    required this.userName,
-    required this.contextLine,
-    required this.isReviewer,
-    required this.pendingLeaveReviews,
-  });
-
-  final String userName;
-  final String contextLine;
-  final bool isReviewer;
-  final int pendingLeaveReviews;
+  const _HomeTab();
 
   @override
   Widget build(BuildContext context) {
+    final bootstrap = ServiceLocator.session.bootstrap;
+    final name = bootstrap?.user.name ?? 'Employee';
+    final role = bootstrap?.employee?.designation ??
+        (bootstrap?.user.roleNames.isNotEmpty == true ? bootstrap!.user.roleNames.first : 'Employee');
+    final branch = bootstrap?.employee?.branchName ?? '';
+    final reviews = bootstrap?.pendingLeaveReviews ?? 0;
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        Text(userName, style: Theme.of(context).textTheme.headlineMedium),
-        if (contextLine.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(contextLine, style: Theme.of(context).textTheme.bodyMedium),
-        ],
-        const SizedBox(height: 20),
-        if (isReviewer) ...[
-          _Card(
-            title: 'Actionable reviews',
-            body: 'Pending leave: $pendingLeaveReviews',
-            actionLabel: 'Leave অনুমোদন',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const LeaveListScreen(reviewMode: true)),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-        _Card(
-          title: 'আজকের উপস্থিতি',
-          body: 'Geofence check-in/out',
-          actionLabel: 'Attendance',
-          onPressed: () {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceScreen()));
-          },
+        Row(
+          children: [
+            const _Avatar(),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('আজকের কাজ', style: Theme.of(context).textTheme.bodyMedium),
+                  Text(name, style: Theme.of(context).textTheme.titleLarge),
+                  if (role.isNotEmpty || branch.isNotEmpty)
+                    Text(
+                      [role, branch].where((e) => e.isNotEmpty).join(' · '),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InboxScreen())),
+              icon: const Icon(Icons.notifications_none),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        Text('দ্রুত কাজ', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        SoftCard(
+          color: MousumiColors.brandPrimary,
+          padding: const EdgeInsets.all(18),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceScreen())),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Attendance', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white70)),
+              const SizedBox(height: 6),
+              Text(
+                'আজকের উপস্থিতি',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'চেক-ইন বা চেক-আউট করুন',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'Open attendance',
+                  style: TextStyle(color: MousumiColors.brandPrimary, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (reviews > 0) ...[
+          const SizedBox(height: 14),
+          SoftCard(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LeaveListScreen(reviewMode: true)),
+            ),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: MousumiColors.primarySubtle,
+                  child: Icon(Icons.fact_check_outlined, color: MousumiColors.brandPrimary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Approval waiting', style: Theme.of(context).textTheme.titleMedium),
+                      Text('$reviews leave request pending', style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 22),
+        const SectionLabel(title: 'আমার কাজ'),
+        const SizedBox(height: 10),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.45,
           children: [
-            ActionChip(
-              label: const Text('Leave'),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LeaveListScreen())),
+            _QuickTile(
+              icon: Icons.event_available_outlined,
+              label: 'Leave',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LeaveListScreen())),
             ),
-            ActionChip(
-              label: const Text('Movement'),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MovementListScreen())),
+            _QuickTile(
+              icon: Icons.route_outlined,
+              label: 'Movement',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MovementListScreen())),
             ),
-            ActionChip(
-              label: const Text('Payslip'),
-              onPressed: () => openModule(context, 'payroll'),
+            _QuickTile(
+              icon: Icons.receipt_long_outlined,
+              label: 'Payslip',
+              onTap: () => openEmployeeService(context, 'payroll'),
+            ),
+            _QuickTile(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Staff fund',
+              onTap: () => openEmployeeService(context, 'staff-fund'),
             ),
           ],
         ),
@@ -167,101 +193,176 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-class _Card extends StatelessWidget {
-  const _Card({
-    required this.title,
-    required this.body,
-    required this.actionLabel,
-    required this.onPressed,
-  });
-
-  final String title;
-  final String body;
-  final String actionLabel;
-  final VoidCallback onPressed;
+class _WorkTab extends StatelessWidget {
+  const _WorkTab();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: MousumiColors.primarySubtle,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: MousumiColors.border),
-      ),
+    const items = [
+      (Icons.fingerprint, 'Attendance', 'চেক-ইন, চেক-আউট, ইতিহাস', 'attendance'),
+      (Icons.event_note_outlined, 'Leave', 'আবেদন ও নিজের স্ট্যাটাস', 'leave'),
+      (Icons.alt_route, 'Movement', 'মুভমেন্ট ও লগবুক', 'movement'),
+      (Icons.payments_outlined, 'Payslip', 'নিজের বেতন স্লিপ', 'payroll'),
+      (Icons.account_balance_outlined, 'Loans', 'নিজের লোন', 'loan'),
+      (Icons.savings_outlined, 'Staff fund', 'PF ও গ্র্যাচুইটি', 'staff-fund'),
+      (Icons.folder_outlined, 'Documents', 'নিজের ডকুমেন্ট', 'documents'),
+      (Icons.devices_outlined, 'My assets', 'আমার কাছে থাকা অ্যাসেট', 'assets'),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      children: [
+        Text('Work', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 4),
+        Text('শুধু কর্মীর নিজের তথ্য।', style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 16),
+        for (final item in items) ...[
+          SoftCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            onTap: () => openEmployeeService(context, item.$4),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: MousumiColors.primarySubtle,
+                  child: Icon(item.$1, color: MousumiColors.brandPrimary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.$2, style: Theme.of(context).textTheme.titleMedium),
+                      Text(item.$3, style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: MousumiColors.textSecondary),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _MeTab extends StatelessWidget {
+  const _MeTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final bootstrap = ServiceLocator.session.bootstrap;
+    final name = bootstrap?.user.name ?? 'Employee';
+    final email = bootstrap?.user.email ?? bootstrap?.user.username ?? '';
+    final branch = bootstrap?.employee?.branchName ?? '';
+    final designation = bootstrap?.employee?.designation ?? '';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      children: [
+        Text('Me', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 14),
+        SoftCard(
+          child: Row(
+            children: [
+              const _Avatar(size: 56),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: Theme.of(context).textTheme.titleLarge),
+                    if (designation.isNotEmpty) Text(designation, style: Theme.of(context).textTheme.bodyMedium),
+                    if (branch.isNotEmpty) Text(branch, style: Theme.of(context).textTheme.bodyMedium),
+                    if (email.isNotEmpty) Text(email, style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        SoftCard(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          child: const Row(
+            children: [
+              Icon(Icons.settings_outlined, color: MousumiColors.brandPrimary),
+              SizedBox(width: 12),
+              Expanded(child: Text('Security & password')),
+              Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SoftCard(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InboxScreen())),
+          child: const Row(
+            children: [
+              Icon(Icons.campaign_outlined, color: MousumiColors.brandPrimary),
+              SizedBox(width: 12),
+              Expanded(child: Text('Notices & inbox')),
+              Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        OutlinedButton(
+          onPressed: () => ServiceLocator.session.logout(),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+            foregroundColor: MousumiColors.error,
+            side: const BorderSide(color: MousumiColors.error),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('লগ আউট'),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickTile extends StatelessWidget {
+  const _QuickTile({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SoftCard(
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(body, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 12),
-          PrimaryButton(label: actionLabel, onPressed: onPressed),
+          Icon(icon, color: MousumiColors.brandPrimary),
+          const SizedBox(height: 10),
+          Text(label, style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );
   }
 }
 
-class _ModulesTab extends StatelessWidget {
-  const _ModulesTab({required this.sections});
+class _Avatar extends StatelessWidget {
+  const _Avatar({this.size = 48});
 
-  final List<BootstrapSection> sections;
-
-  @override
-  Widget build(BuildContext context) {
-    if (sections.isEmpty) {
-      return const AppEmptyState(title: 'কোনো মডিউল নেই');
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(20),
-      itemCount: sections.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final section = sections[index];
-        return ListTile(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: MousumiColors.border),
-          ),
-          tileColor: MousumiColors.surface,
-          title: Text(section.label),
-          subtitle: section.description == null ? null : Text(section.description!),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => openModule(context, section.id),
-        );
-      },
-    );
-  }
-}
-
-class _MeTab extends StatelessWidget {
-  const _MeTab({required this.userName});
-
-  final String userName;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text(userName, style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 8),
-        Text(ServiceLocator.env.apiBaseUrl, style: Theme.of(context).textTheme.bodyMedium),
-        const SizedBox(height: 24),
-        PrimaryButton(
-          label: 'Settings',
-          onPressed: () {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-          },
-        ),
-        const SizedBox(height: 12),
-        PrimaryButton(
-          label: 'লগ আউট',
-          onPressed: () => ServiceLocator.session.logout(),
-        ),
-      ],
+    return Container(
+      width: size,
+      height: size,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: MousumiColors.border),
+      ),
+      child: Image.asset('assets/branding/logo.png', fit: BoxFit.contain),
     );
   }
 }

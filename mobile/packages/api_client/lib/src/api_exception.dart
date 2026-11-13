@@ -16,13 +16,24 @@ class ApiException implements Exception {
   factory ApiException.fromBody(int? status, dynamic body) {
     if (body is Map && body['error'] is Map) {
       final error = Map<String, dynamic>.from(body['error'] as Map);
+      final details = error['details'] is Map
+          ? Map<String, dynamic>.from(error['details'] as Map)
+          : null;
+      var message = (error['message'] ?? 'Request failed').toString();
+      final fieldErrors = details?['errors'];
+      if (fieldErrors is Map && fieldErrors.isNotEmpty) {
+        final first = fieldErrors.values.first;
+        if (first is List && first.isNotEmpty) {
+          message = first.first.toString();
+        } else if (first != null) {
+          message = first.toString();
+        }
+      }
       return ApiException(
         code: (error['code'] ?? 'http_error').toString(),
-        message: (error['message'] ?? 'Request failed').toString(),
+        message: message,
         statusCode: status,
-        details: error['details'] is Map
-            ? Map<String, dynamic>.from(error['details'] as Map)
-            : null,
+        details: details,
         retryable: error['retryable'] == true,
       );
     }

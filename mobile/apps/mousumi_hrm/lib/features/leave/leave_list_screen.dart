@@ -84,22 +84,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final item = _items[index];
-                            return ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: const BorderSide(color: MousumiColors.border),
-                              ),
-                              tileColor: MousumiColors.surface,
-                              title: Text(item.leaveTypeName ?? 'Leave'),
-                              subtitle: Text(
-                                [
-                                  if (item.employeeName != null) item.employeeName!,
-                                  '${item.startDate} → ${item.endDate}',
-                                  '${item.days} day(s)',
-                                ].join('\n'),
-                              ),
-                              isThreeLine: true,
-                              trailing: StatusChip(label: item.status),
+                            return SoftCard(
                               onTap: () async {
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -108,6 +93,31 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                                 );
                                 _load();
                               },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.leaveTypeName ?? 'Leave',
+                                          style: Theme.of(context).textTheme.titleMedium,
+                                        ),
+                                      ),
+                                      StatusChip(label: item.status),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    [
+                                      if (item.employeeName != null) item.employeeName!,
+                                      '${item.startDate} → ${item.endDate}',
+                                      '${item.days} day(s)',
+                                    ].join('\n'),
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
                             );
                           },
                         ),

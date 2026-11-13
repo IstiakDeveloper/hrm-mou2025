@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.2
   api_client:
     path: ../api_client
 

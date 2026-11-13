@@ -20,29 +20,32 @@ class SessionController extends ChangeNotifier {
   String? lastError;
 
   Future<void> restore() async {
-    final token = await _store.readToken();
-    if (token == null || token.isEmpty) {
-      status = SessionStatus.guest;
-      notifyListeners();
-      return;
-    }
-
     try {
-      bootstrap = await _api.bootstrap();
+      final token = await _store.readToken().timeout(const Duration(seconds: 5));
+      if (token == null || token.isEmpty) {
+        status = SessionStatus.guest;
+        lastError = null;
+        notifyListeners();
+        return;
+      }
+
+      bootstrap = await _api.bootstrap().timeout(const Duration(seconds: 25));
       status = bootstrap!.movementFineLocked
           ? SessionStatus.lockedFine
           : SessionStatus.authenticated;
       lastError = null;
-    } catch (error) {
+    } catch (error, stack) {
+      debugPrint('SessionController.restore failed: $error\n$stack');
       final mapped = mapDioError(error);
       if (mapped.statusCode == 401) {
         await _store.clearToken();
-        status = SessionStatus.guest;
+        lastError = null;
       } else {
-        status = SessionStatus.guest;
-        lastError = mapped.message;
         await _store.clearToken();
+        lastError = mapped.message;
       }
+      bootstrap = null;
+      status = SessionStatus.guest;
     }
     notifyListeners();
   }
@@ -53,7 +56,9 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _api.loginStaff(login: login, password: password);
+      final result = await _api
+          .loginStaff(login: login, password: password)
+          .timeout(const Duration(seconds: 30));
       await _store.writeToken(result.token);
       bootstrap = result.bootstrap;
       status = bootstrap!.movementFineLocked
@@ -61,7 +66,8 @@ class SessionController extends ChangeNotifier {
           : SessionStatus.authenticated;
       notifyListeners();
       return true;
-    } catch (error) {
+    } catch (error, stack) {
+      debugPrint('SessionController.loginStaff failed: $error\n$stack');
       lastError = mapDioError(error).message;
       status = SessionStatus.guest;
       notifyListeners();
@@ -75,7 +81,9 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _api.loginBranch(branchId: branchId, pin: pin);
+      final result = await _api
+          .loginBranch(branchId: branchId, pin: pin)
+          .timeout(const Duration(seconds: 30));
       await _store.writeToken(result.token);
       bootstrap = result.bootstrap;
       status = bootstrap!.movementFineLocked
@@ -83,7 +91,8 @@ class SessionController extends ChangeNotifier {
           : SessionStatus.authenticated;
       notifyListeners();
       return true;
-    } catch (error) {
+    } catch (error, stack) {
+      debugPrint('SessionController.loginBranch failed: $error\n$stack');
       lastError = mapDioError(error).message;
       status = SessionStatus.guest;
       notifyListeners();
@@ -93,13 +102,21 @@ class SessionController extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
-      await _api.logout();
+      await _api.logout().timeout(const Duration(seconds: 10));
     } catch (_) {
       // Still clear local session.
     }
     await _store.clearToken();
     bootstrap = null;
     status = SessionStatus.guest;
+    notifyListeners();
+  }
+
+  void forceGuest({String? error}) {
+    status = SessionStatus.guest;
+    if (error != null) {
+      lastError = error;
+    }
     notifyListeners();
   }
 }

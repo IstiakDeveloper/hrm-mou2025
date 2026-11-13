@@ -7,8 +7,20 @@ import '../leave/leave_list_screen.dart';
 import '../movement/movement_list_screen.dart';
 import '../finance/payslip_list_screen.dart';
 
+void openEmployeeService(BuildContext context, String sectionId) {
+  openModule(context, sectionId);
+}
+
 void openModule(BuildContext context, String sectionIdOrLabel) {
   final key = sectionIdOrLabel.toLowerCase();
+
+  const blocked = ['admin', 'report', 'inventory', 'human', 'employee', 'organization', 'store', 'training'];
+  if (blocked.any(key.contains) && !key.contains('my')) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('এই অ্যাপে শুধু কর্মীর নিজের কাজ ও pending অনুমোদন।')),
+    );
+    return;
+  }
 
   if (key.contains('attendance')) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceScreen()));
