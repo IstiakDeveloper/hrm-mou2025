@@ -12,7 +12,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  geolocator: ^13.0.2
+  # 13.x pulls geolocator_android 4.6 which needs Flutter 3.27+ gradle APIs
+  geolocator: 11.1.0
   local_auth: ^2.3.0
   permission_handler: ^11.3.1
   flutter_secure_storage: ^9.2.2
@@ -29,6 +30,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+
+dependency_overrides:
+  # Avoid flutter.compileSdkVersion usage that breaks on Flutter 3.24
+  geolocator_android: 4.5.5
 
 flutter:
   uses-material-design: true
