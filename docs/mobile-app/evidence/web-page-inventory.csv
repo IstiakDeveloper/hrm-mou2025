@@ -1,0 +1,429 @@
+﻿path,lines,renderable_candidate,route_calls,states_to_design
+resources/js/pages/admin/activity-logs/index.tsx,548,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/notices/create.tsx,669,yes,admin.notices.index | admin.notices.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/notices/index.tsx,452,yes,admin.notices.create | admin.notices.destroy | admin.notices.index | admin.notices.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/notices/show.tsx,280,yes,admin.notices.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/roles/create.tsx,571,yes,admin.roles.index | admin.roles.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/roles/edit.tsx,745,yes,admin.roles.index | admin.roles.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/roles/index.tsx,414,yes,admin.roles.create | admin.roles.destroy | admin.roles.edit | admin.roles.index | admin.roles.sync-defaults | admin.roles.sync-line-roles,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/sessions/index.tsx,397,yes,admin.sessions.destroy | admin.sessions.destroy-user | admin.sessions.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/users/BulkEmail.tsx,434,yes,admin.users.bulk-email.send,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/users/create.tsx,536,yes,admin.users.index | admin.users.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/users/edit.tsx,570,yes,admin.users.index | admin.users.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/admin/users/index.tsx,596,yes,admin.users.create | admin.users.destroy | admin.users.edit | admin.users.index | admin.users.sync-branches | admin.users.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/attendance-report.tsx,554,yes,attendance.report | attendance.report.pdf,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/BulkAttendanceModal.tsx,730,yes,attendance.bulk-preview | attendance.bulk-store | attendance.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/helpers.ts,145,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/PortalGridBoard.tsx,137,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/PortalGridStaffCard.tsx,220,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/PortalPrintReport.tsx,41,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/PortalStatsBar.tsx,120,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/ReportHelpPopover.tsx,35,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/components/types.ts,62,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/create.tsx,370,yes,attendance.index | attendance.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/daily-branch-summary.tsx,1533,yes,attendance.index | sections.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/devices/biometric-ids.tsx,358,yes,attendance.devices.biometric-ids | attendance.employees.biometric-id,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/devices/create.tsx,342,yes,attendance.devices.index | attendance.devices.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/devices/edit.tsx,356,yes,attendance.devices.index | attendance.devices.test-connection | attendance.devices.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/devices/index.tsx,578,yes,attendance.devices.biometric-ids | attendance.devices.create | attendance.devices.destroy | attendance.devices.edit | attendance.devices.index | attendance.devices.sync-flags | attendance.devices.sync-report | attendance.devices.sync-settings | attendance.devices.test-connection,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/devices/sync-report.tsx,248,yes,attendance.devices.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/edit.tsx,362,yes,attendance.index | attendance.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/index.tsx,1241,yes,attendance.create | attendance.destroy | attendance.devices.index | attendance.edit | attendance.index | attendance.monthly | attendance.settings.index | attendance.sheet-report | attendance.sync-devices | movements.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/monthly.tsx,1244,yes,attendance.index | attendance.monthly | attendance.report | exports.attendance.monthly,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/report.tsx,689,yes,attendance.index | attendance.report,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/settings/create.tsx,300,yes,attendance.settings.index | attendance.settings.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/settings/edit.tsx,321,yes,attendance.settings.index | attendance.settings.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/settings/employee-times.tsx,473,yes,attendance.settings.employee-times | attendance.settings.employee-times.destroy | attendance.settings.employee-times.upsert | attendance.settings.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/settings/index.tsx,2001,yes,attendance.settings.create | attendance.settings.destroy | attendance.settings.device-log-keep | attendance.settings.devices.push-missing | attendance.settings.edit | attendance.settings.employee-branches.destroy | attendance.settings.employee-branches.store | attendance.settings.employee-times | attendance.settings.guard-shift | attendance.settings.office-open-dates.destroy | attendance.settings.office-open-dates.store | attendance.settings.project-branches.destroy | attendance.settings.project-branches.store | attendance.settings.toggle-bulk-attendance | attendance.settings.toggle-multi-day-movement,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/attendance/sheet-report.tsx,335,yes,attendance.index | attendance.pdf,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/auth/confirm-password.tsx,60,yes,password.confirm,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/auth/forgot-password.tsx,63,yes,login | password.email,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/auth/login.tsx,317,yes,login.attempt,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/auth/register.tsx,119,yes,login | register,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/auth/reset-password.tsx,98,yes,password.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/auth/verify-email.tsx,41,yes,logout | verification.send,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/branch/create.tsx,376,yes,branches.index | branches.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/branch/edit.tsx,418,yes,branches.index | branches.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/branch/index.tsx,393,yes,branches.create | branches.destroy | branches.edit | branches.index | branches.show | organization-structure.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/branch/show.tsx,386,yes,branches.edit | branches.index | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/branch-portal/index.tsx,98,yes,branch.portal.attendance | branch.portal.inventory,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/confirmation/create.tsx,308,yes,confirmations.index | confirmations.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/confirmation/edit.tsx,256,yes,confirmations.show | confirmations.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/confirmation/index.tsx,295,yes,confirmations.complete | confirmations.create | confirmations.edit | confirmations.index | confirmations.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/confirmation/show.tsx,187,yes,confirmations.complete | confirmations.edit | confirmations.index | promotions.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/dashboard.tsx,624,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/demotion/create.tsx,340,yes,demotions.index | demotions.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/demotion/edit.tsx,264,yes,demotions.show | demotions.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/demotion/index.tsx,512,yes,demotions.approve | demotions.complete | demotions.create | demotions.edit | demotions.index | demotions.reject | demotions.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/demotion/show.tsx,248,yes,demotions.approve | demotions.complete | demotions.edit | demotions.index | demotions.reject,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/department/create.tsx,180,yes,departments.index | departments.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/department/edit.tsx,188,yes,departments.index | departments.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/department/index.tsx,359,yes,departments.create | departments.destroy | departments.edit | departments.index | departments.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/department/show.tsx,362,yes,departments.edit | departments.index | departments.show | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/designation/create.tsx,129,yes,designations.index | designations.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/designation/edit.tsx,140,yes,designations.index | designations.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/designation/index.tsx,329,yes,designations.create | designations.destroy | designations.edit | designations.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/disciplinary-actions/create.tsx,221,yes,disciplinary-actions.index | disciplinary-actions.store | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/disciplinary-actions/index.tsx,387,yes,disciplinary-actions.create | disciplinary-actions.destroy | disciplinary-actions.index | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/documents/index.tsx,1359,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/create.tsx,3714,yes,employees.index | employees.salary-assignment-preview | employees.store | employees.unions.store | employees.villages.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/dashboard.tsx,1438,yes,employee.dashboard | employee.dashboard.attendance.pdf | employee.dashboard.movement.pdf | employee.dashboard.pdf | movements.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/documents/create.tsx,248,yes,employees.documents.index | employees.documents.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/documents/edit.tsx,275,yes,employees.documents.index | employees.documents.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/documents/index.tsx,284,yes,employees.documents.create | employees.documents.destroy | employees.documents.download | employees.documents.edit | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/edit.tsx,4877,yes,employees.index | employees.salary-assignment-preview | employees.unions.store | employees.update | employees.villages.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/import-review.tsx,605,yes,employees.import.commit | employees.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/index.tsx,1608,yes,employees.create | employees.destroy | employees.edit | employees.export | employees.import.example | employees.import.preview | employees.index | employees.show | employees.update-status,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/LeavePdfExport.tsx,292,yes,employee.dashboard.leave.pdf,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/leaves/index.tsx,476,yes,employees.leaves.download | employees.leaves.index | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/applications/create.tsx,275,yes,employee.loan.applications.index | employee.loan.applications.preview | employee.loan.applications.show | employee.loan.applications.store | profile.edit,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/applications/index.tsx,133,yes,employee.loan.applications.create | employee.loan.applications.motorcycle.create | employee.loan.applications.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/applications/motorcycle-create.tsx,184,yes,employee.loan.applications.index | employee.loan.applications.motorcycle.preview | employee.loan.applications.motorcycle.store | profile.edit,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/applications/show.tsx,98,yes,employee.loan.applications.create | employee.loan.applications.index | employee.loan.applications.motorcycle.create,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/index.tsx,193,yes,employee.loan.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/ledger.tsx,172,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/recommendations/index.tsx,63,yes,employee.loan.recommendations.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/recommendations/show.tsx,81,yes,employee.loan.recommendations.forward | employee.loan.recommendations.index | employee.loan.recommendations.send-back,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/loan/show.tsx,250,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/movements/index.tsx,441,yes,employees.movements.download | employees.movements.index | employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/my-assets.tsx,143,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/organization-chart.tsx,795,yes,employees.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/payroll/payslips/index.tsx,242,yes,employee.payroll.payslips.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/payroll/payslips/show.tsx,434,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/show.tsx,1251,yes,demotions.show | disciplinary-actions.create | employees.edit | employees.index | employees.update-status | promotions.show | redesignations.show | transfers.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/staff-fund/gratuity-ledger.tsx,249,yes,employee.staff-fund.gratuity,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee/staff-fund/pf-ledger.tsx,275,yes,employee.staff-fund.pf-ledger,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-dashboard.tsx,896,yes,leave.applications.create | leave.applications.index | movements.create,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/applications/form.tsx,483,yes,loan-applications.calculate-preview | loan-applications.employee-preview | loan-applications.index | loan-applications.store | loan-applications.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/applications/index.tsx,104,yes,employee-loans.show | loan-applications.create | loan-applications.destroy | loan-applications.edit | loan-applications.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/applications/show.tsx,284,yes,employee-loans.show | loan-applications.destroy | loan-applications.edit | loan-applications.index | loan-disburse.cancel,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/approval/index.tsx,130,yes,loan-applications.show | loan-approval.approve | loan-approval.reject,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/advance.tsx,113,yes,loan-collection.advance.store | loan-collection.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/batch.tsx,172,yes,loan-collection.batch.store | loan-collection.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/index.tsx,130,yes,loan-collection.advance.create | loan-collection.batch.create | loan-collection.index | loan-collection.show | loan-collection.single.create,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/LoanCollectionFormFields.tsx,140,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/rebate.tsx,312,yes,loan-collection.index | loan-collection.rebate.preview | loan-collection.rebate.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/rollback.tsx,111,yes,loan-collection.index | loan-collection.rollback | loan-collection.rollback.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/show.tsx,170,yes,employee-loans.show | loan-collection.index | loan-collection.rollback,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/single.tsx,112,yes,loan-collection.index | loan-collection.single.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/types.ts,56,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/collection/waive.tsx,112,yes,loan-collection.index | loan-collection.waive.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/committees/form.tsx,190,yes,loan-committees.index | loan-committees.store | loan-committees.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/committees/index.tsx,156,yes,loan-committees.create | loan-committees.destroy | loan-committees.edit,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/disburse/index.tsx,94,yes,loan-disburse.cancel | loan-disburse.disburse,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/index.tsx,287,yes,employee-loans.destroy | employee-loans.index | employee-loans.ledger | employee-loans.show | loan-applications.create | loan-migration.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/ledger.tsx,419,yes,employee-loans.full-paid.preview | employee-loans.full-paid.store | employee-loans.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/migration/create.tsx,552,yes,loan-migration.calculate-preview | loan-migration.index | loan-migration.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/migration/index.tsx,99,yes,loan-migration.create | loan-migration.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/migration/show.tsx,1055,yes,employee-loans.show | loan-migration.calculate-preview | loan-migration.index | loan-migration.items.recalculate | loan-migration.items.update | loan-migration.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/policies/form.tsx,138,yes,loan-policies.index | loan-policies.store | loan-policies.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/policies/index.tsx,121,yes,loan-policies.create | loan-policies.destroy | loan-policies.edit | loan-policies.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/reports/index.tsx,47,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/reports/show.tsx,494,yes,employee-loan.reports.excel | employee-loan.reports.pdf | employee-loan.reports.print | employee-loans.ledger-lookup,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/rollback/index.tsx,301,yes,employee-loans.show | loan-rollback.index | loan-rollback.loans | loan-rollback.migrations,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/second-motorcycle/create.tsx,157,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/show.tsx,299,yes,employee-loans.cancel | employee-loans.destroy | employee-loans.index | employee-loans.ledger | employee-loans.restore | employee-loans.rollback,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/transfer/create.tsx,246,yes,loan-transfer.index | loan-transfer.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/transfer/index.tsx,114,yes,loan-transfer.create | loan-transfer.index | loan-transfer.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/employee-loan/transfer/show.tsx,124,yes,employee-loans.show | loan-transfer.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/Errors/403.tsx,78,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/Errors/Unauthorized.tsx,110,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/components/ClearanceDeleteDialog.tsx,82,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/components/ClearanceFormDocument.tsx,410,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/components/ClearanceWorkflowStepper.tsx,193,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/create.tsx,105,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/index.tsx,481,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/print.tsx,31,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/final-clearances/show.tsx,465,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/form.tsx,299,yes,fixed-assets.index | fixed-assets.store | fixed-assets.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/guarantees/form.tsx,62,yes,fixed-asset.assets.guarantees.index | fixed-asset.assets.guarantees.store | fixed-asset.assets.guarantees.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/guarantees/index.tsx,57,yes,fixed-asset.assets.guarantees.create | fixed-asset.assets.guarantees.destroy | fixed-asset.assets.guarantees.edit | fixed-asset.assets.guarantees.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/import-review.tsx,95,yes,fixed-assets.import.commit | fixed-assets.import.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/import.tsx,67,yes,fixed-assets.import.preview | fixed-assets.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/index.tsx,245,yes,fixed-assets.create | fixed-assets.edit | fixed-assets.import.index | fixed-assets.index | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/insurance/form.tsx,82,yes,fixed-asset.assets.insurance.index | fixed-asset.assets.insurance.store | fixed-asset.assets.insurance.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/insurance/index.tsx,75,yes,fixed-asset.assets.insurance.create | fixed-asset.assets.insurance.destroy | fixed-asset.assets.insurance.edit | fixed-asset.assets.insurance.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/not-in-use/history.tsx,39,yes,fixed-asset.assets.not-in-use.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/not-in-use/index.tsx,128,yes,fixed-asset.assets.not-in-use.history | fixed-asset.assets.not-in-use.index | fixed-asset.assets.not-in-use.restore | fixed-asset.assets.not-in-use.store | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/show.tsx,456,yes,asset-assignments.create | asset-depreciation.index | asset-depreciation.schedule | asset-disposals.create | asset-disposals.index | asset-maintenances.create | asset-transfers.create | fixed-assets.edit | fixed-assets.index | fixed-assets.revaluation.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/tracking/index.tsx,220,yes,fixed-asset.assets.tracking.index | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/warranties/form.tsx,62,yes,fixed-asset.assets.warranties.index | fixed-asset.assets.warranties.store | fixed-asset.assets.warranties.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assets/warranties/index.tsx,59,yes,fixed-asset.assets.warranties.create | fixed-asset.assets.warranties.destroy | fixed-asset.assets.warranties.edit | fixed-asset.assets.warranties.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assignments/form.tsx,124,yes,asset-assignments.employees | asset-assignments.index | asset-assignments.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/assignments/index.tsx,167,yes,asset-assignments.create | asset-assignments.index | asset-assignments.release | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/changes/form.tsx,139,yes,fixed-asset.custodian.changes.index | fixed-asset.custodian.changes.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/changes/index.tsx,92,yes,fixed-asset.custodian.changes.create | fixed-asset.custodian.changes.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/custodians/form.tsx,175,yes,fixed-asset.custodian.custodians.employees | fixed-asset.custodian.custodians.index | fixed-asset.custodian.custodians.store | fixed-asset.custodian.custodians.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/custodians/index.tsx,106,yes,fixed-asset.custodian.custodians.create | fixed-asset.custodian.custodians.destroy | fixed-asset.custodian.custodians.edit | fixed-asset.custodian.custodians.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/departments/form.tsx,52,yes,fixed-asset.custodian.departments.index | fixed-asset.custodian.departments.store | fixed-asset.custodian.departments.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/departments/index.tsx,78,yes,fixed-asset.custodian.departments.create | fixed-asset.custodian.departments.destroy | fixed-asset.custodian.departments.edit | fixed-asset.custodian.departments.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/designations/form.tsx,52,yes,fixed-asset.custodian.designations.index | fixed-asset.custodian.designations.store | fixed-asset.custodian.designations.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/custodian/designations/index.tsx,58,yes,fixed-asset.custodian.designations.create | fixed-asset.custodian.designations.destroy | fixed-asset.custodian.designations.edit | fixed-asset.custodian.designations.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/depreciation/calculation.tsx,126,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/depreciation/index.tsx,170,yes,fixed-asset.depreciation.index | fixed-asset.depreciation.post | fixed-asset.depreciation.schedule,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/depreciation/manual.tsx,182,yes,fixed-asset.depreciation.manual.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/depreciation/posting.tsx,170,yes,fixed-asset.depreciation.post | fixed-asset.depreciation.schedule,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/depreciation/rollback.tsx,148,yes,fixed-asset.depreciation.rollback.run,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/depreciation/schedule.tsx,80,yes,fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposal/batch/form.tsx,117,yes,fixed-asset.disposal.requests.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposal/dispose/form.tsx,3,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposal/reasons/form.tsx,54,yes,fixed-asset.disposal.reasons.index | fixed-asset.disposal.reasons.store | fixed-asset.disposal.reasons.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposal/reasons/index.tsx,84,yes,fixed-asset.disposal.reasons.create | fixed-asset.disposal.reasons.destroy | fixed-asset.disposal.reasons.edit | fixed-asset.disposal.reasons.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposal/requests/form.tsx,40,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposal/requests/index.tsx,156,yes,fixed-asset.disposal.approve | fixed-asset.disposal.reject | fixed-asset.disposal.requests.create | fixed-asset.disposal.requests.index | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposals/form.tsx,86,yes,asset-disposals.index | asset-disposals.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/disposals/index.tsx,169,yes,fixed-asset.disposal.approve | fixed-asset.disposal.reject | fixed-asset.disposal.requests.create | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/maintenances/form.tsx,125,yes,asset-maintenances.index | asset-maintenances.store | asset-maintenances.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/maintenances/index.tsx,135,yes,asset-maintenances.create | asset-maintenances.edit | asset-maintenances.index | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/purchases/form.tsx,559,yes,fixed-asset.purchases.index | fixed-asset.purchases.preview-codes | fixed-asset.purchases.store | fixed-asset.purchases.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/purchases/index.tsx,176,yes,fixed-asset.purchases.create | fixed-asset.purchases.destroy | fixed-asset.purchases.edit | fixed-asset.purchases.index | fixed-asset.purchases.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/purchases/show.tsx,167,yes,fixed-asset.purchases.destroy | fixed-asset.purchases.edit | fixed-asset.purchases.index | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/reports/show.tsx,801,yes,fixed-asset.reports.show | sections.fixed-asset,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/categories/form.tsx,196,yes,fixed-asset.settings.categories.index | fixed-asset.settings.categories.store | fixed-asset.settings.categories.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/categories/index.tsx,202,yes,fixed-asset.settings.categories.create | fixed-asset.settings.categories.destroy | fixed-asset.settings.categories.edit | fixed-asset.settings.categories.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/financial-years/form.tsx,163,yes,fixed-asset.settings.financial-years.index | fixed-asset.settings.financial-years.store | fixed-asset.settings.financial-years.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/financial-years/index.tsx,189,yes,fixed-asset.settings.financial-years.activate | fixed-asset.settings.financial-years.create | fixed-asset.settings.financial-years.destroy | fixed-asset.settings.financial-years.edit | fixed-asset.settings.financial-years.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/sub-categories/form.tsx,154,yes,fixed-asset.settings.sub-categories.index | fixed-asset.settings.sub-categories.store | fixed-asset.settings.sub-categories.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/sub-categories/index.tsx,206,yes,fixed-asset.settings.sub-categories.create | fixed-asset.settings.sub-categories.destroy | fixed-asset.settings.sub-categories.edit | fixed-asset.settings.sub-categories.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/vendors/form.tsx,152,yes,fixed-asset.settings.vendors.index | fixed-asset.settings.vendors.store | fixed-asset.settings.vendors.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/settings/vendors/index.tsx,155,yes,fixed-asset.settings.vendors.create | fixed-asset.settings.vendors.destroy | fixed-asset.settings.vendors.edit | fixed-asset.settings.vendors.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/stock/branch-wise.tsx,156,yes,fixed-asset.stock.branch-wise,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/stock/category-wise.tsx,169,yes,fixed-asset.stock.category-wise,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfer/branch/form.tsx,122,yes,fixed-asset.transfer.branch.index | fixed-asset.transfer.branch.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfer/branch/index.tsx,95,yes,fixed-asset.transfer.branch.create | fixed-asset.transfer.branch.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfer/custodian/form.tsx,156,yes,fixed-asset.transfer.custodian.store | fixed-asset.transfer.history,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfer/history.tsx,98,yes,fixed-asset.transfer.history,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfer/project/form.tsx,140,yes,fixed-asset.transfer.history | fixed-asset.transfer.project.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfers/form.tsx,104,yes,asset-transfers.index | asset-transfers.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/fixed-asset/transfers/index.tsx,134,yes,asset-transfers.create | asset-transfers.index | fixed-assets.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/holiday/calendar.tsx,423,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/holiday/create.tsx,296,yes,holidays.index | holidays.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/holiday/edit.tsx,301,yes,holidays.index | holidays.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/holiday/index.tsx,463,yes,holidays.calendar | holidays.create | holidays.destroy | holidays.edit | holidays.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/disburse/create.tsx,120,yes,inventory.disburse.index | inventory.disburse.stock-check | inventory.disburse.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/disburse/index.tsx,108,yes,inventory.disburse.create | inventory.disburse.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/operations/index.tsx,1260,yes,inventory.operations.disburse | inventory.operations.index | inventory.operations.movements.destroy | inventory.operations.movements.update | inventory.operations.recipients | inventory.operations.recipients.store | inventory.operations.stock-in | inventory.products.quick,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/products/create.tsx,58,yes,inventory.products.index | inventory.products.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/products/edit.tsx,59,yes,inventory.products.index | inventory.products.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/products/index.tsx,315,yes,inventory.products.destroy | inventory.products.index | inventory.products.store | inventory.products.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/reports/current-stock.tsx,93,yes,inventory.reports.current-stock,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/reports/product-ledger.tsx,275,yes,inventory.reports.product-ledger,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/reports/stock-ledger.tsx,173,yes,inventory.reports.product-ledger | inventory.reports.stock-ledger,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/stock-in/create.tsx,78,yes,inventory.stock-in.index | inventory.stock-in.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/inventory/stock-in/index.tsx,105,yes,inventory.stock-in.create | inventory.stock-in.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/applications/create.tsx,778,yes,leave.applications.auto-approve-eligibility | leave.applications.index | leave.applications.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/applications/index.tsx,838,yes,leave.applications.approve | leave.applications.cancel | leave.applications.create | leave.applications.index | leave.applications.reject | leave.applications.report | leave.applications.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/applications/pdf.tsx,1261,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/applications/report.tsx,698,yes,leave.applications.index | leave.applications.report | leave.applications.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/applications/show.tsx,498,yes,leave.applications.approve | leave.applications.cancel | leave.applications.download-document | leave.applications.index | leave.applications.pdf | leave.applications.reject,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/balances/allocate-bulk.tsx,451,yes,leave.balances.apply-defaults | leave.balances.index | leave.balances.store-bulk,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/balances/create.tsx,255,yes,leave.balances.index | leave.balances.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/balances/edit.tsx,262,yes,leave.balances.index | leave.balances.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/balances/index.tsx,744,yes,leave.balances.allocate-bulk | leave.balances.create | leave.balances.edit | leave.balances.index | leave.balances.reset-for-new-year,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/settings/create.tsx,202,yes,leave.settings.index | leave.settings.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/settings/edit.tsx,203,yes,leave.settings.index | leave.settings.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/settings/index.tsx,369,yes,leave.settings.create | leave.settings.destroy | leave.settings.edit | leave.settings.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/types/create.tsx,164,yes,leave.types.index | leave.types.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/types/edit.tsx,177,yes,leave.types.index | leave.types.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/leave/types/index.tsx,378,yes,leave.types.create | leave.types.destroy | leave.types.edit | leave.types.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/create.tsx,1148,yes,movements.index | movements.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/edit.tsx,614,yes,movements.index | movements.show | movements.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/index.tsx,1378,yes,movements.bulk-destroy | movements.create | movements.destroy | movements.edit | movements.export.xlsx | movements.index | movements.print | movements.report | movements.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/edit.tsx,160,yes,movement-log-books.show | movement-log-books.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/index.tsx,907,yes,movement-log-books.destroy | movement-log-books.edit | movement-log-books.export.xlsx | movement-log-books.index | movement-log-books.print | movement-log-books.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/payment/index.tsx,853,yes,movement-log-book-payments.approve | movement-log-book-payments.destroy | movement-log-book-payments.index | movement-log-book-payments.process | movement-log-book-payments.recommend | movement-log-book-payments.reject | movement-log-book-payments.show | movement-log-book-payments.voucher,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/payment/show.tsx,449,yes,movement-log-book-payments.approve | movement-log-book-payments.destroy | movement-log-book-payments.index | movement-log-book-payments.recommend | movement-log-book-payments.reject | movement-log-book-payments.voucher | movement-log-books.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/payment/voucher.tsx,413,yes,movement-log-book-payments.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/print.tsx,234,yes,movement-log-books.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/log-book/show.tsx,158,yes,movement-log-book-payments.show | movement-log-books.destroy | movement-log-books.edit | movement-log-books.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/penalty-admin.tsx,2673,yes,movement-penalties.approve | movement-penalties.bulk | movement-penalties.index | movement-penalties.reject | movement-penalties.sync,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/penalty-payment.tsx,519,yes,dashboard | logout | movement.penalty.status | movement.penalty.submit,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/print.tsx,253,yes,movements.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/report.tsx,749,yes,movements.index | movements.report | movements.report.download,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/movement/show.tsx,354,yes,movements.destroy | movements.edit | movements.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/notices/index.tsx,392,yes,my-notices.index | my-notices.mark-all-read | my-notices.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/notices/show.tsx,186,yes,my-notices.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/notifications/index.tsx,146,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/office-map/index.tsx,34,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/employee-types/create.tsx,80,yes,employee-types.index | employee-types.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/employee-types/edit.tsx,91,yes,employee-types.index | employee-types.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/employee-types/index.tsx,277,yes,employee-types.create | employee-types.destroy | employee-types.edit | employee-types.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/programs/create.tsx,82,yes,programs.index | programs.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/programs/edit.tsx,93,yes,programs.index | programs.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/programs/index.tsx,277,yes,programs.create | programs.destroy | programs.edit | programs.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/projects/create.tsx,73,yes,projects.index | projects.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/projects/edit.tsx,84,yes,projects.index | projects.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/projects/index.tsx,275,yes,projects.create | projects.destroy | projects.edit | projects.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/organization/structure/index.tsx,598,yes,branches.create | branches.edit | branches.index | organization-structure.branches.regional-office | organization-structure.index | organization-structure.regional-offices.zone | regional-offices.create | regional-offices.edit | regional-offices.index | zones.create | zones.edit | zones.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/bonus-calculation/index.tsx,249,yes,bonus-calculation.process | bonus-configurations.create | bonus-post.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/bonus-configurations/form.tsx,190,yes,bonus-configurations.index | bonus-configurations.store | bonus-configurations.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/bonus-configurations/index.tsx,186,yes,bonus-configurations.create | bonus-configurations.destroy | bonus-configurations.edit | bonus-configurations.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/bonus-types/form.tsx,95,yes,bonus-types.index | bonus-types.store | bonus-types.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/bonus-types/index.tsx,161,yes,bonus-types.create | bonus-types.destroy | bonus-types.edit | bonus-types.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/branch-payroll-banks/create.tsx,129,yes,branch-payroll-banks.index | branch-payroll-banks.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/branch-payroll-banks/edit.tsx,133,yes,branch-payroll-banks.index | branch-payroll-banks.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/branch-payroll-banks/index.tsx,164,yes,branch-payroll-banks.create | branch-payroll-banks.destroy | branch-payroll-banks.edit | branch-payroll-banks.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/final-payment/index.tsx,373,yes,employee-financial-statement.index | final-payments.employees.lookup | final-payments.generate | final-payments.index | final-payments.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/final-payment/show.tsx,298,yes,final-payments.index | final-payments.mark-paid | final-payments.refresh | separations.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/financial-statement/index.tsx,553,yes,employee-financial-statement.index | employee-financial-statement.lookup | employee-financial-statement.print,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/fixed-salary/index.tsx,473,yes,fixed-salary.employee.store | fixed-salary.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/gratuity/index.tsx,405,yes,gratuity.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/gratuity/payments.tsx,143,yes,gratuity.payments | gratuity.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/gratuity/reports/index.tsx,48,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/gratuity/reports/show.tsx,341,yes,gratuity.reports.excel | gratuity.reports.pdf | gratuity.reports.print,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/gratuity/rules.tsx,57,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/gratuity/show.tsx,302,yes,gratuity.payments.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/head-modifications/create.tsx,862,yes,salary-head-modifications.create | salary-head-modifications.index | salary-head-modifications.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/head-modifications/index.tsx,341,yes,salary-head-modifications.create | salary-head-modifications.destroy | salary-head-modifications.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/payscales/create.tsx,80,yes,payscales.index | payscales.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/payscales/edit.tsx,95,yes,payscales.index | payscales.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/payscales/index.tsx,176,yes,payscales.create | payscales.destroy | payscales.edit | payscales.index | payscales.update-status,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/probation-salary/index.tsx,586,yes,probation-salary.employee.store | probation-salary.index | probation-salary.rules.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/index.tsx,699,yes,provident-fund.index | provident-fund.ledger | provident-fund.manual.store | provident-fund.opening.store | provident-fund.transactions.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/interest.tsx,347,yes,provident-fund.interest.preview | provident-fund.interest.rollback | provident-fund.interest.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/ledger.tsx,480,yes,provident-fund.index | provident-fund.ledger | provident-fund.transactions.destroy | provident-fund.transactions.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/reports/index.tsx,48,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/reports/show.tsx,315,yes,provident-fund.reports.excel | provident-fund.reports.pdf | provident-fund.reports.print,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/settings.tsx,46,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/summary.tsx,134,yes,provident-fund.index | provident-fund.ledger | provident-fund.summary,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/transfer.tsx,354,yes,provident-fund.ledger | provident-fund.transfer.index | provident-fund.transfer.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/provident-fund/withdrawals.tsx,417,yes,provident-fund.ledger | provident-fund.withdrawals.index | provident-fund.withdrawals.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/reports/index.tsx,50,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/reports/show.tsx,1138,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-arrear/index.tsx,524,yes,salary-arrear.index | salary-arrear.period | salary-arrear.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-arrear/period.tsx,103,yes,salary-arrear.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-arrear/show.tsx,161,yes,salary-arrear.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-grades/create.tsx,67,yes,salary-grades.index | salary-grades.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-grades/edit.tsx,67,yes,salary-grades.index | salary-grades.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-grades/index.tsx,181,yes,salary-grades.create | salary-grades.destroy | salary-grades.edit | salary-grades.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-heads/create.tsx,71,yes,salary-heads.index | salary-heads.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-heads/edit.tsx,79,yes,salary-heads.index | salary-heads.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-heads/form.tsx,204,yes,salary-heads.index | salary-heads.store | salary-heads.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-heads/index.tsx,540,yes,salary-heads.create | salary-heads.custom-overrides.reset | salary-heads.custom-overrides.reset-all | salary-heads.custom-overrides.reset-selected | salary-heads.destroy | salary-heads.edit | salary-heads.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-post/index.tsx,294,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-post/period.tsx,687,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-post/show.tsx,418,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-process/index.tsx,418,yes,salary-process.process,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-rollback/index.tsx,517,yes,salary-rollback.index | salary-rollback.rollback,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-steps/create.tsx,136,yes,salary-steps.index | salary-steps.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-steps/edit.tsx,145,yes,salary-steps.index | salary-steps.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-steps/index.tsx,196,yes,salary-steps.create | salary-steps.destroy | salary-steps.edit | salary-steps.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-structures/create.tsx,265,yes,salary-structures.index | salary-structures.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-structures/edit.tsx,282,yes,salary-structures.index | salary-structures.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-structures/index.tsx,184,yes,salary-structures.create | salary-structures.destroy | salary-structures.edit | salary-structures.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-structures/manual.tsx,572,yes,salary-structures.manual | salary-structures.manual.save,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/payroll/salary-withheld/index.tsx,143,yes,salary-withheld.destroy | salary-withheld.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/profile/edit.tsx,97,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/promotion/create.tsx,340,yes,promotions.index | promotions.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/promotion/edit.tsx,264,yes,promotions.show | promotions.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/promotion/index.tsx,534,yes,promotions.approve | promotions.complete | promotions.create | promotions.edit | promotions.index | promotions.reject | promotions.rollback | promotions.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/promotion/show.tsx,269,yes,promotions.approve | promotions.complete | promotions.edit | promotions.index | promotions.reject | promotions.rollback,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/redesignation/create.tsx,247,yes,redesignations.index | redesignations.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/redesignation/edit.tsx,175,yes,redesignations.show | redesignations.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/redesignation/index.tsx,356,yes,redesignations.create | redesignations.edit | redesignations.index | redesignations.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/redesignation/show.tsx,117,yes,redesignations.edit | redesignations.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/regional-office/create.tsx,156,yes,regional-offices.index | regional-offices.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/regional-office/edit.tsx,166,yes,regional-offices.index | regional-offices.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/regional-office/index.tsx,369,yes,organization-structure.index | regional-offices.create | regional-offices.destroy | regional-offices.edit | regional-offices.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/administration.tsx,497,yes,reports.administration,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/attendance.tsx,1219,yes,reports.attendance | reports.export-excel | reports.export-pdf | reports.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/employee.tsx,1080,yes,reports.employee | reports.export-excel | reports.export-pdf | reports.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/index.tsx,170,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/leave.tsx,716,yes,reports.leave | reports.leave.pdf,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/movement.tsx,1057,yes,reports.export-excel | reports.export-pdf | reports.index | reports.movement,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/report/transfer.tsx,682,yes,reports.index | reports.transfer | transfers.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/salary-increments/create.tsx,1048,yes,salary-increments.create | salary-increments.index | salary-increments.release-stop | salary-increments.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/salary-increments/index.tsx,235,yes,salary-increments.create | salary-increments.index | salary-increments.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/salary-increments/show.tsx,308,yes,salary-increments.index | salary-increments.rollback,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/administration/dashboard.tsx,636,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/attendance-movement/dashboard.tsx,494,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/attendance-movement/employee-dashboard.tsx,419,yes,employee.dashboard | movements.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/employee-loan/dashboard.tsx,292,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/employee-loan/employee-dashboard.tsx,400,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/fixed-asset/dashboard.tsx,608,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/dashboard.tsx,1101,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/components/ConfirmationOfficialFormDocument.tsx,710,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/components/FormA.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/components/FormB.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/components/FormC.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/components/ResponsiveScoreSection.tsx,211,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/components/WorkflowTimelineStepper.tsx,559,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/confirmation-config.ts,440,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/create.tsx,1465,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/edit.tsx,972,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/index.tsx,923,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/print.tsx,87,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/confirmation/show.tsx,431,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/components/FormAIncrement.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/components/FormBIncrement.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/components/FormCIncrement.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/components/ProbationIncrementOfficialFormDocument.tsx,756,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/components/ResponsiveScoreSection.tsx,207,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/components/WorkflowTimelineStepper.tsx,430,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/create.tsx,1064,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/edit.tsx,1013,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/index.tsx,789,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/print.tsx,89,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/probation-increment-config.ts,416,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/probation-increment/show.tsx,425,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/AccountantFormDocument.tsx,795,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/BmToZmFormDocument.tsx,800,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/FormA.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/FormB.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/FormC.tsx,84,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/OfficerAbmFormDocument.tsx,740,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/OfficialFormDocument.tsx,36,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/ResponsiveScoreSection.tsx,211,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/components/WorkflowTimelineStepper.tsx,566,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/create.tsx,1113,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/edit.tsx,1134,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/evaluation-config.ts,756,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/index.tsx,895,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/print.tsx,87,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/show.tsx,526,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/promotion/templates/index.tsx,1060,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/components/TraineeOfficialFormDocument.tsx,465,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/components/WorkflowTimelineStepper.tsx,263,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/create.tsx,989,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/edit.tsx,687,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/index.tsx,815,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/print.tsx,90,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/show.tsx,400,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/evaluations/trainee/trainee-config.ts,394,no/helper,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/components/OfficialResignationDocument.tsx,314,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/components/ResignationApprovalDialog.tsx,234,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/components/WorkflowTimelineStepper.tsx,319,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/create.tsx,368,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/edit.tsx,252,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/index.tsx,349,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/print.tsx,52,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/human-resources/resignation/show.tsx,211,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/index.tsx,530,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/inventory/dashboard.tsx,254,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/leave/branch-dashboard.tsx,402,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/leave/dashboard.tsx,404,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/leave/employee-dashboard.tsx,344,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/payroll/branch-dashboard.tsx,396,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/payroll/dashboard.tsx,725,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/payroll/employee-dashboard.tsx,431,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/section-dashboard.tsx,202,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/staff-fund/dashboard.tsx,368,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/sections/staff-fund/employee-dashboard.tsx,318,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/separation/create.tsx,204,yes,separations.index | separations.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/separation/edit.tsx,215,yes,separations.show | separations.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/separation/index.tsx,208,yes,separations.complete | separations.create | separations.destroy | separations.edit | separations.index | separations.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/separation/show.tsx,171,yes,final-payments.show | separations.complete | separations.destroy | separations.edit | separations.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/settings/appearance.tsx,32,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/settings/notifications.tsx,147,yes,settings.notifications.destroy | settings.notifications.test,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/settings/password.tsx,232,yes,settings.password.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/settings/profile.tsx,131,yes,settings.profile.update | verification.send,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/transfer/bulk.tsx,518,yes,transfers.bulk.store | transfers.create | transfers.index,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/transfer/create.tsx,546,yes,transfers.bulk.create | transfers.index | transfers.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/transfer/edit.tsx,553,yes,transfers.index | transfers.show | transfers.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/transfer/index.tsx,634,yes,reports.transfer | transfers.approve | transfers.bulk.create | transfers.cancel | transfers.complete | transfers.create | transfers.edit | transfers.index | transfers.reject | transfers.show,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/transfer/show.tsx,565,yes,transfers.approve | transfers.cancel | transfers.complete | transfers.edit | transfers.index | transfers.reject,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/welcome.tsx,168,yes,,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/zk-teco/dashboard.tsx,399,yes,api.employees.by-branch | zkteco.devices.edit | zkteco.sync-all | zkteco.sync-device | zkteco.test-connection | zkteco.upload-employees,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/zone/create.tsx,126,yes,zones.index | zones.store,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/zone/edit.tsx,136,yes,zones.index | zones.update,loading | empty | error | success | forbidden | offline | stale | submitting
+resources/js/pages/zone/index.tsx,325,yes,organization-structure.index | zones.create | zones.destroy | zones.edit | zones.index,loading | empty | error | success | forbidden | offline | stale | submitting
