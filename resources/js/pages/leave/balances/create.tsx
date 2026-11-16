@@ -19,11 +19,18 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { ArrowLeft, CalendarDays, User } from 'lucide-react';
+<<<<<<< HEAD
 
 interface Employee {
   id: number;
   first_name: string;
   last_name: string;
+=======
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Employee extends EmployeeNameFields {
+  id: number;
+>>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -122,7 +129,11 @@ export default function Create({ employees, leaveTypes, currentYear, years }: Cr
                   <SelectContent>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
+<<<<<<< HEAD
                         {employee.first_name} {employee.last_name} ({employee.employee_id})
+=======
+                        {employeeDisplayName(employee)} ({employee.employee_id})
+>>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>

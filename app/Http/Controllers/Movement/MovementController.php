@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Movement;
 
+<<<<<<< HEAD
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Employee;
@@ -13,12 +14,164 @@ use Inertia\Inertia;
 
 class MovementController extends Controller
 {
+=======
+use App\Http\Controllers\Concerns\PaginatesForInertia;
+use App\Http\Controllers\Controller;
+use App\Models\Attendance;
+use App\Models\AttendanceSetting;
+use App\Models\Branch;
+use App\Models\Department;
+use App\Models\Employee;
+use App\Models\Movement;
+use App\Models\MovementLogBook;
+use App\Models\RegionalOffice;
+use App\Models\User;
+use App\Models\Zone;
+use App\Notifications\HrmNotification;
+use App\Services\LogBookPaymentWorkflowService;
+use App\Services\OrganogramAccessService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Shuchkin\SimpleXLSXGen;
+
+class MovementController extends Controller
+{
+    use PaginatesForInertia;
+
+    /**
+     * Parse datetime from the client (ISO 8601 with offset or naive) into app timezone for DB storage.
+     */
+    private function parseMovementDateTimeToApp(string $value): Carbon
+    {
+        return Carbon::parse($value)->timezone(config('app.timezone'));
+    }
+
+    /**
+     * Weekend movements are personal-only (log book). Attendance is never linked.
+     */
+    private function movementTypeForDate(string $requestedType, Carbon $from, int $employeeId): string
+    {
+        if (AttendanceSetting::isWeekendForEmployee($from, $employeeId)) {
+            return 'personal';
+        }
+
+        return in_array($requestedType, ['official', 'personal'], true) ? $requestedType : 'official';
+    }
+
+    /**
+     * Weekend day numbers (Carbon: 0=Sun … 6=Sat) for the movement create/edit UI.
+     *
+     * @param  iterable<int, Employee>  $employees
+     * @return array{weekendDays: list<int>, weekendDaysByEmployee: array<int, list<int>>}
+     */
+    private function weekendDaysPayload(?Employee $currentEmployee, iterable $employees): array
+    {
+        $weekendDays = AttendanceSetting::weekendDaysForEmployee($currentEmployee?->id);
+        $weekendDaysByEmployee = [];
+        $branchWeekendCache = [];
+
+        foreach ($employees as $emp) {
+            $branchId = $emp->current_branch_id ? (int) $emp->current_branch_id : 0;
+            if (! array_key_exists($branchId, $branchWeekendCache)) {
+                $branchWeekendCache[$branchId] = AttendanceSetting::weekendDaysForBranch($branchId ?: null);
+            }
+            $weekendDaysByEmployee[(int) $emp->id] = $branchWeekendCache[$branchId];
+        }
+
+        return [
+            'weekendDays' => $weekendDays,
+            'weekendDaysByEmployee' => $weekendDaysByEmployee,
+        ];
+    }
+
+    /**
+     * Get branch work start/end times for an employee (fallback 09:00-18:00).
+     */
+    private function getBranchWorkTimesForEmployee(int $employeeId): array
+    {
+        $employee = \App\Models\Employee::find($employeeId);
+        $branchId = $employee?->current_branch_id ?? null;
+
+        $default = ['work_start_time' => '09:00:00', 'work_end_time' => '18:00:00'];
+        if (! $branchId) {
+            return $default;
+        }
+
+        $settings = \App\Models\AttendanceSetting::where('branch_id', $branchId)->first();
+        if (! $settings) {
+            return $default;
+        }
+
+        return [
+            'work_start_time' => $settings->work_start_time ?: $default['work_start_time'],
+            'work_end_time' => $settings->work_end_time ?: $default['work_end_time'],
+        ];
+    }
+
+    /**
+     * Merge a time into attendance check_in/check_out using min/max rule.
+     * Times are stored as "H:i:s" strings.
+     */
+    private function mergeAttendanceTimes(Attendance $attendance, ?string $inCandidate, ?string $outCandidate): void
+    {
+        $toSeconds = function ($value): ?int {
+            if ($value === null || $value === '') {
+                return null;
+            }
+            if ($value instanceof Carbon) {
+                return ($value->hour * 3600) + ($value->minute * 60) + $value->second;
+            }
+            if (is_string($value)) {
+                try {
+                    $dt = Carbon::parse($value);
+
+                    return ($dt->hour * 3600) + ($dt->minute * 60) + $dt->second;
+                } catch (\Throwable $e) {
+                    return null;
+                }
+            }
+
+            return null;
+        };
+
+        if ($inCandidate) {
+            if (! $attendance->check_in) {
+                $attendance->check_in = $inCandidate;
+            } else {
+                $existingSec = $toSeconds($attendance->check_in);
+                $candidateSec = $toSeconds($inCandidate);
+                if ($existingSec === null || ($candidateSec !== null && $candidateSec < $existingSec)) {
+                    $attendance->check_in = $inCandidate;
+                }
+            }
+        }
+
+        if ($outCandidate) {
+            if (! $attendance->check_out) {
+                $attendance->check_out = $outCandidate;
+            } else {
+                $existingSec = $toSeconds($attendance->check_out);
+                $candidateSec = $toSeconds($outCandidate);
+                if ($existingSec === null || ($candidateSec !== null && $candidateSec > $existingSec)) {
+                    $attendance->check_out = $outCandidate;
+                }
+            }
+        }
+    }
+
+>>>>>>> feature/flutter-mobile-app
     /**
      * Display a listing of movements.
      */
     public function index(Request $request)
     {
         $user = Auth::user();
+<<<<<<< HEAD
         $query = Movement::with(['employee.department', 'employee.designation', 'approver']);
 
         // If user is not an admin, filter by relevant movements
@@ -74,30 +227,505 @@ class MovementController extends Controller
             'filters' => $request->only(['status', 'department_id', 'employee_id', 'movement_type', 'from_date', 'to_date', 'search']),
             'canApprove' => $user->hasPermission('movements.approve'),
         ]);
+=======
+
+        $userEmployeeId = $user->employee_id;
+        $hasViewPermission = $user->hasPermission('movements.view');
+        $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
+        $userBranchId = $user->branch_id;
+
+        $isBranchHead = false;
+        if ($userEmployeeId && $userBranchId) {
+            $branch = Branch::find($userBranchId);
+            $employee = Employee::find($userEmployeeId);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
+        }
+
+        $isDepartmentHead = false;
+        $userDepartmentId = null;
+        if ($userEmployeeId) {
+            $employee = Employee::find($userEmployeeId);
+            if ($employee && $employee->department_id) {
+                $userDepartmentId = $employee->department_id;
+                $department = Department::find($employee->department_id);
+                $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
+            }
+        }
+
+        if (! $request->filled('from_date') && ! $request->filled('to_date') && ! $request->filled('search')) {
+            $request->merge([
+                'from_date' => now()->startOfMonth()->toDateString(),
+                'to_date' => now()->endOfMonth()->toDateString(),
+            ]);
+        }
+
+        $query = $this->buildMovementIndexQuery($request, $user);
+
+        $summaryRow = (clone $query)->selectRaw("
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved
+        ")->first();
+
+        $summary = [
+            'total' => (int) ($summaryRow->total ?? 0),
+            'active' => (int) ($summaryRow->active ?? 0),
+            'completed' => (int) ($summaryRow->completed ?? 0),
+            'pending' => (int) ($summaryRow->pending ?? 0),
+            'approved' => (int) ($summaryRow->approved ?? 0),
+        ];
+
+        $perPage = $this->resolvePerPage($request->get('per_page'), 10);
+
+        $movements = $query->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        // Get accessible departments and employees
+        $departments = $this->getAccessibleDepartments($user);
+        $employees = $this->getAccessibleEmployees($user);
+        $organizationFilters = $this->getAccessibleOrganizationFilters($user);
+
+        return Inertia::render('movement/index', [
+            'movements' => $this->inertiaPagination($movements),
+            'summary' => $summary,
+            'departments' => $departments,
+            'employees' => $employees,
+            'zones' => $organizationFilters['zones'],
+            'regionalOffices' => $organizationFilters['regionalOffices'],
+            'branches' => $organizationFilters['branches'],
+            'filters' => $request->only($this->movementIndexFilterKeys()),
+            'userPermissions' => [
+                'canView' => $hasViewPermission,
+                'canCreate' => $user->hasPermission('movements.create'),
+                'canEdit' => $user->hasPermission('movements.edit'),
+                'canDelete' => $user->hasPermission('movements.delete'),
+                'isBranchManager' => $isBranchManager,
+                'isBranchHead' => $isBranchHead,
+                'isDepartmentHead' => $isDepartmentHead,
+                'userBranchId' => $userBranchId,
+                'userDepartmentId' => $userDepartmentId,
+                'isEmployee' => $userEmployeeId ? true : false,
+                'employeeId' => $userEmployeeId,
+            ],
+        ]);
+    }
+
+    /**
+     * Download the current index listing as PDF (respects active filters).
+     */
+    public function exportIndexPdf(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('movements.view'), 403);
+
+        $movements = $this->buildMovementIndexQuery($request, $user)
+            ->orderByDesc('id')
+            ->get();
+
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('pdf.movement-index', [
+            'movements' => $movements,
+            'filterSummary' => $this->movementIndexFilterSummary($request),
+        ]);
+
+        return $pdf->download('movements-'.now()->format('Y-m-d-His').'.pdf');
+    }
+
+    /**
+     * Print-friendly TSX document for the current filtered index listing.
+     */
+    public function printIndex(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('movements.view'), 403);
+
+        $movements = $this->buildMovementIndexQuery($request, $user)
+            ->orderByDesc('id')
+            ->get();
+
+        return Inertia::render('movement/print', [
+            'movements' => $movements,
+            'filterSummary' => $this->movementIndexFilterSummary($request),
+            'generatedAt' => now()->toIso8601String(),
+            'companyName' => config('payroll_reports.company_name', config('app.name')),
+            'companyAddress' => config('payroll_reports.company_address', ''),
+        ]);
+    }
+
+    /**
+     * Download the current index listing as XLSX (respects active filters).
+     */
+    public function exportIndexXlsx(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('movements.view'), 403);
+
+        $movements = $this->buildMovementIndexQuery($request, $user)
+            ->orderByDesc('id')
+            ->get();
+
+        $rows = [[
+            'PIN',
+            'Employee',
+            'Branch',
+            'Department',
+            'Designation',
+            'Type',
+            'From',
+            'Return',
+            'Destination',
+            'Status',
+            'Duration',
+            'Purpose',
+        ]];
+
+        foreach ($movements as $movement) {
+            $employee = $movement->employee;
+            $rows[] = [
+                (string) ($employee->pin ?? $employee->employee_id ?? ''),
+                (string) ($employee->name_en ?? $employee->full_name_en ?? ''),
+                (string) ($employee->branch->name ?? ''),
+                (string) ($employee->department->name ?? ''),
+                (string) ($employee->designation->name ?? ''),
+                ucfirst((string) $movement->movement_type),
+                Carbon::parse($movement->from_datetime)->format('Y-m-d H:i'),
+                $movement->status === 'completed' && $movement->actual_return_datetime
+                    ? Carbon::parse($movement->actual_return_datetime)->format('Y-m-d H:i')
+                    : 'Not returned',
+                (string) $movement->destination,
+                ucfirst((string) $movement->status),
+                $this->movementDurationLabel($movement),
+                (string) $movement->purpose,
+            ];
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'movement-xlsx-');
+        if ($path === false) {
+            abort(500, 'Could not create export file.');
+        }
+
+        SimpleXLSXGen::fromArray($rows)->saveAs($path);
+        $content = file_get_contents($path);
+        @unlink($path);
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="movements-'.now()->format('Y-m-d-His').'.xlsx"',
+        ]);
+    }
+
+    private function buildMovementIndexQuery(Request $request, User $user)
+    {
+        $query = Movement::with(['employee.department', 'employee.designation', 'employee.branch']);
+
+        $hasViewPermission = $user->hasPermission('movements.view');
+        $userEmployeeId = $user->employee_id;
+
+        if (! $hasViewPermission) {
+            if ($userEmployeeId) {
+                $query->where('employee_id', $userEmployeeId);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } else {
+            OrganogramAccessService::constrainViaEmployeeRelation($query, $user, 'employee');
+        }
+
+        $this->applyMovementIndexFilters($query, $request);
+
+        return $query;
+    }
+
+    private function applyMovementIndexFilters($query, Request $request): void
+    {
+        $query->when($request->filled('status') && $request->status !== 'all', function ($query) use ($request) {
+            $query->where('status', $request->status);
+        })
+            ->when($request->filled('department_id') && $request->department_id !== 'all', function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
+                });
+            })
+            ->when($request->filled('employee_id') && $request->employee_id !== 'all', function ($query) use ($request) {
+                $query->where('employee_id', $request->employee_id);
+            })
+            ->when($request->filled('movement_type') && $request->movement_type !== 'all', function ($query) use ($request) {
+                $query->where('movement_type', $request->movement_type);
+            })
+            ->when($request->filled('branch_id') && $request->branch_id !== 'all', function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('current_branch_id', $request->branch_id);
+                });
+            })
+            ->when(
+                $request->filled('regional_office_id') && $request->regional_office_id !== 'all' && ! ($request->filled('branch_id') && $request->branch_id !== 'all'),
+                function ($query) use ($request) {
+                    $query->whereHas('employee.branch', function ($q) use ($request) {
+                        $q->where('regional_office_id', $request->regional_office_id);
+                    });
+                }
+            )
+            ->when(
+                $request->filled('zone_id') && $request->zone_id !== 'all'
+                    && ! ($request->filled('branch_id') && $request->branch_id !== 'all')
+                    && ! ($request->filled('regional_office_id') && $request->regional_office_id !== 'all'),
+                function ($query) use ($request) {
+                    $query->whereHas('employee.branch.regionalOffice', function ($q) use ($request) {
+                        $q->where('zone_id', $request->zone_id);
+                    });
+                }
+            )
+            ->when($this->filledFilter($request, 'from_date'), function ($query) use ($request) {
+                $query->whereDate('from_datetime', '>=', $request->input('from_date'));
+            })
+            ->when($this->filledFilter($request, 'to_date'), function ($query) use ($request) {
+                $query->whereDate('from_datetime', '<=', $request->input('to_date'));
+            })
+            ->when($request->boolean('cross_day_only'), function ($query) {
+                $query->where(function ($q) {
+                    $q->where(function ($q2) {
+                        $q2->where('status', 'completed')
+                            ->whereNotNull('actual_return_datetime')
+                            ->whereRaw('DATE(from_datetime) != DATE(actual_return_datetime)');
+                    })->orWhere(function ($q2) {
+                        $q2->where('status', 'active')
+                            ->whereRaw('DATE(from_datetime) < CURDATE()');
+                    });
+                });
+            })
+            ->when($request->search, function ($query, $search) {
+                $query->whereHas('employee', function ($q) use ($search) {
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('pin', 'like', "%{$search}%");
+                });
+            });
+    }
+
+    private function movementDurationLabel(Movement $movement): string
+    {
+        if ($movement->status !== 'completed' || ! $movement->actual_return_datetime) {
+            return '—';
+        }
+
+        $from = Carbon::parse($movement->from_datetime);
+        $to = Carbon::parse($movement->actual_return_datetime);
+        $hours = $from->diffInHours($to);
+        $minutes = $from->diffInMinutes($to) % 60;
+
+        return "{$hours}h {$minutes}m";
+    }
+
+    private function movementIndexFilterSummary(Request $request): string
+    {
+        $parts = [];
+
+        if ($this->filledFilter($request, 'from_date')) {
+            $parts[] = 'From '.$request->input('from_date');
+        }
+        if ($this->filledFilter($request, 'to_date')) {
+            $parts[] = 'To '.$request->input('to_date');
+        }
+        if ($request->filled('status') && $request->status !== 'all') {
+            $parts[] = 'Status: '.ucfirst((string) $request->status);
+        }
+        if ($request->filled('movement_type') && $request->movement_type !== 'all') {
+            $parts[] = 'Type: '.ucfirst((string) $request->movement_type);
+        }
+        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+            $branch = Branch::find($request->branch_id);
+            $parts[] = 'Branch: '.($branch->name ?? $request->branch_id);
+        }
+        if ($request->boolean('cross_day_only')) {
+            $parts[] = 'Not closed same day';
+        }
+        if ($request->search) {
+            $parts[] = 'Search: '.$request->search;
+        }
+
+        return $parts === [] ? 'All movements' : implode(', ', $parts);
+    }
+
+    private function filledFilter(Request $request, string $key): bool
+    {
+        $value = $request->input($key);
+
+        return $value !== null && $value !== '' && $value !== 'all';
+    }
+
+    /**
+     * Zone / regional office / branch options scoped to the user's organogram access.
+     *
+     * @return array{zones: \Illuminate\Support\Collection, regionalOffices: \Illuminate\Support\Collection, branches: \Illuminate\Support\Collection}
+     */
+    private function getAccessibleOrganizationFilters($user): array
+    {
+        $branchIds = OrganogramAccessService::accessibleBranchIdList($user);
+
+        if ($branchIds === []) {
+            return [
+                'zones' => collect(),
+                'regionalOffices' => collect(),
+                'branches' => collect(),
+            ];
+        }
+
+        $branchesQuery = Branch::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->select(['id', 'name', 'branch_code', 'regional_office_id']);
+
+        if ($branchIds !== null) {
+            $branchesQuery->whereIn('id', $branchIds);
+        }
+
+        $branches = $branchesQuery->get();
+        $regionalOfficeIds = $branches->pluck('regional_office_id')->filter()->unique()->values();
+
+        $regionalOffices = $regionalOfficeIds->isEmpty()
+            ? collect()
+            : RegionalOffice::query()
+                ->whereIn('id', $regionalOfficeIds)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code', 'zone_id']);
+
+        $zoneIds = $regionalOffices->pluck('zone_id')->filter()->unique()->values();
+
+        $zones = $zoneIds->isEmpty()
+            ? collect()
+            : Zone::query()
+                ->whereIn('id', $zoneIds)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']);
+
+        return [
+            'zones' => $zones,
+            'regionalOffices' => $regionalOffices,
+            'branches' => $branches,
+        ];
+    }
+
+    /**
+     * Get departments accessible to the user based on permissions
+     */
+    private function getAccessibleDepartments($user)
+    {
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->select(['id', 'name'])->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
+        }
+
+        return Department::query()->select(['id', 'name'])->whereIn('id', $ids)->orderBy('name')->get();
+    }
+
+    /**
+     * Get employees accessible to the user based on permissions
+     */
+    private function getAccessibleEmployees($user)
+    {
+        $q = Employee::query()
+            ->select(['id', 'employee_id', 'pin', 'name_en', 'name_bn'])
+            ->where('status', 'active')
+            ->orderBy('name_en');
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->get();
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
      * Show form to create a new movement.
      */
+<<<<<<< HEAD
+=======
+    /**
+     * Whether the user may pick any employee when creating a movement (HR/desk).
+     * Regular employees have movements.create but not employees.view — they may only create for themselves.
+     */
+    private function canSelectEmployeeForMovement($user): bool
+    {
+        return $user->hasPermission('movements.create') && $user->hasPermission('employees.view');
+    }
+
+    private function getActiveMovementForEmployee(int $employeeId): ?Movement
+    {
+        return Movement::query()
+            ->where('employee_id', $employeeId)
+            ->where('status', 'active')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function redirectForActiveMovement(Movement $activeMovement)
+    {
+        return redirect()
+            ->route('movements.show', $activeMovement->id)
+            ->with(
+                'warning',
+                'This employee already has an active movement. Please close the existing movement before creating a new one.'
+            );
+    }
+
+>>>>>>> feature/flutter-mobile-app
     public function create()
     {
         $user = Auth::user();
         $employee = $user->employee;
 
+<<<<<<< HEAD
         if (!$employee && !$user->hasPermission('movements.create')) {
+=======
+        if (! $employee && ! $user->hasPermission('movements.create')) {
+>>>>>>> feature/flutter-mobile-app
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to create movement requests.');
         }
 
+<<<<<<< HEAD
         $employees = $user->hasPermission('movements.create') ?
             Employee::where('status', 'active')->get() :
             collect([$employee]);
+=======
+        $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
+
+        if (! $canSelectEmployee && $employee) {
+            $activeMovement = $this->getActiveMovementForEmployee((int) $employee->id);
+            if ($activeMovement) {
+                return $this->redirectForActiveMovement($activeMovement);
+            }
+        }
+
+        $employees = $canSelectEmployee
+            ? Employee::where('status', 'active')
+                ->with(['department:id,name', 'designation:id,name'])
+                ->get(['id', 'employee_id', 'pin', 'name_en', 'name_bn', 'department_id', 'designation_id', 'current_branch_id'])
+            : ($employee ? collect([$employee->load(['department:id,name', 'designation:id,name'])]) : collect());
+
+        $multiDayAllowedBranchIds = Branch::where('allow_multi_day_movement', true)->pluck('id')->values()->all();
+>>>>>>> feature/flutter-mobile-app
 
         return Inertia::render('movement/create', [
             'employees' => $employees,
             'currentEmployee' => $employee,
+<<<<<<< HEAD
             'isAdmin' => $user->hasPermission('movements.create'),
             'movementTypes' => ['official', 'personal'],
+=======
+            'isAdmin' => $canSelectEmployee,
+            'movementTypes' => ['official', 'personal'],
+            'multiDayAllowedBranchIds' => $multiDayAllowedBranchIds,
+            'isMultiDayAllowedForCurrent' => $employee ? AttendanceSetting::isMultiDayAllowedForBranch($employee->current_branch_id) : false,
+            ...$this->weekendDaysPayload($employee, $employees),
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -109,6 +737,7 @@ class MovementController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
+<<<<<<< HEAD
         // Validate request
         $request->validate([
             'employee_id' => $user->hasPermission('movements.create') ? 'required|exists:employees,id' : 'nullable',
@@ -136,6 +765,381 @@ class MovementController extends Controller
 
         return redirect()->route('movements.index')
             ->with('success', 'Movement request submitted successfully.');
+=======
+        $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
+        $isMultiDay = $request->boolean('is_multi_day');
+
+        // Preprocess request: if to_datetime is missing, default it to from_datetime + 8 hours
+        if ($request->filled('from_datetime') && ! $request->filled('to_datetime')) {
+            try {
+                $from = \Carbon\Carbon::parse($request->from_datetime);
+                $request->merge([
+                    'to_datetime' => $from->copy()->addHours(8)->toIso8601String(),
+                ]);
+            } catch (\Exception $e) {
+                // Let validation catch invalid date formatting
+            }
+        }
+
+        // Validate request
+        $request->validate([
+            'employee_id' => $canSelectEmployee ? 'required|exists:employees,id' : 'nullable',
+            'movement_type' => 'required|in:official,personal',
+            'is_multi_day' => 'sometimes|boolean',
+            'from_datetime' => 'required|date',
+            'to_datetime' => 'required|date|after:from_datetime',
+            'purpose' => 'required|string|max:500',
+            'destination' => 'required|string|max:255',
+            'remarks' => 'nullable|string|max:1000',
+        ]);
+
+        // Determine which employee ID to use
+        if ($canSelectEmployee) {
+            $employeeId = (int) $request->employee_id;
+        } else {
+            if (! $employee) {
+                return redirect()->route('movements.index')
+                    ->with('error', 'You must be associated with an employee record to create a movement.');
+            }
+
+            if ($request->filled('employee_id') && (int) $request->employee_id !== (int) $employee->id) {
+                return redirect()->back()
+                    ->with('error', 'You can only create movements for yourself.')
+                    ->withInput();
+            }
+
+            $employeeId = (int) $employee->id;
+        }
+
+        // Get the actual employee object (might be different from current user's employee)
+        $targetEmployee = $employee && (int) $employeeId === (int) $employee->id
+            ? $employee
+            : Employee::findOrFail($employeeId);
+
+        // Branch check for multi-day movement
+        if ($isMultiDay) {
+            $branchId = $targetEmployee->current_branch_id ?? $targetEmployee->branch_id;
+            if (! AttendanceSetting::isMultiDayAllowedForBranch($branchId)) {
+                return redirect()->back()
+                    ->withErrors(['is_multi_day' => 'Multiple-day movement is not enabled for this branch. Only Head Office and authorized branches are permitted.'])
+                    ->withInput();
+            }
+        }
+
+        // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
+        $from = $this->parseMovementDateTimeToApp($request->from_datetime);
+        $to = $this->parseMovementDateTimeToApp($request->to_datetime);
+        $now = Carbon::now(config('app.timezone'));
+
+        // Same-day form delay: if the user picked "now" but submitted a few minutes later, snap start to current time.
+        if ($from->lt($now) && $from->isSameDay($now)) {
+            $from = $now->copy();
+            if ($to->lte($from)) {
+                $to = $from->copy()->addHours(8);
+            }
+        }
+
+        if (! $isMultiDay) {
+            // Movements are single calendar day only — clamp expected return to end of start day
+            if (! $to->isSameDay($from)) {
+                $to = $from->copy()->endOfDay()->seconds(0);
+            }
+            if ($to->lte($from)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
+                    ->withInput();
+            }
+        } else {
+            if ($to->lte($from)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after the start date and time.'])
+                    ->withInput();
+            }
+        }
+
+        if ($from->lt($now->copy()->subMinutes(5))) {
+            return redirect()->back()
+                ->withErrors(['from_datetime' => 'Movement start (from date & time) cannot be more than 5 minutes in the past.'])
+                ->withInput();
+        }
+
+        $movementType = $this->movementTypeForDate((string) $request->movement_type, $from, $employeeId);
+
+        $activeMovement = $this->getActiveMovementForEmployee($employeeId);
+        if ($activeMovement) {
+            return $this->redirectForActiveMovement($activeMovement);
+        }
+
+        // Create movement
+        $movementData = [
+            'employee_id' => $employeeId,
+            'movement_type' => $movementType,
+            'is_multi_day' => $isMultiDay,
+            'from_datetime' => $from->format('Y-m-d H:i:s'),
+            'to_datetime' => $to->format('Y-m-d H:i:s'),
+            'purpose' => $request->purpose,
+            'destination' => $request->destination,
+            'remarks' => $request->remarks,
+            'status' => 'active', // Set as active instead of pending
+        ];
+
+        $movement = Movement::create($movementData);
+
+        // Send notifications to department heads and branch heads
+        $this->sendNotificationsToManagers($movement, $targetEmployee);
+
+        // For official movements, update attendance records (non-blocking — movement must still be created)
+        if ($movement->movement_type === 'official') {
+            try {
+                $this->updateAttendanceForMovement($movement);
+            } catch (\Throwable $e) {
+                \Log::error('Movement attendance update failed after create', [
+                    'movement_id' => $movement->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return redirect()->route('movements.index')
+            ->with('success', 'Movement created successfully.');
+    }
+
+    /**
+     * Update attendance records for a movement
+     */
+    /**
+     * Update attendance for a movement — start calendar day only for single-day (on_duty + movement_id),
+     * or across all covered calendar dates without punch times for multi-day official movements.
+     */
+    public function updateAttendanceForMovement(Movement $movement)
+    {
+        if ($movement->is_multi_day) {
+            $this->updateAttendanceForMultiDayMovement($movement);
+
+            return;
+        }
+
+        $movementStart = Carbon::parse($movement->from_datetime);
+        $dateStr = $movementStart->format('Y-m-d');
+
+        // Never mark attendance on configured weekend days
+        if (AttendanceSetting::isWeekendForEmployee($movementStart, (int) $movement->employee_id)) {
+            return;
+        }
+
+        $attendance = Attendance::where('employee_id', $movement->employee_id)
+            ->where('date', $dateStr)
+            ->first();
+
+        if (! $attendance) {
+            $attendance = new Attendance;
+            $attendance->employee_id = $movement->employee_id;
+            $attendance->date = $dateStr;
+            $attendance->status = 'on_duty';
+        } elseif ($attendance->status == 'absent') {
+            $attendance->status = 'on_duty';
+        }
+
+        $inCandidate = null;
+        if (! $attendance->check_in) {
+            $inCandidate = $movementStart->format('H:i:s');
+        }
+
+        $this->mergeAttendanceTimes($attendance, $inCandidate, null);
+
+        $attendance->movement_id = $movement->id;
+
+        $remarks = 'On official movement: '.$movement->purpose;
+        if ($attendance->remarks) {
+            if (strpos($attendance->remarks, $remarks) === false) {
+                $attendance->remarks = $attendance->remarks.' | '.$remarks;
+            }
+        } else {
+            $attendance->remarks = $remarks;
+        }
+
+        $attendance->save();
+    }
+
+    /**
+     * Pre-create daily attendance for multi-day official movement across all covered dates.
+     * Status: on_duty, No punch times (time chara), Movement remarks populated.
+     */
+    private function updateAttendanceForMultiDayMovement(Movement $movement): void
+    {
+        $start = Carbon::parse($movement->from_datetime)->startOfDay();
+        $end = Carbon::parse($movement->to_datetime)->startOfDay();
+        $employeeId = (int) $movement->employee_id;
+
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            $dateStr = $current->format('Y-m-d');
+
+            // Skip configured weekend days
+            if (AttendanceSetting::isWeekendForEmployee($current, $employeeId)) {
+                $current->addDay();
+
+                continue;
+            }
+
+            $attendance = Attendance::where('employee_id', $employeeId)
+                ->where('date', $dateStr)
+                ->first();
+
+            if (! $attendance) {
+                $attendance = new Attendance;
+                $attendance->employee_id = $employeeId;
+                $attendance->date = $dateStr;
+                $attendance->status = 'on_duty';
+            } elseif ($attendance->status === 'absent' || empty($attendance->status)) {
+                $attendance->status = 'on_duty';
+            }
+
+            // Time chara (no check_in, no check_out) — preserve existing biometric punch if already punched
+            $attendance->movement_id = $movement->id;
+
+            $remarks = 'On official movement: '.$movement->purpose;
+            if ($attendance->remarks) {
+                if (strpos($attendance->remarks, $remarks) === false) {
+                    $attendance->remarks = $attendance->remarks.' | '.$remarks;
+                }
+            } else {
+                $attendance->remarks = $remarks;
+            }
+
+            $attendance->save();
+
+            $current->addDay();
+        }
+    }
+
+    /**
+     * Send notifications to managers about a new movement
+     */
+    private function sendNotificationsToManagers(Movement $movement, Employee $employee)
+    {
+        try {
+            // Find department head
+            $departmentHeads = collect([]);
+            if ($employee->department_id) {
+                $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+            }
+
+            // Find branch head
+            $branchHeads = collect([]);
+            if ($employee->branch_id) {
+                $branchHeads = $this->getBranchHeads($employee->branch_id);
+            }
+
+            // Find Super Admin users
+            $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                $query->where('name', 'Super Admin');
+            })->get();
+
+            // Combine unique recipients
+            $recipients = $departmentHeads->merge($branchHeads)->merge($superAdmins)->unique('id');
+
+            if ($recipients->isEmpty()) {
+                \Log::warning('No recipients found for movement notification');
+
+                return;
+            }
+
+            // Format movement date/time for notification message
+            $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+            $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+
+            // Construct full employee name
+            $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
+
+            // Notification details
+            $title = 'New Movement Created';
+            $message = "{$employeeName} has created a {$movement->movement_type} movement from {$fromDate} to {$toDate} for {$movement->purpose}.";
+            $link = route('movements.show', $movement->id);
+
+            // Send emails and in-app notifications to all recipients
+            foreach ($recipients as $recipient) {
+                try {
+                    // Find corresponding user for this recipient
+                    $recipientUser = null;
+
+                    // Check if this is directly a User object
+                    if (isset($recipient->id) && $recipient instanceof \App\Models\User) {
+                        $recipientUser = $recipient;
+                    }
+                    // Check if this is an Employee with a user relationship
+                    elseif (isset($recipient->user_id)) {
+                        $recipientUser = \App\Models\User::find($recipient->user_id);
+                    }
+                    // Try to find user by email
+                    elseif (isset($recipient->email)) {
+                        $recipientUser = \App\Models\User::where('email', $recipient->email)->first();
+                    }
+
+                    // Send in-app notification if we found a user
+                    if ($recipientUser) {
+                        $recipientUser->notify(new \App\Notifications\HrmNotification(
+                            $title,
+                            $message,
+                            'info',
+                            $link
+                        ));
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Failed to process recipient: '.$e->getMessage());
+
+                    continue;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Critical error in sendNotificationsToManagers: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Get users who are department heads for the given department
+     */
+    private function getDepartmentHeads($departmentId)
+    {
+        if (! $departmentId) {
+            return collect([]);
+        }
+
+        $heads = User::whereHas('roles', function ($query) {
+            // For JSON stored as string
+            $query->where(function ($q) {
+                $q->whereRaw("JSON_CONTAINS(permissions, '\"department_head\"')")
+                    ->orWhereRaw("permissions LIKE '%department_head%'");
+            });
+        })
+            ->whereHas('employee', function ($query) use ($departmentId) {
+                $query->where('department_id', $departmentId);
+            })
+            ->get(['id', 'name', 'email']);
+
+        return $heads;
+    }
+
+    private function getBranchHeads($branchId)
+    {
+        if (! $branchId) {
+            return collect([]);
+        }
+
+        $heads = User::whereHas('roles', function ($query) {
+            // For JSON stored as string
+            $query->where(function ($q) {
+                $q->whereRaw("JSON_CONTAINS(permissions, '\"branch_manager\"')")
+                    ->orWhereRaw("permissions LIKE '%branch_manager%'");
+            });
+        })
+            ->whereHas('employee', function ($query) use ($branchId) {
+                $query->where('branch_id', $branchId);
+            })
+            ->get(['id', 'name', 'email']);
+
+        return $heads;
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -143,6 +1147,7 @@ class MovementController extends Controller
      */
     public function show(Movement $movement)
     {
+<<<<<<< HEAD
         $movement->load(['employee.department', 'employee.designation', 'approver']);
 
         $user = Auth::user();
@@ -151,33 +1156,278 @@ class MovementController extends Controller
         return Inertia::render('movement/show', [
             'movement' => $movement,
             'canApprove' => $canApprove,
+=======
+        // Eager load related models to avoid N+1 issues
+        $movement->load(['employee.department', 'employee.designation', 'employee.branch']);
+
+        // Get the currently authenticated user and their associated employee record
+        $user = Auth::user();
+        $userEmployee = $user->employee;
+
+        // Determine if the user can close the movement
+        $canClose = false;
+
+        if (
+            $user->hasPermission('movements.complete')
+            && $userEmployee
+            && (int) $userEmployee->id === (int) $movement->employee_id
+            && $movement->status === 'active'
+        ) {
+            $canClose = true;
+        }
+
+        $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+            (int) $movement->employee_id,
+            (int) $movement->id
+        );
+        $movement->setAttribute('last_end_meter_reading', $lastEndMeter);
+
+        // Render the inertia view with the movement details and permission flag
+        return Inertia::render('movement/show', [
+            'movement' => $movement,
+            'canClose' => $canClose,
+            'canEdit' => $user->hasPermission('movements.edit'),
+            'canDelete' => $user->hasPermission('movements.delete'),
+>>>>>>> feature/flutter-mobile-app
         ]);
+    }
+
+    /**
+<<<<<<< HEAD
+     * Show form to edit a movement.
+     */
+    public function edit(Movement $movement)
+=======
+     * Get lightweight JSON details of a movement for modals.
+     */
+    public function details(Movement $movement)
+    {
+        $movement->loadMissing('employee.branch');
+
+        $hasStartPlace = Schema::hasColumn('movements', 'start_place');
+        $hasStartMeter = Schema::hasColumn('movements', 'start_meter_reading');
+        $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+            (int) $movement->employee_id,
+            (int) $movement->id
+        );
+        $legacyStartMeter = $hasStartMeter && $movement->start_meter_reading !== null
+            ? (float) $movement->start_meter_reading
+            : null;
+        $presetStartMeter = $lastEndMeter ?? $legacyStartMeter;
+
+        return response()->json([
+            'id' => $movement->id,
+            'employee_id' => $movement->employee_id,
+            'last_end_meter_reading' => $lastEndMeter,
+            'start_meter_reading' => $presetStartMeter,
+            'start_place' => $hasStartPlace ? $movement->start_place : null,
+            'movement_type' => $movement->movement_type,
+            'from_datetime' => $movement->from_datetime?->toIso8601String(),
+            'to_datetime' => $movement->to_datetime?->toIso8601String(),
+            'is_multi_day' => (bool) $movement->is_multi_day,
+            'purpose' => $movement->purpose,
+            'destination' => $movement->destination,
+            'branch_name' => $movement->employee?->branch?->name ?: '',
+        ]);
+    }
+
+    /**
+     * Mark the movement as completed.
+     */
+    public function complete(Request $request, Movement $movement)
+    {
+
+        $user = Auth::user();
+        $userEmployee = $user->employee;
+
+        if (! $user->hasPermission('movements.complete')) {
+            return redirect()->route('movements.index')
+                ->with('error', 'You do not have permission to complete movements.');
+        }
+
+        // Check if user can close this movement - with proper type casting
+        if (! $userEmployee || (int) $userEmployee->id !== (int) $movement->employee_id) {
+            return redirect()->route('movements.index')
+                ->with('error', 'You do not have permission to close this movement.');
+        }
+
+        if ($movement->status !== 'active') {
+            return redirect()->route('movements.index')
+                ->with('error', 'This movement has already been closed.');
+        }
+
+        $forgotReturn = $request->boolean('forgot_return_time');
+        $createLogBook = $request->boolean('create_log_book', true);
+
+        // Start meter = employee's last log-book close meter; first-time employees enter it manually
+        $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+            (int) $movement->employee_id,
+            (int) $movement->id
+        );
+        $legacyStartMeter = Schema::hasColumn('movements', 'start_meter_reading') && $movement->start_meter_reading !== null
+            ? (float) $movement->start_meter_reading
+            : null;
+        $startReading = $lastEndMeter
+            ?? $legacyStartMeter
+            ?? ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
+
+        $rules = [
+            'forgot_return_time' => 'sometimes|boolean',
+            'create_log_book' => 'sometimes|boolean',
+            'actual_return_datetime' => $forgotReturn ? 'required|date' : 'nullable|date',
+            'work_result' => 'required|string|min:5|max:2000',
+            'start_place' => 'nullable|string|max:255',
+            'personal_km' => $createLogBook ? 'nullable|numeric|min:0' : 'nullable',
+        ];
+
+        if ($createLogBook) {
+            if ($startReading !== null) {
+                $rules['end_meter_reading'] = "required|numeric|gte:{$startReading}";
+            } else {
+                $rules['start_meter_reading'] = 'required|numeric|min:0';
+                $rules['end_meter_reading'] = 'required|numeric|gte:start_meter_reading';
+            }
+        } else {
+            $rules['end_meter_reading'] = 'nullable';
+            $rules['start_meter_reading'] = 'nullable';
+        }
+
+        $request->validate($rules);
+
+        $effectiveStart = null;
+        if ($createLogBook) {
+            $effectiveStart = $startReading ?? (float) $request->start_meter_reading;
+            $totalKm = round((float) $request->end_meter_reading - $effectiveStart, 2);
+            // Personal movements always count full distance as personal_km — skip partial personal check
+            if (
+                $movement->movement_type !== 'personal'
+                && $request->filled('personal_km')
+                && (float) $request->personal_km > $totalKm
+            ) {
+                throw ValidationException::withMessages([
+                    'personal_km' => 'Personal distance cannot exceed total distance.',
+                ]);
+            }
+        }
+
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Update movement status
+            $movement->status = 'completed';
+            $movement->is_returned = true;
+            $movement->work_result = trim($request->work_result);
+
+            // Default: close at current time. If user forgot to close, they check the box and set actual return time.
+            $returnDateTime = $forgotReturn
+                ? Carbon::parse($request->actual_return_datetime)
+                : now();
+
+            $from = Carbon::parse($movement->from_datetime);
+            if ($returnDateTime->lt($from)) {
+                DB::rollBack();
+
+                return redirect()->back()
+                    ->with('error', 'Return time cannot be before the movement start time.');
+            }
+
+            if ($returnDateTime->gt(Carbon::now()->addMinutes(2))) {
+                DB::rollBack();
+
+                return redirect()->back()
+                    ->with('error', 'Return time cannot be in the future.');
+            }
+
+            $movement->actual_return_datetime = $returnDateTime;
+            $movement->save();
+
+            if ($createLogBook) {
+                $this->createLogBookFromMovement($movement, $request, $returnDateTime, $effectiveStart);
+            }
+
+            // Update attendance records for official movements
+            if ($movement->movement_type === 'official') {
+                $this->updateAttendanceForCompletion($movement, $returnDateTime);
+            }
+
+            // Send notifications about movement completion
+            $this->sendCompletionNotifications($movement, $returnDateTime);
+
+            DB::commit();
+
+            return redirect()->back()
+                ->with('success', $createLogBook
+                    ? 'Movement closed successfully. Log book entry created.'
+                    : 'Movement closed successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error closing movement: '.$e->getMessage(), [
+                'movement_id' => $movement->id,
+                'user_id' => $user->id,
+                'employee_id' => $userEmployee ? $userEmployee->id : null,
+                'movement_employee_id' => $movement->employee_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'An error occurred while closing the movement. Please try again.');
+        }
     }
 
     /**
      * Show form to edit a movement.
      */
-    public function edit(Movement $movement)
+    public function edit(Request $request, Movement $movement)
+>>>>>>> feature/flutter-mobile-app
     {
         $user = Auth::user();
         $employee = $user->employee;
 
+<<<<<<< HEAD
         // Check if user can edit this movement
         if (!$user->hasPermission('movements.edit') &&
             (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to edit this movement request.');
+=======
+        $isAdminEditor = $user->hasPermission('movements.edit');
+
+        // Admin/HR with movements.edit: can edit active or completed records
+        // Employee: only own pending requests (legacy flow)
+        if (
+            ! $isAdminEditor &&
+            (! $employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
+        ) {
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to edit this movement request.');
+        }
+
+        if ($isAdminEditor && ! in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
+            return $this->redirectToMovementIndex($request, 'error', 'This movement cannot be edited.');
+>>>>>>> feature/flutter-mobile-app
         }
 
         $employees = $user->hasPermission('movements.edit') ?
             Employee::where('status', 'active')->get() :
             collect([$employee]);
 
+<<<<<<< HEAD
+=======
+        $movementEmployee = $employees->firstWhere('id', $movement->employee_id) ?? $movement->employee;
+
+>>>>>>> feature/flutter-mobile-app
         return Inertia::render('movement/edit', [
             'movement' => $movement,
             'employees' => $employees,
             'isAdmin' => $user->hasPermission('movements.edit'),
             'movementTypes' => ['official', 'personal'],
+<<<<<<< HEAD
+=======
+            'returnFilters' => $this->movementIndexFiltersFromRequest($request),
+            ...$this->weekendDaysPayload($movementEmployee, $employees),
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -189,6 +1439,7 @@ class MovementController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
+<<<<<<< HEAD
         // Check if user can update this movement
         if (!$user->hasPermission('movements.edit') &&
             (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')) {
@@ -198,6 +1449,24 @@ class MovementController extends Controller
 
         // Validate request
         $request->validate([
+=======
+        $isAdminEditor = $user->hasPermission('movements.edit');
+
+        if (
+            ! $isAdminEditor &&
+            (! $employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
+        ) {
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to update this movement request.');
+        }
+
+        if ($isAdminEditor && ! in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
+            return $this->redirectToMovementIndex($request, 'error', 'This movement cannot be updated.');
+        }
+
+        $isCompleted = $movement->status === 'completed';
+
+        $validationRules = [
+>>>>>>> feature/flutter-mobile-app
             'employee_id' => $user->hasPermission('movements.edit') ? 'required|exists:employees,id' : 'nullable',
             'movement_type' => 'required|in:official,personal',
             'from_datetime' => 'required|date',
@@ -205,12 +1474,63 @@ class MovementController extends Controller
             'purpose' => 'required|string',
             'destination' => 'required|string',
             'remarks' => 'nullable|string',
+<<<<<<< HEAD
         ]);
 
         // Update fields except for employee_id if not admin
         $movement->movement_type = $request->movement_type;
         $movement->from_datetime = $request->from_datetime;
         $movement->to_datetime = $request->to_datetime;
+=======
+        ];
+
+        if ($isCompleted && $isAdminEditor) {
+            $validationRules['actual_return_datetime'] = 'required|date';
+        }
+
+        $request->validate($validationRules);
+
+        $previousReturn = $movement->actual_return_datetime
+            ? Carbon::parse($movement->actual_return_datetime)
+            : null;
+
+        $fromParsed = $this->parseMovementDateTimeToApp($request->from_datetime);
+        $toParsed = $this->parseMovementDateTimeToApp($request->to_datetime);
+
+        $isMultiDay = $request->has('is_multi_day') ? $request->boolean('is_multi_day') : (bool) $movement->is_multi_day;
+
+        if (! $isMultiDay) {
+            // Movements are single calendar day only
+            if (! $toParsed->isSameDay($fromParsed)) {
+                $toParsed = $fromParsed->copy()->endOfDay()->seconds(0);
+            }
+            if ($toParsed->lte($fromParsed)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
+                    ->withInput();
+            }
+        } else {
+            if ($toParsed->lte($fromParsed)) {
+                return redirect()->back()
+                    ->withErrors(['to_datetime' => 'Expected return must be after the start date and time.'])
+                    ->withInput();
+            }
+        }
+
+        $employeeIdForWeekend = $user->hasPermission('movements.edit') && $request->filled('employee_id')
+            ? (int) $request->employee_id
+            : (int) $movement->employee_id;
+
+        // Update fields except for employee_id if not admin
+        $movement->movement_type = $this->movementTypeForDate(
+            (string) $request->movement_type,
+            $fromParsed,
+            $employeeIdForWeekend
+        );
+        $movement->from_datetime = $fromParsed->format('Y-m-d H:i:s');
+        $movement->to_datetime = $toParsed->format('Y-m-d H:i:s');
+        $movement->is_multi_day = $isMultiDay;
+>>>>>>> feature/flutter-mobile-app
         $movement->purpose = $request->purpose;
         $movement->destination = $request->destination;
         $movement->remarks = $request->remarks;
@@ -220,6 +1540,7 @@ class MovementController extends Controller
             $movement->employee_id = $request->employee_id;
         }
 
+<<<<<<< HEAD
         $movement->save();
 
         return redirect()->route('movements.index')
@@ -250,18 +1571,169 @@ class MovementController extends Controller
 
     /**
      * Approve the specified movement.
+=======
+        if ($isCompleted && $isAdminEditor) {
+            $newReturn = $this->parseMovementDateTimeToApp($request->actual_return_datetime);
+
+            if ($newReturn->lt($fromParsed)) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['actual_return_datetime' => 'Return time cannot be before the movement start time.']);
+            }
+
+            $nowApp = Carbon::now(config('app.timezone'));
+            if ($newReturn->gt($nowApp->copy()->addMinutes(2))) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['actual_return_datetime' => 'Return time cannot be more than a few minutes in the future.']);
+            }
+
+            $movement->actual_return_datetime = $newReturn->format('Y-m-d H:i:s');
+        }
+
+        $movement->save();
+
+        $newReturnFinal = $movement->actual_return_datetime
+            ? Carbon::parse($movement->actual_return_datetime)
+            : null;
+
+        if (
+            $isCompleted
+            && $isAdminEditor
+            && $movement->movement_type === 'official'
+            && $newReturnFinal
+            && (! $previousReturn || ! $previousReturn->equalTo($newReturnFinal))
+        ) {
+            $this->updateAttendanceForCompletion($movement->fresh(), $newReturnFinal);
+        }
+
+        return $this->redirectToMovementIndex($request, 'success', 'Movement request updated successfully.');
+    }
+
+    /**
+     * Remove the specified movement (admin only).
+     */
+    public function destroy(Request $request, Movement $movement)
+    {
+        $user = Auth::user();
+
+        if (! $user->hasPermission('movements.delete')) {
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to delete movements.');
+        }
+
+        DB::beginTransaction();
+
+        try {
+            Attendance::where('movement_id', $movement->id)->update(['movement_id' => null]);
+            $movement->delete();
+            DB::commit();
+
+            return $this->redirectToMovementIndex($request, 'success', 'Movement deleted successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error deleting movement: '.$e->getMessage(), [
+                'movement_id' => $movement->id,
+            ]);
+
+            return $this->redirectToMovementIndex($request, 'error', 'Could not delete this movement.');
+        }
+    }
+
+    /**
+     * Remove multiple movements (admin only).
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $user = Auth::user();
+
+        if (! $user->hasPermission('movements.delete')) {
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to delete movements.');
+        }
+
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:movements,id',
+        ]);
+
+        $ids = $validated['ids'];
+
+        DB::beginTransaction();
+
+        try {
+            Attendance::whereIn('movement_id', $ids)->update(['movement_id' => null]);
+            Movement::whereIn('id', $ids)->delete();
+            DB::commit();
+
+            $count = count($ids);
+            $message = $count === 1
+                ? 'Movement deleted successfully.'
+                : "{$count} movements deleted successfully.";
+
+            return $this->redirectToMovementIndex($request, 'success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error bulk deleting movements: '.$e->getMessage(), [
+                'ids' => $ids,
+            ]);
+
+            return $this->redirectToMovementIndex($request, 'error', 'Could not delete the selected movements.');
+        }
+    }
+
+    /**
+     * Approve the specified movement and update attendance records.
+>>>>>>> feature/flutter-mobile-app
      */
     public function approve(Request $request, Movement $movement)
     {
         $user = Auth::user();
+<<<<<<< HEAD
 
         if (!$user->hasPermission('movements.approve')) {
             return redirect()->route('movements.index')
+=======
+        $employee = $user->employee;
+
+        // Check if user can approve this movement based on various conditions
+        $canApprove = false;
+
+        // Condition 1: User has explicit movement.approve permission
+        if ($user->hasPermission('movements.approve')) {
+            $canApprove = true;
+        }
+
+        // Condition 2: User is a branch manager for the employee's branch
+        elseif (
+            $employee &&
+            $movement->employee->branch_id &&
+            $employee->branch_id === $movement->employee->branch_id &&
+            $user->hasPermission('branch_manager')
+        ) {
+            $canApprove = true;
+        }
+
+        // Condition 3: User is a department head for the employee's department
+        elseif (
+            $employee &&
+            $movement->employee->department_id &&
+            $employee->department_id === $movement->employee->department_id &&
+            $user->hasPermission('department_head')
+        ) {
+            $canApprove = true;
+        }
+
+        if (! $canApprove) {
+            return redirect()->back()
+>>>>>>> feature/flutter-mobile-app
                 ->with('error', 'You do not have permission to approve movement requests.');
         }
 
         if ($movement->status !== 'pending') {
+<<<<<<< HEAD
             return redirect()->route('movements.index')
+=======
+            return redirect()->back()
+>>>>>>> feature/flutter-mobile-app
                 ->with('error', 'This movement request is not pending approval.');
         }
 
@@ -269,6 +1741,7 @@ class MovementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
+<<<<<<< HEAD
         // Update movement
         $movement->status = 'approved';
         $movement->approved_by = $user->id;
@@ -283,18 +1756,188 @@ class MovementController extends Controller
 
     /**
      * Reject the specified movement.
+=======
+        // Debug information before processing
+        \Log::info('Movement data before approval:', [
+            'movement_id' => $movement->id,
+            'employee_id' => $movement->employee_id,
+            'purpose' => $movement->purpose,
+            'destination' => $movement->destination,
+            'remarks' => $movement->remarks,
+        ]);
+
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Update movement
+            $movement->status = 'approved';
+            $movement->approved_by = $user->id;
+
+            // Handle remarks in a safe way
+            if ($request->filled('remarks')) {
+                // Store the remarks directly without encoding manipulation
+                $movement->remarks = $request->remarks;
+            }
+
+            // Save the movement with simple updates first
+            $saveResult = $movement->save();
+
+            // Log the save result
+            \Log::info('Movement status update result:', [
+                'movement_id' => $movement->id,
+                'save_result' => $saveResult,
+                'new_status' => $movement->status,
+                'approved_by' => $movement->approved_by,
+            ]);
+
+            // For official movements, create/update attendance for the start day only.
+            // Multi-day / return-day attendance is applied when the movement is closed.
+            if ($movement->movement_type === 'official') {
+                $this->updateAttendanceForMovement($movement);
+            }
+
+            DB::commit();
+
+            // Log success after transaction
+            \Log::info('Movement approval transaction completed successfully', [
+                'movement_id' => $movement->id,
+                'employee_id' => $movement->employee_id,
+            ]);
+
+            // Handle notifications in a separate try-catch to avoid affecting the main process
+            try {
+                // Only load employee if not already loaded
+                if (! $movement->relationLoaded('employee')) {
+                    $movement->load('employee');
+                }
+
+                // Check if the employee exists and has a user account
+                if ($movement->employee) {
+                    // Use relationship or direct lookup by user_id
+                    $employeeUser = null;
+                    if (isset($movement->employee->user_id)) {
+                        $employeeUser = \App\Models\User::find($movement->employee->user_id);
+                    } else {
+                        // Fallback to looking up by employee_id
+                        $employeeUser = \App\Models\User::where('employee_id', $movement->employee_id)->first();
+                    }
+
+                    if ($employeeUser) {
+                        // Format movement date/time for notification message
+                        $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+                        $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+
+                        // Keep notification simple to avoid encoding issues
+                        $title = 'Movement Request Approved';
+                        $message = "Your movement request from {$fromDate} to {$toDate} has been approved.";
+                        $link = route('movements.show', $movement->id);
+
+                        // Send in-app notification
+                        try {
+                            $employeeUser->notify(new \App\Notifications\HrmNotification(
+                                $title,
+                                $message,
+                                'success',
+                                $link
+                            ));
+
+                            \Log::info('In-app notification sent successfully', [
+                                'movement_id' => $movement->id,
+                                'user_id' => $employeeUser->id,
+                            ]);
+                        } catch (\Exception $notificationError) {
+                            \Log::error('Error sending in-app notification: '.$notificationError->getMessage(), [
+                                'movement_id' => $movement->id,
+                            ]);
+                            // Continue with the process even if notification fails
+                        }
+
+                        // Email notification disabled for movements
+                    }
+                }
+            } catch (\Exception $notificationException) {
+                // Log notification errors but don't fail the approval process
+                \Log::error('Error in notification process: '.$notificationException->getMessage(), [
+                    'movement_id' => $movement->id,
+                    'error' => $notificationException->getMessage(),
+                ]);
+                // Do not throw - approval should succeed even if notifications fail
+            }
+
+            return redirect()->back()
+                ->with('success', 'Movement request approved successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            // Detailed error logging
+            \Log::error('Error approving movement: '.$e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'An error occurred while approving the movement: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Reject the specified movement and clean up any attendance records.
+>>>>>>> feature/flutter-mobile-app
      */
     public function reject(Request $request, Movement $movement)
     {
         $user = Auth::user();
+<<<<<<< HEAD
 
         if (!$user->hasPermission('movements.approve')) {
             return redirect()->route('movements.index')
+=======
+        $employee = $user->employee;
+
+        // Check if user can reject this movement based on various conditions
+        $canReject = false;
+
+        // Condition 1: User has explicit movement.approve permission
+        if ($user->hasPermission('movements.approve')) {
+            $canReject = true;
+        }
+
+        // Condition 2: User is a branch manager for the employee's branch
+        elseif (
+            $employee &&
+            $movement->employee->branch_id &&
+            $employee->branch_id === $movement->employee->branch_id &&
+            $user->hasPermission('branch_manager')
+        ) {
+            $canReject = true;
+        }
+
+        // Condition 3: User is a department head for the employee's department
+        elseif (
+            $employee &&
+            $movement->employee->department_id &&
+            $employee->department_id === $movement->employee->department_id &&
+            $user->hasPermission('department_head')
+        ) {
+            $canReject = true;
+        }
+
+        if (! $canReject) {
+            return redirect()->back()
+>>>>>>> feature/flutter-mobile-app
                 ->with('error', 'You do not have permission to reject movement requests.');
         }
 
         if ($movement->status !== 'pending') {
+<<<<<<< HEAD
             return redirect()->route('movements.index')
+=======
+            return redirect()->back()
+>>>>>>> feature/flutter-mobile-app
                 ->with('error', 'This movement request is not pending approval.');
         }
 
@@ -302,6 +1945,7 @@ class MovementController extends Controller
             'remarks' => 'required|string',
         ]);
 
+<<<<<<< HEAD
         // Update movement
         $movement->status = 'rejected';
         $movement->approved_by = $user->id;
@@ -335,6 +1979,375 @@ class MovementController extends Controller
 
         return redirect()->route('movements.index')
             ->with('success', 'Movement marked as completed successfully.');
+=======
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Update movement
+            $movement->status = 'rejected';
+            $movement->approved_by = $user->id;
+            $movement->remarks = $request->remarks;
+            $movement->save();
+
+            // Remove any associated attendance records that have this movement_id
+            // This is to clean up if this movement was pre-approved and then rejected
+            Attendance::where('movement_id', $movement->id)->update([
+                'movement_id' => null,
+                'remarks' => DB::raw("CONCAT(IFNULL(remarks, ''), ' | Movement rejected: ".addslashes($request->remarks)."')"),
+                // Do not automatically change status, let the attendance system handle it based on check-in/out
+            ]);
+
+            DB::commit();
+
+            return redirect()->back()
+                ->with('success', 'Movement request rejected successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error rejecting movement: '.$e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'An error occurred while rejecting the movement.');
+        }
+    }
+
+    /**
+     * Cancel the specified movement and clean up any attendance records.
+     */
+    public function cancel(Movement $movement)
+    {
+        $user = Auth::user();
+        $employee = $user->employee;
+
+        // Check if user can cancel this movement
+        if (
+            ! $user->hasPermission('movements.edit') &&
+            (! $employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+        ) {
+            return redirect()->back()
+                ->with('error', 'You do not have permission to cancel this movement request.');
+        }
+
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            $movement->status = 'cancelled';
+            $movement->save();
+
+            // Clean up any attendance records that might have been created for this movement
+            // This is to clean up if this movement was pre-approved and then cancelled
+            Attendance::where('movement_id', $movement->id)->update([
+                'movement_id' => null,
+                'remarks' => DB::raw("CONCAT(IFNULL(remarks, ''), ' | Movement cancelled by user')"),
+                // Do not automatically change status, let the attendance system handle it based on check-in/out
+            ]);
+
+            DB::commit();
+
+            return redirect()->back()
+                ->with('success', 'Movement request cancelled successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error cancelling movement: '.$e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'An error occurred while cancelling the movement.');
+        }
+    }
+
+    /**
+     * Update attendance records when a movement is completed
+     */
+    private function updateAttendanceForCompletion(Movement $movement, $returnDateTime)
+    {
+        $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
+        $movementStart = Carbon::parse($movement->from_datetime);
+        $return = $returnDateTime instanceof Carbon ? $returnDateTime : Carbon::parse($returnDateTime);
+        $workStartNormalized = Carbon::parse($workTimes['work_start_time'])->format('H:i:s');
+        $startDate = $movementStart->format('Y-m-d');
+        $returnDate = $return->format('Y-m-d');
+
+        if ($movement->is_multi_day) {
+            // For multi-day movements, update completion remarks on the return date's attendance record
+            if (! AttendanceSetting::isWeekendForEmployee($return, (int) $movement->employee_id)) {
+                $returnAttendance = Attendance::where('employee_id', $movement->employee_id)
+                    ->where('date', $returnDate)
+                    ->first();
+
+                if ($returnAttendance) {
+                    $returnInfo = 'Movement completed: '.$return->format('Y-m-d H:i:s');
+                    if ($returnAttendance->remarks) {
+                        if (strpos($returnAttendance->remarks, 'Movement completed:') === false) {
+                            $returnAttendance->remarks .= ' | '.$returnInfo;
+                        }
+                    } else {
+                        $returnAttendance->remarks = 'On official movement: '.$movement->purpose.' | '.$returnInfo;
+                    }
+                    $returnAttendance->save();
+                }
+            }
+
+            // Clean up any future pre-created days beyond actual return date (if returned early)
+            $this->clearMovementAttendanceSpillover($movement, $workStartNormalized, $return);
+
+            return;
+        }
+
+        // Single-day only: never invent next-day attendance when closed late
+        // Never mark attendance on configured weekend days
+        if (! AttendanceSetting::isWeekendForEmployee($movementStart, (int) $movement->employee_id)) {
+            $attendance = Attendance::where('employee_id', $movement->employee_id)
+                ->where('date', $startDate)
+                ->first();
+
+            if (! $attendance) {
+                $attendance = new Attendance;
+                $attendance->employee_id = $movement->employee_id;
+                $attendance->date = $startDate;
+                $attendance->status = 'on_duty';
+            } elseif ($attendance->status == 'absent') {
+                $attendance->status = 'on_duty';
+            }
+
+            $inCandidate = null;
+            if (! $attendance->check_in) {
+                $inCandidate = $movementStart->format('H:i:s');
+            }
+
+            // Check-out only when actually returned on the same calendar day
+            $outCandidate = $return->isSameDay($movementStart) ? $return->format('H:i:s') : null;
+
+            $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
+
+            $attendance->movement_id = $movement->id;
+
+            $returnInfo = 'Movement completed: '.$return->format('Y-m-d H:i:s');
+            if ($attendance->remarks) {
+                if (strpos($attendance->remarks, 'Movement completed:') === false) {
+                    $attendance->remarks .= ' | '.$returnInfo;
+                }
+            } else {
+                $attendance->remarks = 'On official movement: '.$movement->purpose.' | '.$returnInfo;
+            }
+
+            $attendance->save();
+        }
+
+        // Unlink any non-start-day rows previously linked to this movement
+        $this->clearMovementAttendanceSpillover($movement, $workStartNormalized);
+    }
+
+    /**
+     * Remove false attendance days linked to a movement that are outside the authorized dates.
+     * (Single-day: not start day. Multi-day: beyond actual return date if returned early.)
+     */
+    public function clearMovementAttendanceSpillover(Movement $movement, string $workStartNormalized = '09:00:00', ?Carbon $return = null): void
+    {
+        $startDate = Carbon::parse($movement->from_datetime)->toDateString();
+
+        if ($movement->is_multi_day) {
+            $effectiveEndDate = $return
+                ? $return->toDateString()
+                : Carbon::parse($movement->to_datetime)->toDateString();
+
+            $spillover = Attendance::where('employee_id', $movement->employee_id)
+                ->where('movement_id', $movement->id)
+                ->where(function ($q) use ($startDate, $effectiveEndDate) {
+                    $q->whereDate('date', '<', $startDate)
+                        ->orWhereDate('date', '>', $effectiveEndDate);
+                })
+                ->get();
+        } else {
+            $spillover = Attendance::where('employee_id', $movement->employee_id)
+                ->where('movement_id', $movement->id)
+                ->whereDate('date', '!=', $startDate)
+                ->get();
+        }
+
+        foreach ($spillover as $attendance) {
+            $checkIn = $attendance->check_in
+                ? Carbon::parse($attendance->check_in)->format('H:i:s')
+                : null;
+
+            // Invented from movement create: office start with no checkout
+            if ($checkIn === $workStartNormalized && ! $attendance->check_out) {
+                $attendance->check_in = null;
+            }
+
+            $attendance->movement_id = null;
+
+            if ($attendance->remarks) {
+                $attendance->remarks = trim(preg_replace(
+                    '/\s*\|\s*/',
+                    ' | ',
+                    preg_replace(
+                        '/(?:^|\s*\|\s*)On official movement:[^|]*/i',
+                        '',
+                        preg_replace('/(?:^|\s*\|\s*)Movement completed:[^|]*/i', '', $attendance->remarks)
+                    )
+                ), " |\t\n\r\0\x0B");
+                if ($attendance->remarks === '') {
+                    $attendance->remarks = null;
+                }
+            }
+
+            if (! $attendance->check_in && ! $attendance->check_out && $attendance->status === 'on_duty') {
+                $attendance->status = 'absent';
+            }
+
+            $attendance->save();
+        }
+    }
+
+    /**
+     * Create a pending log-book register entry when a movement is closed.
+     */
+    private function createLogBookFromMovement(Movement $movement, Request $request, Carbon $returnDateTime, ?float $startReading = null): void
+    {
+        if (MovementLogBook::where('movement_id', $movement->id)->exists()) {
+            return;
+        }
+
+        $movement->loadMissing(['employee.branch', 'employee.designation']);
+        $branch = $movement->employee?->branch;
+        $isHeadOffice = (bool) ($branch?->is_head_office);
+
+        if ($startReading === null) {
+            $startReading = MovementLogBook::lastEndMeterReadingForEmployee(
+                (int) $movement->employee_id,
+                (int) $movement->id
+            );
+        }
+        if ($startReading === null) {
+            $startReading = (float) $request->start_meter_reading;
+        }
+        $endReading = (float) $request->end_meter_reading;
+        $totalKm = round($endReading - $startReading, 2);
+
+        // Personal movement: entire trip distance is personal (no official km)
+        if ($movement->movement_type === 'personal') {
+            $personalKm = $totalKm;
+            $officialKm = 0.0;
+        } else {
+            $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
+            $officialKm = round($totalKm - ($personalKm ?? 0), 2);
+        }
+
+        $startPlace = $movement->start_place
+            ? trim($movement->start_place)
+            : trim((string) $request->start_place);
+        if ($startPlace === '') {
+            $startPlace = $branch?->name ?: 'Unknown';
+        }
+
+        MovementLogBook::create([
+            'movement_id' => $movement->id,
+            'employee_id' => $movement->employee_id,
+            'date' => Carbon::parse($movement->from_datetime)->toDateString(),
+            'start_time' => $movement->from_datetime,
+            'start_place' => $startPlace,
+            'start_meter_reading' => $startReading,
+            'destination' => $movement->destination,
+            'purpose' => $movement->purpose,
+            'work_result' => $movement->work_result,
+            'return_time' => $returnDateTime,
+            'end_meter_reading' => $endReading,
+            'distance_km' => $totalKm,
+            'personal_km' => $personalKm,
+            'official_km' => $officialKm,
+            'approval_scope' => $isHeadOffice ? 'head_office' : 'branch',
+            'payment_status' => $this->logBookPaymentStatusForEmployee($movement->employee),
+        ]);
+    }
+
+    /**
+     * Officers and lower staff never sit in unpaid/pending payment.
+     * Accountant / ABM and above stay unpaid until monthly payment is processed.
+     */
+    private function logBookPaymentStatusForEmployee(?Employee $employee): string
+    {
+        if (! $employee) {
+            return 'paid';
+        }
+
+        $limitInfo = app(LogBookPaymentWorkflowService::class)->resolveKmLimit($employee);
+
+        return $limitInfo['eligible'] ? 'unpaid' : 'paid';
+    }
+
+    /**
+     * Send notifications about movement completion
+     */
+    private function sendCompletionNotifications(Movement $movement, $returnDateTime)
+    {
+        try {
+            // Load employee if not already loaded
+            if (! $movement->relationLoaded('employee')) {
+                $movement->load('employee');
+            }
+
+            // Find appropriate managers to notify
+            $recipients = collect();
+
+            // Add department heads
+            if ($movement->employee->department_id) {
+                $departmentHeads = $this->getDepartmentHeads($movement->employee->department_id);
+                $recipients = $recipients->merge($departmentHeads);
+            }
+
+            // Add branch heads
+            if ($movement->employee->branch_id) {
+                $branchHeads = $this->getBranchHeads($movement->employee->branch_id);
+                $recipients = $recipients->merge($branchHeads);
+            }
+
+            // Add any super admins
+            $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                $query->where('name', 'Super Admin');
+            })->get();
+            $recipients = $recipients->merge($superAdmins);
+
+            // Format times for message
+            $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+            $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+            $returnDate = $returnDateTime->format('M d, Y h:i A');
+
+            // Prepare employee name
+            $employeeName = $movement->employee->name_en ?? $movement->employee->full_name_en ?? '';
+
+            // Create notification content
+            $title = 'Movement Completed';
+            $message = "{$employeeName} has returned from their {$movement->movement_type} movement ({$fromDate} to {$toDate}). Actual return time: {$returnDate}";
+            $link = route('movements.show', $movement->id);
+
+            // Send notifications to each recipient
+            foreach ($recipients as $recipient) {
+                // Send in-app notification
+                if (isset($recipient->id)) {
+                    $recipient->notify(new HrmNotification(
+                        $title,
+                        $message,
+                        'info',
+                        $link
+                    ));
+                }
+            }
+        } catch (\Exception $e) {
+            // Log error but don't stop the process
+            \Log::error('Error sending completion notifications: '.$e->getMessage());
+        }
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -342,10 +2355,25 @@ class MovementController extends Controller
      */
     public function report(Request $request)
     {
+<<<<<<< HEAD
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
         $query = Movement::with(['employee.department', 'employee.designation', 'approver'])
+=======
+        $timezone = config('app.timezone', 'Asia/Dhaka');
+
+        // Parse dates with specified timezone
+        $startDate = $request->start_date
+            ? Carbon::parse($request->start_date)->setTimezone($timezone)->startOfDay()
+            : Carbon::today($timezone)->subDays(30)->startOfDay();
+
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)->setTimezone($timezone)->endOfDay()
+            : Carbon::today($timezone)->endOfDay();
+
+        $query = Movement::with(['employee.department', 'employee.designation'])
+>>>>>>> feature/flutter-mobile-app
             ->whereBetween('from_datetime', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -371,10 +2399,19 @@ class MovementController extends Controller
             'total' => $query->count(),
             'official' => $query->where('movement_type', 'official')->count(),
             'personal' => $query->where('movement_type', 'personal')->count(),
+<<<<<<< HEAD
             'approved' => $query->where('status', 'approved')->count(),
             'rejected' => $query->where('status', 'rejected')->count(),
             'pending' => $query->where('status', 'pending')->count(),
             'completed' => $query->where('status', 'completed')->count(),
+=======
+            'active' => $query->where('status', 'active')->count(),
+            'completed' => $query->where('status', 'completed')->count(),
+            // Keep old summary keys for backward compatibility with frontend
+            'approved' => 0,
+            'rejected' => 0,
+            'pending' => $query->where('status', 'active')->count(), // Map 'active' to 'pending' for compatibility
+>>>>>>> feature/flutter-mobile-app
         ];
 
         $departments = Department::all();
@@ -391,4 +2428,124 @@ class MovementController extends Controller
             'movementTypes' => ['official', 'personal'],
         ]);
     }
+<<<<<<< HEAD
+=======
+
+    /**
+     * Download movement report as PDF.
+     */
+    public function downloadReport(Request $request)
+    {
+        $timezone = config('app.timezone', 'Asia/Dhaka');
+
+        // Parse dates with specified timezone
+        $startDate = $request->start_date
+            ? Carbon::parse($request->start_date)->setTimezone($timezone)->startOfDay()
+            : Carbon::today($timezone)->subDays(30)->startOfDay();
+
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)->setTimezone($timezone)->endOfDay()
+            : Carbon::today($timezone)->endOfDay();
+
+        $query = Movement::with(['employee.department', 'employee.designation'])
+            ->whereBetween('from_datetime', [$startDate, $endDate])
+            ->when($request->status, function ($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->department_id, function ($query, $departmentId) {
+                $query->whereHas('employee', function ($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                });
+            })
+            ->when($request->movement_type, function ($query, $movementType) {
+                $query->where('movement_type', $movementType);
+            })
+            ->when($request->employee_id, function ($query, $employeeId) {
+                $query->where('employee_id', $employeeId);
+            });
+
+        $movements = $query->orderBy('from_datetime', 'desc')->get();
+
+        // Summary statistics
+        $summary = [
+            'total' => $movements->count(),
+            'official' => $movements->where('movement_type', 'official')->count(),
+            'personal' => $movements->where('movement_type', 'personal')->count(),
+            'active' => $movements->where('status', 'active')->count(),
+            'completed' => $movements->where('status', 'completed')->count(),
+        ];
+
+        // Generate PDF
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('pdf.movement-report', [
+            'movements' => $movements,
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'summary' => $summary,
+            'filters' => [
+                'status' => $request->status,
+                'department_id' => $request->department_id,
+                'movement_type' => $request->movement_type,
+                'employee_id' => $request->employee_id,
+            ],
+        ]);
+
+        return $pdf->download('movement-report-'.now()->format('Y-m-d').'.pdf');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function movementIndexFilterKeys(): array
+    {
+        return [
+            'status',
+            'department_id',
+            'employee_id',
+            'movement_type',
+            'zone_id',
+            'regional_office_id',
+            'branch_id',
+            'from_date',
+            'to_date',
+            'cross_day_only',
+            'search',
+            'per_page',
+            'page',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function movementIndexFiltersFromRequest(Request $request): array
+    {
+        return array_filter(
+            $request->only($this->movementIndexFilterKeys()),
+            static fn ($value) => $value !== null && $value !== '',
+        );
+    }
+
+    /**
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    private function redirectToMovementIndex(Request $request, ?string $flashKey = null, ?string $flashMessage = null)
+    {
+        $prev = url()->previous();
+        $isIndexPage = $prev && (str_contains($prev, '/movements?') || str_ends_with($prev, '/movements'));
+
+        if ($isIndexPage) {
+            $redirect = redirect()->back();
+        } else {
+            $filters = $this->movementIndexFiltersFromRequest($request);
+            $redirect = redirect()->route('movements.index', $filters);
+        }
+
+        if ($flashKey && $flashMessage) {
+            $redirect->with($flashKey, $flashMessage);
+        }
+
+        return $redirect;
+    }
+>>>>>>> feature/flutter-mobile-app
 }

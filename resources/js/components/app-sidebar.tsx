@@ -9,8 +9,13 @@ import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
+<<<<<<< HEAD
         title: 'Dashboard',
         url: '/dashboard',
+=======
+        title: 'Sections',
+        url: '/sections',
+>>>>>>> feature/flutter-mobile-app
         icon: LayoutGrid,
     },
 ];
@@ -35,7 +40,11 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
+<<<<<<< HEAD
                             <Link href="/dashboard" prefetch>
+=======
+                            <Link href="/sections" prefetch>
+>>>>>>> feature/flutter-mobile-app
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>

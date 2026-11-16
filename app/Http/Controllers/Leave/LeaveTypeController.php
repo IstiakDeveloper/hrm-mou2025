@@ -14,16 +14,31 @@ class LeaveTypeController extends Controller
      */
     public function index(Request $request)
     {
+<<<<<<< HEAD
         $leaveTypes = LeaveType::when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
             })
             ->orderBy('name')
             ->paginate(10)
+=======
+        $perPage = $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+
+        $leaveTypes = LeaveType::when($request->search, function ($query, $search) {
+            $query->where('name', 'like', "%{$search}%");
+        })
+            ->orderBy('name')
+            ->paginate($perPage)
+>>>>>>> feature/flutter-mobile-app
             ->withQueryString();
 
         return Inertia::render('leave/types/index', [
             'leaveTypes' => $leaveTypes,
+<<<<<<< HEAD
             'filters' => $request->only(['search']),
+=======
+            'filters' => $request->only(['search', 'per_page']),
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -70,7 +85,11 @@ class LeaveTypeController extends Controller
     public function update(Request $request, LeaveType $leaveType)
     {
         $request->validate([
+<<<<<<< HEAD
             'name' => 'required|string|max:255|unique:leave_types,name,' . $leaveType->id,
+=======
+            'name' => 'required|string|max:255|unique:leave_types,name,'.$leaveType->id,
+>>>>>>> feature/flutter-mobile-app
             'days_allowed' => 'required|integer|min:0',
             'is_paid' => 'required|boolean',
             'description' => 'nullable|string',

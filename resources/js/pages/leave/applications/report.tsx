@@ -35,10 +35,15 @@ import {
 } from '@/components/ui/pagination';
 import {
   CalendarIcon,
+<<<<<<< HEAD
   Download,
   Eye,
   FilePieChart,
   Printer
+=======
+  Eye,
+  FilePieChart,
+>>>>>>> feature/flutter-mobile-app
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -51,22 +56,42 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+<<<<<<< HEAD
+=======
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+>>>>>>> feature/flutter-mobile-app
 
 interface Department {
   id: number;
   name: string;
 }
 
+<<<<<<< HEAD
 interface Employee {
   id: number;
   first_name: string;
   last_name: string;
+=======
+interface BranchInfo {
+  id: number;
+  name: string;
+}
+
+interface Employee extends EmployeeNameFields {
+  id: number;
+>>>>>>> feature/flutter-mobile-app
   employee_id: string;
   department: Department;
   designation: {
     id: number;
     name: string;
   };
+<<<<<<< HEAD
+=======
+  branch?: BranchInfo | null;
+  current_branch?: BranchInfo | null;
+  currentBranch?: BranchInfo | null;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface LeaveType {
@@ -241,6 +266,7 @@ export default function Report({
     );
   };
 
+<<<<<<< HEAD
   const handlePrint = () => {
     window.print();
   };
@@ -275,6 +301,9 @@ export default function Report({
     link.click();
     document.body.removeChild(link);
   };
+=======
+  // Print / CSV export intentionally removed (per request).
+>>>>>>> feature/flutter-mobile-app
 
   // Calculate total for percentages
   const totalApplications = statusData.reduce((sum, item) => sum + item.value, 0);
@@ -293,6 +322,7 @@ export default function Report({
           </div>
 
           <div className="mt-4 md:mt-0 flex space-x-2">
+<<<<<<< HEAD
             <Button variant="outline" onClick={handlePrint} className="flex items-center">
               <Printer className="mr-1 h-4 w-4" />
               Print Report
@@ -303,6 +333,8 @@ export default function Report({
               Export CSV
             </Button>
 
+=======
+>>>>>>> feature/flutter-mobile-app
             <Link href={route('leave.applications.index')}>
               <Button variant="outline" className="flex items-center">
                 <Eye className="mr-1 h-4 w-4" />
@@ -448,7 +480,11 @@ export default function Report({
                     <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
+<<<<<<< HEAD
                         {employee.first_name} {employee.last_name}
+=======
+                        {employeeDisplayName(employee)}
+>>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -580,6 +616,10 @@ export default function Report({
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
+<<<<<<< HEAD
+=======
+                  <TableHead>Branch</TableHead>
+>>>>>>> feature/flutter-mobile-app
                   <TableHead>Department</TableHead>
                   <TableHead>Leave Type</TableHead>
                   <TableHead>From</TableHead>
@@ -595,12 +635,22 @@ export default function Report({
                     <TableRow key={application.id}>
                       <TableCell>
                         <div className="font-medium">
+<<<<<<< HEAD
                           {application.employee.first_name} {application.employee.last_name}
+=======
+                          {employeeDisplayName(application.employee)}
+>>>>>>> feature/flutter-mobile-app
                         </div>
                         <div className="text-xs text-gray-500">
                           {application.employee.employee_id}
                         </div>
                       </TableCell>
+<<<<<<< HEAD
+=======
+                      <TableCell className="text-xs text-slate-700">
+                        {application.employee.branch?.name ?? application.employee.current_branch?.name ?? (application.employee as any).currentBranch?.name ?? '—'}
+                      </TableCell>
+>>>>>>> feature/flutter-mobile-app
                       <TableCell>
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                           {application.employee.department.name}
@@ -622,7 +672,11 @@ export default function Report({
                   ))
                 ) : (
                   <TableRow>
+<<<<<<< HEAD
                     <TableCell colSpan={8} className="h-24 text-center">
+=======
+                    <TableCell colSpan={9} className="h-24 text-center">
+>>>>>>> feature/flutter-mobile-app
                       No leave applications found for the selected period.
                       {(status !== 'all' || departmentId !== 'all' || leaveTypeId !== 'all' || employeeId !== 'all') && (
                         <Button

@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Department;
 
 use App\Http\Controllers\Controller;
+<<<<<<< HEAD
 use App\Models\Branch;
+=======
+>>>>>>> feature/flutter-mobile-app
 use App\Models\Department;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -16,6 +19,7 @@ class DepartmentController extends Controller
      */
     public function index(Request $request)
     {
+<<<<<<< HEAD
         $departments = Department::with(['headEmployee', 'branch', 'parentDepartment'])
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
@@ -33,6 +37,70 @@ class DepartmentController extends Controller
             'departments' => $departments,
             'branches' => $branches,
             'filters' => $request->only(['search', 'branch_id']),
+=======
+        $perPage = (int) $request->get('per_page', 10);
+        if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
+        // Query departments
+        $departments = Department::query()
+            ->with(['parentDepartment'])
+            ->when($request->search, function ($query, $search) {
+                $query->where('name', 'like', "%{$search}%");
+            })
+            ->orderBy('name')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        // Get all head employee IDs from the departments
+        $headEmployeeIds = $departments->pluck('head_employee_id')->filter()->unique()->values()->toArray();
+
+        // Get all the head employees in a single query
+        $headEmployees = [];
+        if (! empty($headEmployeeIds)) {
+            $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
+                ->select('id', 'employee_id', 'name_en', 'photo')
+                ->get()
+                ->keyBy('id')
+                ->toArray();
+
+            $headEmployees = $employees;
+        }
+
+        // Convert to array and manually set head employees
+        $departmentsArray = $departments->toArray();
+        foreach ($departmentsArray['data'] as &$department) {
+            if (! empty($department['head_employee_id']) && isset($headEmployees[$department['head_employee_id']])) {
+                $department['headEmployee'] = $headEmployees[$department['head_employee_id']];
+            } else {
+                $department['headEmployee'] = null;
+            }
+        }
+
+        // Structure the data to match what the frontend expects for pagination
+        return Inertia::render('department/index', [
+            'departments' => [
+                'data' => $departmentsArray['data'],
+                'meta' => [
+                    'current_page' => $departments->currentPage(),
+                    'from' => $departments->firstItem(),
+                    'last_page' => $departments->lastPage(),
+                    'links' => $departments->linkCollection()->toArray(),
+                    'path' => $departments->path(),
+                    'per_page' => $departments->perPage(),
+                    'to' => $departments->lastItem(),
+                    'total' => $departments->total(),
+                ],
+                'links' => [
+                    'first' => $departments->url(1),
+                    'last' => $departments->url($departments->lastPage()),
+                    'prev' => $departments->previousPageUrl(),
+                    'next' => $departments->nextPageUrl(),
+                ],
+            ],
+            'filters' => $request->only(['search', 'per_page']),
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -41,12 +109,18 @@ class DepartmentController extends Controller
      */
     public function create()
     {
+<<<<<<< HEAD
         $branches = Branch::all();
+=======
+>>>>>>> feature/flutter-mobile-app
         $employees = Employee::where('status', 'active')->get();
         $departments = Department::all();
 
         return Inertia::render('department/create', [
+<<<<<<< HEAD
             'branches' => $branches,
+=======
+>>>>>>> feature/flutter-mobile-app
             'employees' => $employees,
             'departments' => $departments,
         ]);
@@ -57,6 +131,7 @@ class DepartmentController extends Controller
      */
     public function store(Request $request)
     {
+<<<<<<< HEAD
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -66,6 +141,16 @@ class DepartmentController extends Controller
         ]);
 
         Department::create($request->all());
+=======
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'head_employee_id' => 'nullable|exists:employees,id',
+            'parent_department_id' => 'nullable|exists:departments,id',
+        ]);
+
+        Department::create($validated);
+>>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('departments.index')
             ->with('success', 'Department created successfully.');
@@ -76,13 +161,19 @@ class DepartmentController extends Controller
      */
     public function edit(Department $department)
     {
+<<<<<<< HEAD
         $branches = Branch::all();
+=======
+>>>>>>> feature/flutter-mobile-app
         $employees = Employee::where('status', 'active')->get();
         $departments = Department::where('id', '!=', $department->id)->get();
 
         return Inertia::render('department/edit', [
             'department' => $department,
+<<<<<<< HEAD
             'branches' => $branches,
+=======
+>>>>>>> feature/flutter-mobile-app
             'employees' => $employees,
             'departments' => $departments,
         ]);
@@ -93,11 +184,18 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, Department $department)
     {
+<<<<<<< HEAD
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'head_employee_id' => 'nullable|exists:employees,id',
             'branch_id' => 'required|exists:branches,id',
+=======
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'head_employee_id' => 'nullable|exists:employees,id',
+>>>>>>> feature/flutter-mobile-app
             'parent_department_id' => 'nullable|exists:departments,id',
         ]);
 
@@ -108,7 +206,11 @@ class DepartmentController extends Controller
             ]);
         }
 
+<<<<<<< HEAD
         $department->update($request->all());
+=======
+        $department->update($validated);
+>>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('departments.index')
             ->with('success', 'Department updated successfully.');
@@ -144,14 +246,43 @@ class DepartmentController extends Controller
      */
     public function show(Department $department)
     {
+<<<<<<< HEAD
         $department->load(['headEmployee', 'branch', 'parentDepartment']);
 
+=======
+        // Load basic relationships without headEmployee
+        $department->load(['parentDepartment']);
+
+        // Fetch employees for this department
+>>>>>>> feature/flutter-mobile-app
         $employees = Employee::where('department_id', $department->id)
             ->with(['designation'])
             ->paginate(10);
 
+<<<<<<< HEAD
         return Inertia::render('department/show', [
             'department' => $department,
+=======
+        // Convert department to array for manipulation
+        $departmentArray = $department->toArray();
+
+        // Directly fetch the head employee if it exists
+        if ($department->head_employee_id) {
+            $headEmployee = Employee::select('id', 'employee_id', 'name_en', 'photo')
+                ->find($department->head_employee_id);
+
+            if ($headEmployee) {
+                $departmentArray['headEmployee'] = $headEmployee->toArray();
+            } else {
+                $departmentArray['headEmployee'] = null;
+            }
+        } else {
+            $departmentArray['headEmployee'] = null;
+        }
+
+        return Inertia::render('department/show', [
+            'department' => $departmentArray,
+>>>>>>> feature/flutter-mobile-app
             'employees' => $employees,
         ]);
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Leave;
 
 use App\Http\Controllers\Controller;
+<<<<<<< HEAD
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveApplication;
@@ -14,16 +15,684 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+=======
+use App\Mail\LeaveApplicationNotification;
+use App\Models\Attendance;
+use App\Models\Branch;
+use App\Models\Department;
+use App\Models\Designation;
+use App\Models\Employee;
+use App\Models\LeaveApplication;
+use App\Models\LeaveApproval;
+use App\Models\LeaveApprovalTier;
+use App\Models\LeaveBalance;
+use App\Models\LeaveType;
+use App\Models\RegionalOffice;
+use App\Models\User;
+use App\Models\Zone;
+use App\Services\OrganogramAccessService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+>>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
 {
+<<<<<<< HEAD
+=======
+    private ?Collection $cachedActiveTiers = null;
+
+    private ?Collection $cachedExecutiveDirectors = null;
+
+    private array $cachedRankLevels = [];
+
+    private array $cachedTierApprovers = [];
+
+    private array $cachedDesignationFamilies = [];
+
+    private ?Collection $cachedHoDeptHeadUsers = null;
+
+    /**
+     * Active leave approval tiers (memoized for the request).
+     *
+     * @return Collection<int, LeaveApprovalTier>
+     */
+    private function getActiveTiers(): Collection
+    {
+        if ($this->cachedActiveTiers === null) {
+            $this->cachedActiveTiers = LeaveApprovalTier::query()
+                ->with('designation')
+                ->where('is_active', true)
+                ->orderBy('max_leave_days', 'asc')
+                ->get();
+        }
+
+        return $this->cachedActiveTiers;
+    }
+
+    /**
+     * Head office vs branch for leave tier matching.
+     * Staff with no branch are treated as head office (common for HO desk employees).
+     * Branches not linked to a regional office are treated as central (head office) for tier routing
+     * when `is_head_office` was not set in data.
+     *
+     * Non-Microfinance projects or departments (e.g. Program/Project, Health, Audit, HR, IT, Finance, etc.)
+     * follow Head Office tiers (routing to their Department Head / ED) even when stationed at a branch office.
+     */
+    private function leaveTierContext(Employee $employee): string
+    {
+        if (! $employee->current_branch_id) {
+            return 'head_office';
+        }
+
+        $branch = $employee->currentBranch ?: $employee->branch;
+
+        if ($branch && $branch->is_head_office) {
+            return 'head_office';
+        }
+
+        if ($branch && $branch->regional_office_id === null) {
+            return 'head_office';
+        }
+
+        // Non-Microfinance departments or projects follow Head Office tiers
+        $employee->loadMissing(['department', 'project']);
+        $deptName = strtolower(trim((string) ($employee->department?->name ?? '')));
+        $projName = strtolower(trim((string) ($employee->project?->name ?? '')));
+
+        if ($deptName !== '' && ! str_contains($deptName, 'microfinance')) {
+            return 'head_office';
+        }
+
+        if ($projName !== '' && ! str_contains($projName, 'microfinance')) {
+            return 'head_office';
+        }
+
+        return 'branch';
+    }
+
+    /**
+     * How the PDF / letter should qualify the addressee line (branch name, regional office, zone, department).
+     * Used for designation-based tiers (e.g. Regional Manager, Zonal Manager) by designation title keywords.
+     */
+    private function routingScopeForDesignationTierName(?string $designationName): string
+    {
+        $name = strtolower(trim((string) $designationName));
+        if ($name === '') {
+            return 'none';
+        }
+        if (str_contains($name, 'regional')) {
+            return 'regional_office';
+        }
+        if (str_contains($name, 'zonal') || str_contains($name, 'zone manager') || (str_contains($name, 'zone') && str_contains($name, 'manager'))) {
+            return 'zone';
+        }
+        if (str_contains($name, 'branch') && str_contains($name, 'manager')) {
+            return 'branch';
+        }
+
+        // Directors and other HO-level designations are not scoped to the applicant's branch.
+        return 'none';
+    }
+
+    /**
+     * Graded designation family for a configured tier designation
+     * (e.g. "Branch Manager" → Branch Manager, Branch Manager-1/2/3).
+     *
+     * @return Collection<int, int>
+     */
+    private function designationFamilyIds(int $designationId, ?string $designationName): Collection
+    {
+        if (isset($this->cachedDesignationFamilies[$designationId])) {
+            return $this->cachedDesignationFamilies[$designationId];
+        }
+
+        $ids = collect([(int) $designationId]);
+        $name = trim((string) $designationName);
+        if ($name === '') {
+            $this->cachedDesignationFamilies[$designationId] = $ids;
+            return $ids;
+        }
+
+        $base = trim((string) preg_replace('/\s*-\s*\d+\s*$/u', '', $name));
+        if ($base === '') {
+            $this->cachedDesignationFamilies[$designationId] = $ids;
+            return $ids;
+        }
+
+        $family = Designation::query()
+            ->where(function ($q) use ($base) {
+                $q->where('name', $base)
+                    ->orWhere('name', 'like', $base.'-%');
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        $res = $ids->merge($family)->unique()->values();
+        $this->cachedDesignationFamilies[$designationId] = $res;
+
+        return $res;
+    }
+
+    /**
+     * Determine an applicant's hierarchy rank level for leave routing.
+     * Higher rank levels can only be approved by strictly higher tiers.
+     * 0 = Regular Staff, 1 = Branch Manager / Head, 2 = Regional Manager,
+     * 3 = Zonal Manager, 4 = Director / HO Dept Head, 5 = Executive Director.
+     */
+    private function getEmployeeApprovalRankLevel(Employee $applicant): int
+    {
+        $empId = (int) $applicant->id;
+        if (isset($this->cachedRankLevels[$empId])) {
+            return $this->cachedRankLevels[$empId];
+        }
+
+        $applicant->loadMissing(['designation', 'currentBranch.regionalOffice.zone', 'branch']);
+        $designationName = strtolower(trim((string) ($applicant->designation?->name ?? '')));
+
+        if (str_contains($designationName, 'executive director')) {
+            return $this->cachedRankLevels[$empId] = 5;
+        }
+
+        if (str_contains($designationName, 'deputy executive director') || (str_contains($designationName, 'director') && ! str_contains($designationName, 'assistant director') && ! str_contains($designationName, 'deputy assistant director'))) {
+            return $this->cachedRankLevels[$empId] = 4;
+        }
+
+        // Check if applicant is a Head Office Department Head
+        if ($this->leaveTierContext($applicant) === 'head_office') {
+            if ($applicant->department_id) {
+                $dept = Department::find($applicant->department_id);
+                if ($dept && (int) $dept->head_employee_id === (int) $applicant->id) {
+                    return $this->cachedRankLevels[$empId] = 4;
+                }
+            }
+            $user = User::where('employee_id', $applicant->id)->first();
+            if ($user && OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
+                return $this->cachedRankLevels[$empId] = 4;
+            }
+        }
+
+        // Check if Zonal Manager
+        if (str_contains($designationName, 'zonal manager') || str_contains($designationName, 'zone manager') || preg_match('/\bzm\b/', $designationName)) {
+            return $this->cachedRankLevels[$empId] = 3;
+        }
+        if (Zone::query()->where('zone_manager_employee_id', $applicant->id)->exists()) {
+            return $this->cachedRankLevels[$empId] = 3;
+        }
+
+        // Check if Regional Manager
+        if (str_contains($designationName, 'regional manager') || preg_match('/\brm\b/', $designationName)) {
+            return $this->cachedRankLevels[$empId] = 2;
+        }
+        if (RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->exists()) {
+            return $this->cachedRankLevels[$empId] = 2;
+        }
+
+        // Check if Branch Manager / Branch Head
+        if (str_contains($designationName, 'branch manager') || preg_match('/\bbm\b/', $designationName)) {
+            return $this->cachedRankLevels[$empId] = 1;
+        }
+        $branch = $applicant->currentBranch ?: $applicant->branch;
+        if ($branch && $branch->isEmployeeBranchHead($applicant)) {
+            return $this->cachedRankLevels[$empId] = 1;
+        }
+
+        return $this->cachedRankLevels[$empId] = 0;
+    }
+
+    /**
+     * Determine a leave approval tier's rank level.
+     */
+    private function getTierRankLevel(LeaveApprovalTier $tier): int
+    {
+        $type = (string) $tier->approver_type;
+        $desigName = strtolower(trim((string) ($tier->designation?->name ?? '')));
+
+        if ($type === 'executive_director' || str_contains($desigName, 'executive director')) {
+            return 5;
+        }
+        if (str_contains($desigName, 'director')) {
+            return 4;
+        }
+        if ($type === 'department_head') {
+            return 4;
+        }
+        if (str_contains($desigName, 'zonal') || str_contains($desigName, 'zone')) {
+            return 3;
+        }
+        if (str_contains($desigName, 'regional')) {
+            return 2;
+        }
+        if ($type === 'branch_manager' || $type === 'branch_head' || str_contains($desigName, 'branch')) {
+            return 1;
+        }
+
+        return 1;
+    }
+
+    /**
+     * Resolve active employees who should approve under a designation-based leave tier.
+     * Uses graded designation families and geography: branch / regional office / zone / none.
+     *
+     * @return Collection<int, Employee>
+     */
+    private function resolveDesignationTierApproverEmployees(
+        Employee $applicant,
+        int $designationId,
+        ?string $designationName,
+        string $routingScope
+    ): Collection {
+        $applicant->loadMissing(['currentBranch.regionalOffice.zone']);
+        $branch = $applicant->currentBranch;
+        $familyIds = $this->designationFamilyIds($designationId, $designationName);
+
+        if ($routingScope === 'regional_office') {
+            $roId = $branch?->regional_office_id;
+            if (! $roId) {
+                $ro = RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->first();
+                $roId = $ro?->id;
+            }
+            $ro = $roId ? RegionalOffice::query()->find($roId) : null;
+            if ($ro?->regional_manager_employee_id) {
+                $official = Employee::query()
+                    ->with('designation')
+                    ->where('status', 'active')
+                    ->where('id', $ro->regional_manager_employee_id)
+                    ->first();
+                if ($official) {
+                    return collect([$official]);
+                }
+            }
+        }
+
+        if ($routingScope === 'zone') {
+            $zoneId = $branch?->regionalOffice?->zone_id;
+            if (! $zoneId && $branch?->regional_office_id) {
+                $ro = RegionalOffice::query()->find($branch->regional_office_id);
+                $zoneId = $ro?->zone_id;
+            }
+            if (! $zoneId) {
+                $ro = RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->first();
+                $zoneId = $ro?->zone_id;
+            }
+            if (! $zoneId) {
+                $z = Zone::query()->where('zone_manager_employee_id', $applicant->id)->first();
+                $zoneId = $z?->id;
+            }
+            $zone = $zoneId ? Zone::query()->find($zoneId) : null;
+            if ($zone?->zone_manager_employee_id) {
+                $official = Employee::query()
+                    ->with('designation')
+                    ->where('status', 'active')
+                    ->where('id', $zone->zone_manager_employee_id)
+                    ->first();
+                if ($official) {
+                    return collect([$official]);
+                }
+            }
+        }
+
+        $q = Employee::query()
+            ->with('designation')
+            ->where('status', 'active')
+            ->whereIn('designation_id', $familyIds->all());
+
+        if ($routingScope === 'branch') {
+            if (! $applicant->current_branch_id) {
+                return collect();
+            }
+            $q->where('current_branch_id', $applicant->current_branch_id);
+        } elseif ($routingScope === 'regional_office') {
+            $roId = $branch?->regional_office_id;
+            if (! $roId) {
+                return collect();
+            }
+            $branchIds = Branch::query()->where('regional_office_id', $roId)->pluck('id');
+            $q->whereIn('current_branch_id', $branchIds);
+        } elseif ($routingScope === 'zone') {
+            $zoneId = $branch?->regionalOffice?->zone_id;
+            if (! $zoneId) {
+                return collect();
+            }
+            $roIds = RegionalOffice::query()->where('zone_id', $zoneId)->pluck('id');
+            $branchIds = Branch::query()->whereIn('regional_office_id', $roIds)->pluck('id');
+            $q->whereIn('current_branch_id', $branchIds);
+        }
+
+        return $q->orderBy('id')->get();
+    }
+
+    /**
+     * Branch / regional / zone / department labels for the applicant (leave PDF addressee line).
+     *
+     * @param  array{type?: ?string, title?: ?string, name?: ?string, routing_scope?: string}  $addressee
+     * @return array<string, mixed>
+     */
+    private function enrichLeaveAddresseeForPdf(?Employee $employee, array $addressee): array
+    {
+        if ($employee) {
+            $employee->loadMissing(['department', 'currentBranch.regionalOffice.zone']);
+        }
+
+        $branch = $employee?->currentBranch;
+        $ro = $branch?->regionalOffice;
+        $zone = $ro?->zone;
+
+        $addressee['routing_context'] = [
+            'branch_name' => $branch?->name,
+            'regional_office_name' => $ro?->name,
+            'zone_name' => $zone?->name,
+            'department_name' => $employee?->department?->name,
+        ];
+
+        if (! isset($addressee['routing_scope'])) {
+            $type = $addressee['type'] ?? null;
+            $addressee['routing_scope'] = match ($type) {
+                'department_head' => 'department',
+                'branch_manager', 'branch_head' => 'branch',
+                'designation' => 'branch',
+                default => 'none',
+            };
+        }
+
+        return $addressee;
+    }
+
+    /**
+     * Resolve approver users from leave_approval_tiers (Head office vs Branch only).
+     *
+     * Always routes strictly upwards:
+     * - Disqualifies any tiers lower than or equal to the applicant's hierarchy level.
+     * - If applicant is Head Office Department Head -> routes to Executive Director.
+     * - If applicant is Regional Manager -> routes to Zonal Manager (or Director/ED for longer leaves).
+     * - If applicant is Branch Manager -> routes to Regional Manager (or higher).
+     * - Excludes the applicant themselves from receiving or approving their own request.
+     *
+     * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array{type: ?string, title: ?string, name: ?string, routing_scope?: string}}
+     */
+    private function resolveTierApprovers(Employee $employee, int $leaveDays): array
+    {
+        $cacheKey = "{$employee->id}_{$leaveDays}";
+        if (isset($this->cachedTierApprovers[$cacheKey])) {
+            return $this->cachedTierApprovers[$cacheKey];
+        }
+
+        $branch = $employee->currentBranch ?: $employee->branch;
+        $context = $this->leaveTierContext($employee);
+        $applicantLevel = $this->getEmployeeApprovalRankLevel($employee);
+
+        // Fetch all active tiers for applicant's context
+        $allTiers = $this->getActiveTiers()
+            ->where('context', $context)
+            ->values();
+
+        // Filter out tiers that are at or below the applicant's rank level
+        $eligibleTiers = $allTiers->filter(function ($t) use ($applicantLevel) {
+            return $this->getTierRankLevel($t) > $applicantLevel;
+        })->values();
+
+        /** @var ?LeaveApprovalTier $tier */
+        $tier = null;
+        if ($eligibleTiers->isNotEmpty()) {
+            // Find lowest tier that can approve this many days
+            $tier = $eligibleTiers->first(function ($t) use ($leaveDays) {
+                return $t->max_leave_days >= $leaveDays;
+            });
+            // If the days requested is smaller than the minimum eligible tier, pick the lowest eligible tier (immediate superior)
+            if (! $tier && $leaveDays <= $eligibleTiers->min('max_leave_days')) {
+                $tier = $eligibleTiers->first();
+            }
+        }
+
+        $recipients = collect([]);
+        $addressee = [
+            'type' => null,
+            'title' => null,
+            'name' => null,
+            'routing_scope' => 'none',
+        ];
+
+        if (! $tier) {
+            $hasAnyTierForContext = $allTiers->isNotEmpty();
+
+            if ($hasAnyTierForContext || $applicantLevel >= 4) {
+                $recipients = $this->getExecutiveDirectors();
+                $ed = $recipients->first();
+                $edEmployee = $ed?->employee_id ? Employee::with('designation')->find($ed->employee_id) : null;
+                $addressee = [
+                    'type' => 'executive_director',
+                    'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                    'name' => $edEmployee?->full_name_en ?? $edEmployee?->full_name ?? null,
+                    'routing_scope' => 'none',
+                ];
+            }
+
+            $recipients = $recipients->filter(function ($u) use ($employee) {
+                return (int) ($u->employee_id ?? 0) !== (int) $employee->id;
+            })->values();
+
+            $result = ['recipients' => $recipients, 'tier' => null, 'addressee' => $addressee];
+            $this->cachedTierApprovers[$cacheKey] = $result;
+
+            return $result;
+        }
+
+        $approverType = (string) $tier->approver_type;
+
+        if ($approverType === 'department_head') {
+            $department = $employee->department_id ? Department::find($employee->department_id) : null;
+            $headEmployee = $department?->head_employee_id ? Employee::find($department->head_employee_id) : null;
+            $recipientUserIds = collect();
+            if ($headEmployee) {
+                $recipientUserIds = User::where('employee_id', $headEmployee->id)->pluck('id');
+            }
+            $hoDeptHeadUserIds = User::query()
+                ->whereNotNull('employee_id')
+                ->get()
+                ->filter(function (User $u) use ($employee) {
+                    if (! OrganogramAccessService::isHeadOfficeDepartmentHead($u)) {
+                        return false;
+                    }
+                    $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($u);
+
+                    return in_array((int) $employee->department_id, $deptIds, true);
+                })
+                ->pluck('id');
+            $recipients = User::query()
+                ->whereIn('id', $recipientUserIds->merge($hoDeptHeadUserIds)->unique()->all())
+                ->get();
+            if ($headEmployee) {
+                $addressee = [
+                    'type' => 'department_head',
+                    'title' => $headEmployee->designation?->name ?? 'Department Head',
+                    'name' => $headEmployee->full_name_en ?? $headEmployee->full_name ?? null,
+                    'routing_scope' => 'department',
+                ];
+            }
+        } elseif ($approverType === 'executive_director') {
+            $recipients = $this->getExecutiveDirectors();
+            $ed = $recipients->first();
+            $edEmployee = $ed?->employee_id ? Employee::with('designation')->find($ed->employee_id) : null;
+            $addressee = [
+                'type' => 'executive_director',
+                'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                'name' => $edEmployee?->full_name_en ?? $edEmployee?->full_name ?? null,
+                'routing_scope' => 'none',
+            ];
+        } elseif ($approverType === 'branch_manager') {
+            $branchId = (int) ($employee->current_branch_id ?? 0);
+            if ($branchId > 0) {
+                $recipients = User::query()
+                    ->where('branch_id', $branchId)
+                    ->get()
+                    ->filter(fn (User $u) => $u->hasPermission('branch_manager'))
+                    ->values();
+            }
+            $addressee = [
+                'type' => 'branch_manager',
+                'title' => 'Branch Manager',
+                'name' => null,
+                'routing_scope' => 'branch',
+            ];
+        } elseif ($approverType === 'branch_head') {
+            $headEmployee = $branch?->resolveBranchHeadEmployee();
+            if ($headEmployee) {
+                $recipients = User::where('employee_id', $headEmployee->id)->get();
+                $addressee = [
+                    'type' => 'branch_head',
+                    'title' => $headEmployee->designation?->name ?? 'Branch Head',
+                    'name' => $headEmployee->full_name_en ?? $headEmployee->full_name ?? null,
+                    'routing_scope' => 'branch',
+                ];
+            }
+        } elseif ($approverType === 'designation' && $tier->designation_id) {
+            $routingScope = $this->routingScopeForDesignationTierName($tier->designation?->name);
+            $approverEmployees = $this->resolveDesignationTierApproverEmployees(
+                $employee,
+                (int) $tier->designation_id,
+                $tier->designation?->name,
+                $routingScope
+            );
+
+            if ($approverEmployees->isNotEmpty()) {
+                $recipients = User::whereIn('employee_id', $approverEmployees->pluck('id'))->get();
+                $primary = $approverEmployees->first();
+                $addressee = [
+                    'type' => 'designation',
+                    'title' => $primary->designation?->name ?? $tier->designation?->name ?? 'Approver',
+                    'name' => $primary->full_name_en ?? $primary->full_name ?? null,
+                    'routing_scope' => $routingScope,
+                ];
+            }
+        }
+
+        $recipients = $recipients->filter(function ($u) use ($employee) {
+            return (int) ($u->employee_id ?? 0) !== (int) $employee->id;
+        })->values();
+
+        $result = ['recipients' => $recipients, 'tier' => $tier, 'addressee' => $addressee];
+        $this->cachedTierApprovers[$cacheKey] = $result;
+
+        return $result;
+    }
+
+    /**
+     * Whether this user may auto-approve for this applicant and duration under active leave tiers.
+     * Mirrors tier resolution used for notifications / approvals.
+     */
+    private function userMayAutoApproveLeaveForApplicant(User $user, Employee $applicant, int $days): bool
+    {
+        // No self-auto-approval is ever allowed
+        if ($user->employee_id && (int) $user->employee_id === (int) $applicant->id) {
+            return false;
+        }
+
+        if (! $user->hasPermission('leave-applications.approve')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $this->getActiveTiers()->isNotEmpty()) {
+            return true;
+        }
+
+        if ($days < 1) {
+            return false;
+        }
+
+        $context = $this->leaveTierContext($applicant);
+        $applicantLevel = $this->getEmployeeApprovalRankLevel($applicant);
+
+        // Fetch active tiers above the applicant's level
+        $allTiers = $this->getActiveTiers()
+            ->where('context', $context)
+            ->values();
+
+        $tiers = $allTiers->filter(function ($t) use ($applicantLevel, $days) {
+            return $this->getTierRankLevel($t) > $applicantLevel && $t->max_leave_days >= $days;
+        })->values();
+
+        foreach ($tiers as $tier) {
+            $type = (string) $tier->approver_type;
+
+            if ($type === 'department_head' && OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
+                $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
+                if (in_array((int) $applicant->department_id, $deptIds, true)) {
+                    return true;
+                }
+            } elseif ($type === 'department_head' && $user->employee_id) {
+                $dept = $applicant->department_id ? Department::find($applicant->department_id) : null;
+                if ($dept && (int) $dept->head_employee_id === (int) $user->employee_id) {
+                    return true;
+                }
+            } elseif ($type === 'branch_head' && $user->employee_id) {
+                $branch = $applicant->current_branch_id ? Branch::find($applicant->current_branch_id) : null;
+                $emp = Employee::find($user->employee_id);
+                if ($branch && $emp && $branch->isEmployeeBranchHead($emp)) {
+                    return true;
+                }
+            } elseif ($type === 'branch_manager') {
+                if (! $user->hasPermission('branch_manager')) {
+                    continue;
+                }
+                $bid = OrganogramAccessService::branchOnlyScopeBranchId($user);
+                if ($bid !== null && $bid === (int) $applicant->current_branch_id) {
+                    return true;
+                }
+            } elseif ($type === 'executive_director') {
+                if (OrganogramAccessService::isExecutiveDirector($user)) {
+                    return true;
+                }
+            } elseif ($type === 'designation' && $tier->designation_id && $user->employee_id) {
+                $routingScope = $this->routingScopeForDesignationTierName($tier->designation?->name);
+                $approvers = $this->resolveDesignationTierApproverEmployees(
+                    $applicant,
+                    (int) $tier->designation_id,
+                    $tier->designation?->name,
+                    $routingScope
+                );
+                if ($approvers->contains(fn (Employee $e) => (int) $e->id === (int) $user->employee_id)) {
+                    return true;
+                }
+            }
+        }
+
+        // If tiers exist but none cover this duration (or no matching tier), fall back to ED only.
+        $hasAnyTierForContext = $this->getActiveTiers()
+            ->where('context', $context)
+            ->isNotEmpty();
+
+        if (($hasAnyTierForContext || $applicantLevel >= 4) && $tiers->isEmpty()) {
+            return OrganogramAccessService::isExecutiveDirector($user);
+        }
+
+        return false;
+    }
+
+    /**
+     * JSON: can the current user auto-approve for their own application with this many days?
+     */
+    public function autoApproveEligibility(Request $request)
+    {
+        // Auto-approve is disabled for one's own leave application
+        return response()->json(['eligible' => false]);
+    }
+
+>>>>>>> feature/flutter-mobile-app
     /**
      * Display a listing of leave applications.
      */
     public function index(Request $request)
     {
         $user = Auth::user();
+<<<<<<< HEAD
         $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType', 'approver']);
 
         // Apply filters based on user's role and permissions
@@ -63,6 +732,54 @@ class LeaveApplicationController extends Controller
                     $q->where('department_id', $user->employee->department_id);
                 });
             }
+=======
+
+        $query = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch.regionalOffice.zone',
+            'employee.branch',
+            'employee.project',
+            'leaveType',
+            'approver',
+            'approvals.approver',
+        ]);
+
+        $userEmployeeId = $user->employee_id;
+        $hasViewPermission = $user->hasPermission('leave-applications.view');
+        $hasApprovePermission = $user->hasPermission('leave-applications.approve');
+        $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
+        $userBranchId = $user->branch_id;
+
+        $isBranchHead = false;
+        if ($userEmployeeId && $userBranchId) {
+            $branch = Branch::find($userBranchId);
+            $employee = Employee::find($userEmployeeId);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
+        }
+
+        $isDepartmentHead = OrganogramAccessService::isHeadOfficeDepartmentHead($user);
+        $userDepartmentId = $isDepartmentHead
+            ? (OrganogramAccessService::departmentIdsForDepartmentHeadScope($user)[0] ?? null)
+            : null;
+        if ($userEmployeeId && ! $isDepartmentHead) {
+            $employee = Employee::find($userEmployeeId);
+            if ($employee && $employee->department_id) {
+                $department = Department::find($employee->department_id);
+                $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
+                $userDepartmentId = $employee->department_id;
+            }
+        }
+
+        if (! $hasViewPermission) {
+            if ($userEmployeeId) {
+                $query->where('employee_id', $userEmployeeId);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } else {
+            OrganogramAccessService::constrainLeaveApplications($query, $user);
+>>>>>>> feature/flutter-mobile-app
         }
 
         // Apply user-selected filters
@@ -85,6 +802,7 @@ class LeaveApplicationController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->whereHas('employee', function ($q) use ($search) {
+<<<<<<< HEAD
                     $q->where('first_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%");
@@ -95,10 +813,39 @@ class LeaveApplicationController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+=======
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhereHas('currentBranch', function ($bq) use ($search) {
+                            $bq->where('name', 'like', "%{$search}%");
+                        });
+                });
+            });
+
+        $perPage = $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+
+        $applications = $query
+            ->orderByDesc('applied_at')
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $applications->getCollection()->transform(function (LeaveApplication $app) use ($user) {
+            $resolvedApprovers = $this->resolvedTierApproversForIndex($app);
+            $app->setAttribute('can_approve_action', $this->canApproveApplication($user, $app, $resolvedApprovers));
+            $app->setAttribute('approver_display', $this->approverDisplayForIndex($app, $resolvedApprovers));
+
+            return $app;
+        });
+
+>>>>>>> feature/flutter-mobile-app
         // Get departments based on user's permissions
         $departments = $this->getAccessibleDepartments($user);
 
         // Get employees based on user's permissions
+<<<<<<< HEAD
         $employees = $this->getAccessibleEmployees($user);
 
         // Check different approval scenarios
@@ -131,10 +878,448 @@ class LeaveApplicationController extends Controller
                 'isEmployee' => $user->employee_id ? true : false,
                 'employeeId' => $user->employee_id,
             ],
+=======
+        $employees = $this->getAccessibleEmployees($user, $request);
+
+        // Check different approval scenarios
+        $canApproveAny = $hasApprovePermission;
+
+        return Inertia::render('leave/applications/index', [
+            'applications' => [
+                'data' => $applications->getCollection()->values()->all(),
+                'meta' => [
+                    'current_page' => $applications->currentPage(),
+                    'from' => $applications->firstItem(),
+                    'last_page' => $applications->lastPage(),
+                    'links' => $applications->linkCollection()->toArray(),
+                    'path' => $applications->path(),
+                    'per_page' => $applications->perPage(),
+                    'to' => $applications->lastItem(),
+                    'total' => $applications->total(),
+                ],
+                'links' => [
+                    'first' => $applications->url(1),
+                    'last' => $applications->url($applications->lastPage()),
+                    'prev' => $applications->previousPageUrl(),
+                    'next' => $applications->nextPageUrl(),
+                ],
+            ],
+            'departments' => $departments,
+            'employees' => $employees,
+            'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),
+            'canApprove' => $canApproveAny,
+            'userPermissions' => [
+                'canView' => $hasViewPermission,
+                'canCreate' => $user->hasPermission('leave-applications.create'),
+                'canEdit' => $user->hasPermission('leave-applications.edit'),
+                'canApprove' => $hasApprovePermission,
+                'isBranchManager' => $isBranchManager,
+                'isBranchHead' => $isBranchHead,
+                'isDepartmentHead' => $isDepartmentHead,
+                'userBranchId' => $userBranchId,
+                'userDepartmentId' => $userDepartmentId,
+                'isEmployee' => $userEmployeeId ? true : false,
+                'employeeId' => $userEmployeeId,
+            ],
+            'currentUserId' => $user->id,
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 
     /**
+<<<<<<< HEAD
+=======
+     * Get departments accessible to the user based on permissions
+     */
+    private function getAccessibleDepartments($user)
+    {
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->select(['id', 'name'])->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
+        }
+
+        return Department::query()->select(['id', 'name'])->whereIn('id', $ids)->orderBy('name')->get();
+    }
+
+    /**
+     * Get employees accessible to the user based on permissions
+     */
+    private function getAccessibleEmployees($user, ?Request $request = null)
+    {
+        $q = Employee::query()
+            ->select(['id', 'employee_id', 'name_en', 'name_bn'])
+            ->where('status', 'active')
+            ->orderBy('name_en');
+
+        if ($request && $request->filled('department_id') && $request->department_id !== 'all') {
+            $q->where('department_id', $request->department_id);
+        }
+
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        $employees = $q->limit(100)->get();
+
+        if ($request && $request->filled('employee_id') && $request->employee_id !== 'all') {
+            $selectedId = (int) $request->employee_id;
+            if (! $employees->contains('id', $selectedId)) {
+                $selected = Employee::query()
+                    ->select(['id', 'employee_id', 'name_en', 'name_bn'])
+                    ->find($selectedId);
+                if ($selected) {
+                    $employees->prepend($selected);
+                }
+            }
+        }
+
+        return $employees;
+    }
+
+    /**
+     * Tier approvers for one pending index row. Resolved once and reused for the approve
+     * button and the Approver column. Null when this row does not need tier resolution.
+     *
+     * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array<string, mixed>}|null
+     */
+    private function resolvedTierApproversForIndex(LeaveApplication $application): ?array
+    {
+        if ((string) $application->status !== 'pending') {
+            return null;
+        }
+
+        if (! $this->getActiveTiers()->isNotEmpty()) {
+            return null;
+        }
+
+        $applicant = ($application->relationLoaded('employee') && $application->employee)
+            ? $application->employee
+            : Employee::query()->with(['currentBranch', 'branch', 'department', 'designation'])->find($application->employee_id);
+
+        if (! $applicant) {
+            return null;
+        }
+
+        if (! $applicant->relationLoaded('currentBranch')) {
+            $applicant->load(['currentBranch.regionalOffice.zone', 'branch', 'department', 'designation', 'project']);
+        }
+
+        return $this->resolveTierApprovers($applicant, (int) $application->days);
+    }
+
+    /**
+     * Label for the Approver column on the leave applications index.
+     * Pending → current tier addressee / recipients; decided → who actioned it.
+     *
+     * @param  array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array<string, mixed>}|null  $resolvedApprovers
+     * @return array{label: string, title: ?string, name: ?string, status: string}
+     */
+    private function approverDisplayForIndex(LeaveApplication $application, ?array $resolvedApprovers = null): array
+    {
+        $status = (string) $application->status;
+
+        if (in_array($status, ['approved', 'rejected'], true)) {
+            $name = $application->approver?->name;
+            if (! $name && $application->relationLoaded('approvals')) {
+                $latest = $application->approvals->sortByDesc('id')->first();
+                $name = $latest?->approver?->name;
+            }
+
+            return [
+                'label' => $name ?: '—',
+                'title' => $status === 'approved' ? 'Approved by' : 'Rejected by',
+                'name' => $name,
+                'status' => $status,
+            ];
+        }
+
+        if ($status !== 'pending') {
+            return [
+                'label' => '—',
+                'title' => null,
+                'name' => null,
+                'status' => $status,
+            ];
+        }
+
+        $applicant = ($application->relationLoaded('employee') && $application->employee)
+            ? $application->employee
+            : Employee::query()->with(['currentBranch', 'branch', 'department', 'designation'])->find($application->employee_id);
+
+        if (! $applicant) {
+            return [
+                'label' => '—',
+                'title' => null,
+                'name' => null,
+                'status' => $status,
+            ];
+        }
+
+        if (! $applicant->relationLoaded('currentBranch')) {
+            $applicant->load(['currentBranch.regionalOffice.zone', 'branch', 'department', 'designation', 'project']);
+        }
+
+        if (! $this->getActiveTiers()->isNotEmpty()) {
+            return [
+                'label' => 'Approver',
+                'title' => 'Approver',
+                'name' => null,
+                'status' => $status,
+            ];
+        }
+
+        $resolved = $resolvedApprovers ?? $this->resolveTierApprovers($applicant, (int) $application->days);
+        $addressee = $resolved['addressee'] ?? [];
+        $title = trim((string) ($addressee['title'] ?? ''));
+        $name = trim((string) ($addressee['name'] ?? ''));
+
+        if ($name === '' && $resolved['recipients']->isNotEmpty()) {
+            $names = $resolved['recipients']
+                ->map(fn (User $u) => trim((string) $u->name))
+                ->filter()
+                ->unique()
+                ->values();
+            $name = $names->take(2)->implode(', ');
+            if ($names->count() > 2) {
+                $name .= ' +'.($names->count() - 2);
+            }
+        }
+
+        if ($name !== '' && $title !== '') {
+            $label = "{$name} ({$title})";
+        } elseif ($name !== '') {
+            $label = $name;
+        } elseif ($title !== '') {
+            $label = $title;
+        } else {
+            $label = 'Unassigned';
+        }
+
+        return [
+            'label' => $label,
+            'title' => $title !== '' ? $title : null,
+            'name' => $name !== '' ? $name : null,
+            'status' => $status,
+        ];
+    }
+
+    /**
+     * Check if user can view a specific leave application.
+     */
+    private function canViewApplication($user, $application)
+    {
+        if ($user->employee_id && (int) $application->employee_id === (int) $user->employee_id) {
+            return true;
+        }
+
+        if (OrganogramAccessService::hasUnrestrictedLeaveApplicationAccess($user)) {
+            return true;
+        }
+
+        if (! $user->hasPermission('leave-applications.view') && ! $user->hasPermission('leave-applications.approve')) {
+            return false;
+        }
+
+        return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
+    }
+
+    /**
+     * Check if user can approve/reject a specific leave application.
+     *
+     * When any active leave approval tier exists in the system, only users resolved for the applicant's context
+     * (head office vs branch) and leave length may approve — plus super admin. Users with both
+     * leave-applications.approve and employees.view are not exempt (that pair used to bypass tiers and wrongly
+     * allowed department heads with employee directory access to approve any leave).
+     * Legacy role-based rules apply only when no leave approval tiers are configured at all.
+     */
+    private function canApproveApplication($user, $application, ?array $resolvedApprovers = null)
+    {
+        $userEmployeeId = $user->employee_id;
+        $employeeId = $application->employee_id;
+
+        if ($userEmployeeId && (int) $employeeId === (int) $userEmployeeId) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($application->status !== 'pending') {
+            return false;
+        }
+
+        $applicant = ($application->relationLoaded('employee') && $application->employee)
+            ? $application->employee
+            : Employee::query()->with(['currentBranch', 'branch'])->find($employeeId);
+
+        if ($applicant && ! $applicant->relationLoaded('currentBranch')) {
+            $applicant->load(['currentBranch', 'branch']);
+        }
+
+        $globalTiersExist = $this->getActiveTiers()->isNotEmpty();
+
+        if ($applicant) {
+            $context = $this->leaveTierContext($applicant);
+            $hasTiersForContext = $this->getActiveTiers()
+                ->where('context', $context)
+                ->isNotEmpty();
+
+            if ($hasTiersForContext) {
+                // Apex: Executive Director may approve any pending leave in their visibility,
+                // including applications currently routed to a lower tier (dept head / designation).
+                if (OrganogramAccessService::isExecutiveDirector($user)
+                    && $user->hasPermission('leave-applications.approve')) {
+                    return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
+                }
+
+                $resolved = $resolvedApprovers ?? $this->resolveTierApprovers($applicant, (int) $application->days);
+                $recipientIds = $resolved['recipients']->pluck('id')->map(fn ($id) => (int) $id)->all();
+                $isListedApprover = in_array((int) $user->id, $recipientIds, true);
+
+                // When the application routes to Executive Director, allow ED role / organogram
+                // permission even if designation-based recipient lookup missed the user.
+                $routesToEd = ($resolved['addressee']['type'] ?? null) === 'executive_director';
+                $isEdApprover = $routesToEd && OrganogramAccessService::isExecutiveDirector($user);
+
+                if (! $isListedApprover && ! $isEdApprover) {
+                    return false;
+                }
+
+                return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
+            }
+
+            if ($globalTiersExist) {
+                return false;
+            }
+        } elseif ($globalTiersExist) {
+            return false;
+        }
+
+        // Legacy role-based approval (only when no leave approval tiers exist in the system)
+        $userBranchId = $user->branch_id;
+
+        $isBranchHead = false;
+        if ($userEmployeeId && $userBranchId) {
+            $branch = Branch::find($userBranchId);
+            if ($branch) {
+                $employee = Employee::find($userEmployeeId);
+                $isBranchHead = $employee ? $branch->isEmployeeBranchHead($employee) : false;
+            }
+        }
+
+        $isDepartmentHead = false;
+        $userDeptId = null;
+        if ($userEmployeeId) {
+            $userEmployee = Employee::find($userEmployeeId);
+            if ($userEmployee && $userEmployee->department_id) {
+                $userDeptId = $userEmployee->department_id;
+                $department = Department::find($userDeptId);
+                if ($department) {
+                    $isDepartmentHead = (int) $department->head_employee_id === (int) $userEmployeeId;
+                }
+            }
+        }
+
+        if ($isBranchHead) {
+            $employee = Employee::find($employeeId);
+            if ($employee && (int) $employee->current_branch_id === (int) $userBranchId) {
+                return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
+            }
+        }
+
+        if ($isDepartmentHead) {
+            $employee = Employee::find($employeeId);
+            if ($employee && $userDeptId && (int) $employee->department_id === (int) $userDeptId) {
+                return (int) $application->days <= 3
+                    && OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
+            }
+        }
+
+        if ($user->hasPermission('branch_manager') && $userBranchId) {
+            $employee = Employee::find($employeeId);
+            if ($employee && (int) $employee->current_branch_id === (int) $userBranchId) {
+                return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
+            }
+        }
+
+        if ($user->hasPermission('leave-applications.approve')) {
+            if ($userEmployeeId) {
+                $employee = Employee::find($employeeId);
+                if ($employee && (int) $employee->reporting_to === (int) $userEmployeeId) {
+                    return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
+                }
+            }
+
+            return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user can cancel a specific leave application
+     */
+    private function canCancelApplication($user, $application)
+    {
+        // Check if user is branch head (designation-based)
+        $isBranchHead = false;
+        if ($user->employee_id && $user->branch_id) {
+            $branch = Branch::find($user->branch_id);
+            $employee = Employee::find($user->employee_id);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
+        }
+
+        // Admins can cancel all applications
+        if ($user->hasPermission('leave-applications.edit')) {
+            return true;
+        }
+
+        // Employees can cancel their own pending applications
+        if ($user->employee && $application->employee_id == $user->employee->id && $application->status == 'pending') {
+            return true;
+        }
+
+        // Branch heads can cancel applications from their branch
+        if ($isBranchHead && $user->branch_id && $application->status == 'pending') {
+            $employee = Employee::find($application->employee_id);
+
+            return $employee && $employee->current_branch_id == $user->branch_id;
+        }
+
+        // Department heads and branch managers with appropriate permissions
+        if ($user->hasPermission('leave-applications.approve')) {
+            // Only pending applications can be cancelled
+            if ($application->status != 'pending') {
+                return false;
+            }
+
+            // Branch managers for their branch
+            if ($user->hasPermission('branch_manager') && $user->branch_id) {
+                $employee = Employee::find($application->employee_id);
+
+                return $employee && $employee->current_branch_id == $user->branch_id;
+            }
+
+            // Department heads for their department
+            if ($user->employee && $user->employee->department_id) {
+                $department = Department::find($user->employee->department_id);
+                $isDepartmentHead = $department && $department->head_employee_id == $user->employee->id;
+
+                if ($isDepartmentHead) {
+                    $employee = Employee::find($application->employee_id);
+
+                    return $employee && $employee->department_id == $user->employee->department_id;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+>>>>>>> feature/flutter-mobile-app
      * Show form to create a new leave application.
      */
     public function create()
@@ -142,6 +1327,7 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
+<<<<<<< HEAD
         if (!$employee) {
             if ($user->hasPermission('leaves.create') && $user->hasPermission('employees.view')) {
                 // Admin creating leave request for someone else
@@ -157,6 +1343,12 @@ class LeaveApplicationController extends Controller
                 return redirect()->route('leave.applications.index')
                     ->with('error', 'You must be associated with an employee record to apply for leave.');
             }
+=======
+        if (! $employee) {
+
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'You must be associated with an employee record to apply for leave.');
+>>>>>>> feature/flutter-mobile-app
         }
 
         $leaveTypes = LeaveType::all();
@@ -165,14 +1357,32 @@ class LeaveApplicationController extends Controller
             ->with('leaveType')
             ->get();
 
+<<<<<<< HEAD
+=======
+        $existingLeaves = LeaveApplication::where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->select(['id', 'start_date', 'end_date', 'days', 'status', 'leave_type_id'])
+            ->with('leaveType:id,name')
+            ->orderBy('start_date')
+            ->get();
+
+>>>>>>> feature/flutter-mobile-app
         return Inertia::render('leave/applications/create', [
             'employee' => $employee,
             'leaveTypes' => $leaveTypes,
             'balances' => $balances,
+<<<<<<< HEAD
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('leaves.create'),
                 'canEdit' => $user->hasPermission('leaves.edit'),
                 'canApprove' => $user->hasPermission('leaves.approve'),
+=======
+            'existingLeaves' => $existingLeaves,
+            'userPermissions' => [
+                'canCreate' => $user->hasPermission('leave-applications.create'),
+                'canEdit' => $user->hasPermission('leave-applications.edit'),
+                'canApprove' => $user->hasPermission('leave-applications.approve'),
+>>>>>>> feature/flutter-mobile-app
                 'isEmployee' => true,
             ],
         ]);
@@ -187,12 +1397,20 @@ class LeaveApplicationController extends Controller
         $employee = null;
 
         // Check if user is admin creating for someone else
+<<<<<<< HEAD
         if ($request->has('employee_id') && $user->hasPermission('leaves.create') && $user->hasPermission('employees.view')) {
+=======
+        if ($request->has('employee_id') && $user->hasPermission('leave-applications.create') && $user->hasPermission('employees.view')) {
+>>>>>>> feature/flutter-mobile-app
             $employee = Employee::findOrFail($request->employee_id);
         } else {
             $employee = $user->employee;
 
+<<<<<<< HEAD
             if (!$employee) {
+=======
+            if (! $employee) {
+>>>>>>> feature/flutter-mobile-app
                 return redirect()->route('leave.applications.index')
                     ->with('error', 'You must be associated with an employee record to apply for leave.');
             }
@@ -207,12 +1425,16 @@ class LeaveApplicationController extends Controller
             'documents.*' => 'file|mimes:jpeg,png,jpg,pdf,doc,docx|max:2048',
         ]);
 
+<<<<<<< HEAD
         // CRITICAL FIX: Correctly parse and calculate date differences
+=======
+>>>>>>> feature/flutter-mobile-app
         try {
             // Parse dates using Carbon and ensure they are formatted consistently
             $startDate = Carbon::parse($request->start_date)->startOfDay();
             $endDate = Carbon::parse($request->end_date)->startOfDay();
 
+<<<<<<< HEAD
             // Log the actual date objects for debugging
             \Log::info("Leave application date calculation:", [
                 'start_date_raw' => $request->start_date,
@@ -232,20 +1454,68 @@ class LeaveApplicationController extends Controller
             ]);
         } catch (\Exception $e) {
             \Log::error("Error calculating leave days: " . $e->getMessage());
+=======
+            // Calculate days INCLUDING both start and end date (add 1 to the difference)
+            $diffDays = $startDate->diffInDays($endDate);
+            $days = $diffDays + 1;
+        } catch (\Exception $e) {
+>>>>>>> feature/flutter-mobile-app
             return redirect()->back()->withErrors([
                 'date_calculation' => 'Error calculating leave days. Please check your dates.',
             ])->withInput();
         }
 
+<<<<<<< HEAD
         // Check leave balance for regular employees (not for admins creating on behalf)
         if (!$user->hasPermission('leaves.edit')) {
+=======
+        // Prevent duplicate/overlapping leave applications for the same employee
+        $overlappingLeave = LeaveApplication::where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->where('start_date', '<=', $endDate->toDateString())
+                    ->where('end_date', '>=', $startDate->toDateString());
+            })
+            ->with('leaveType')
+            ->first();
+
+        if ($overlappingLeave) {
+            $existingStart = Carbon::parse($overlappingLeave->start_date)->format('d-m-Y');
+            $existingEnd = Carbon::parse($overlappingLeave->end_date)->format('d-m-Y');
+            $leaveTypeName = $overlappingLeave->leaveType->name ?? 'Leave';
+            $statusLabel = ucfirst($overlappingLeave->status);
+
+            return redirect()->back()->withErrors([
+                'start_date' => "An overlapping {$statusLabel} leave application already exists ({$leaveTypeName}: {$existingStart} to {$existingEnd}). Duplicate application is not allowed for the same date(s).",
+            ])->withInput();
+        }
+
+        $leaveType = LeaveType::findOrFail($request->leave_type_id);
+        $isUnpaid = ! $leaveType->is_paid;
+        $isMedical = str_contains(strtolower($leaveType->name), 'medical')
+            || str_contains(strtolower($leaveType->name), 'sick')
+            || str_contains(strtolower($leaveType->name), 'চিকিৎসা');
+
+        if ($isMedical && (! $request->hasFile('documents') || empty($request->file('documents')))) {
+            return redirect()->back()->withErrors([
+                'documents' => 'Medical certificate or supporting document is mandatory for Medical Leave application.',
+            ])->withInput();
+        }
+
+        // Check leave balance for regular employees on paid leaves (not for admins creating on behalf)
+        if (! $isUnpaid && ! $user->hasPermission('leave-applications.edit')) {
+>>>>>>> feature/flutter-mobile-app
             $currentYear = Carbon::now()->year;
             $balance = LeaveBalance::where('employee_id', $employee->id)
                 ->where('leave_type_id', $request->leave_type_id)
                 ->where('year', $currentYear)
                 ->first();
 
+<<<<<<< HEAD
             if (!$balance) {
+=======
+            if (! $balance) {
+>>>>>>> feature/flutter-mobile-app
                 return redirect()->back()->withErrors([
                     'leave_type_id' => 'You do not have a leave balance for this leave type.',
                 ])->withInput();
@@ -253,7 +1523,11 @@ class LeaveApplicationController extends Controller
 
             if ($balance->remaining_days < $days) {
                 return redirect()->back()->withErrors([
+<<<<<<< HEAD
                     'leave_type_id' => 'Not enough leave balance. Available: ' . $balance->remaining_days . ' days, Requested: ' . $days . ' days.',
+=======
+                    'leave_type_id' => 'Not enough leave balance. Available: '.$balance->remaining_days.' days, Requested: '.$days.' days.',
+>>>>>>> feature/flutter-mobile-app
                 ])->withInput();
             }
         }
@@ -271,12 +1545,29 @@ class LeaveApplicationController extends Controller
             }
         }
 
+<<<<<<< HEAD
         // Auto-approve if user has approval permission
         $status = 'pending';
         $approvedBy = null;
 
         // Auto-approve if admin is creating the application
         if ($user->hasPermission('leaves.approve') && $request->has('auto_approve') && $request->auto_approve) {
+=======
+        // Auto-approve if user has approval permission and is creating on behalf of someone else
+        $status = 'pending';
+        $approvedBy = null;
+        $isSelfApplication = $user->employee_id && (int) $user->employee_id === (int) $employee->id;
+
+        // Auto-approve only when tier rules allow this user to be the approver for this duration and not self-application
+        if (! $isSelfApplication && $user->hasPermission('leave-applications.approve') && $request->boolean('auto_approve')) {
+            if (! $this->userMayAutoApproveLeaveForApplicant($user, $employee, $days)) {
+                return redirect()->back()
+                    ->withErrors([
+                        'auto_approve' => 'Auto-approve is not allowed for this many days under the current leave approval tiers.',
+                    ])
+                    ->withInput();
+            }
+>>>>>>> feature/flutter-mobile-app
             $status = 'approved';
             $approvedBy = $user->id;
         }
@@ -285,14 +1576,24 @@ class LeaveApplicationController extends Controller
         $leaveApplication = LeaveApplication::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $request->leave_type_id,
+<<<<<<< HEAD
             'start_date' => $startDate->toDateString(),  // Ensure consistent date format
             'end_date' => $endDate->toDateString(),      // Ensure consistent date format
             'days' => $days,                             // Correctly calculated days
+=======
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate->toDateString(),
+            'days' => $days,
+>>>>>>> feature/flutter-mobile-app
             'reason' => $request->reason,
             'status' => $status,
             'approved_by' => $approvedBy,
             'applied_at' => now(),
+<<<<<<< HEAD
             'documents' => !empty($documents) ? json_encode($documents) : null,
+=======
+            'documents' => ! empty($documents) ? json_encode($documents) : null,
+>>>>>>> feature/flutter-mobile-app
         ]);
 
         // Create approval record if auto-approved
@@ -308,10 +1609,241 @@ class LeaveApplicationController extends Controller
 
             // Update leave balance
             $this->updateLeaveBalance($employee->id, $request->leave_type_id, $days);
+<<<<<<< HEAD
         }
 
         return redirect()->route('leave.applications.index')
             ->with('success', 'Leave application submitted successfully for ' . $days . ' day(s).');
+=======
+
+            // Ensure attendance is marked as leave for the approved date range
+            $this->syncAttendanceForApprovedLeave($leaveApplication);
+        }
+        // Send notification emails to department head and branch head if not auto-approved
+        elseif ($status === 'pending') {
+            try {
+                // Get fresh employee data with department and branch
+                $employee = Employee::with(['department', 'branch'])->find($employee->id);
+
+                // Get the leave type for the email
+                $leaveType = LeaveType::find($request->leave_type_id);
+
+                // Send email notifications
+                $this->sendLeaveNotifications($leaveApplication, $employee, $leaveType);
+            } catch (\Exception $e) {
+                // Continue with the application creation even if emails fail
+            }
+        }
+
+        return redirect()->route('leave.applications.index')
+            ->with('success', 'Leave application submitted successfully for '.$days.' day(s).');
+    }
+
+    /**
+     * Send leave application notifications to department heads and branch heads
+     */
+    private function sendLeaveNotifications($leaveApplication, $employee, $leaveType)
+    {
+        try {
+            $days = (int) ($leaveApplication->days ?? 0);
+
+            // Tier-based recipients (Leave settings)
+            $dynamic = $this->resolveTierApprovers($employee, $days);
+            $dynamicRecipients = $dynamic['recipients'] ?? collect([]);
+
+            // Fallback to legacy behavior if no rules are configured
+            $legacyRecipients = collect([]);
+            if ($dynamicRecipients->isEmpty()) {
+                $isShortLeave = $days <= 3;
+
+                $departmentHeads = collect([]);
+                if ($isShortLeave) {
+                    $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+                }
+
+                $executiveDirectors = $this->getExecutiveDirectors();
+                $legacyRecipients = $executiveDirectors->merge($departmentHeads);
+            }
+
+            // Find Super Admin users
+            $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                $query->where('name', 'Super Admin');
+            })->get();
+
+            // Combine unique recipients (User models)
+            $recipients = $superAdmins
+                ->merge($dynamicRecipients)
+                ->merge($legacyRecipients)
+                ->unique('id');
+
+            if ($recipients->isEmpty()) {
+                return;
+            }
+
+            // Format dates for notification message
+            $startDate = Carbon::parse($leaveApplication->start_date)->format('M d, Y');
+            $endDate = Carbon::parse($leaveApplication->end_date)->format('M d, Y');
+
+            // Construct employee full name
+            $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
+
+            // Notification details
+            $title = 'New Leave Application';
+            $message = "{$employeeName} has applied for {$leaveApplication->days} day(s) of {$leaveType->name} leave from {$startDate} to {$endDate}.";
+            $link = route('leave.applications.show', $leaveApplication->id);
+
+            // Send emails and in-app notifications to all recipients
+            foreach ($recipients as $recipient) {
+                // Skip if recipient is the employee who submitted the application
+                if (isset($recipient->employee_id) && $recipient->employee_id === $employee->id) {
+                    continue;
+                }
+
+                try {
+                    // Find corresponding user for this recipient
+                    $recipientUser = null;
+
+                    // Check if this is directly a User object
+                    if (isset($recipient->id) && $recipient instanceof \App\Models\User) {
+                        $recipientUser = $recipient;
+                    }
+                    // Check if this is an Employee with a user relationship
+                    elseif (isset($recipient->user_id)) {
+                        $recipientUser = \App\Models\User::find($recipient->user_id);
+                    }
+                    // Try to find user by email
+                    elseif (isset($recipient->email)) {
+                        $recipientUser = \App\Models\User::where('email', $recipient->email)->first();
+                    }
+
+                    // Send in-app notification if we found a user
+                    if ($recipientUser) {
+                        $recipientUser->notify(new \App\Notifications\HrmNotification(
+                            $title,
+                            $message,
+                            'info',
+                            $link
+                        ));
+                    }
+
+                    // Send email notification
+                    Mail::to($recipient->email)->queue(
+                        new LeaveApplicationNotification($leaveApplication, $employee, $leaveType, $recipient)
+                    );
+                } catch (\Exception $e) {
+                    // Continue to next recipient if there's an error
+                    continue;
+                }
+            }
+        } catch (\Exception $e) {
+            // Silent fail
+        }
+    }
+
+    /**
+     * Get users who are department heads for the given department
+     */
+    private function getDepartmentHeads($departmentId)
+    {
+        if (! $departmentId) {
+            return collect([]);
+        }
+
+        $department = Department::find($departmentId);
+        if (! $department || ! $department->head_employee_id) {
+            return collect([]);
+        }
+
+        // Find the user associated with the department head
+        $departmentHeadEmployee = Employee::find($department->head_employee_id);
+        if (! $departmentHeadEmployee) {
+            return collect([]);
+        }
+
+        // Get the user(s) associated with this employee
+        $departmentHeadUsers = User::where('employee_id', $departmentHeadEmployee->id)->get();
+
+        \Log::info('Department head lookup', [
+            'department_id' => $departmentId,
+            'department_head_employee_id' => $department->head_employee_id,
+            'users_found' => $departmentHeadUsers->count(),
+        ]);
+
+        return $departmentHeadUsers;
+    }
+
+    /**
+     * Get users who are branch heads for the given branch
+     */
+    private function getBranchHeads($branchId)
+    {
+        if (! $branchId) {
+            return collect([]);
+        }
+
+        $branch = Branch::find($branchId);
+        if (! $branch || ! $branch->head_employee_id) {
+            return collect([]);
+        }
+
+        // Find the user associated with the branch head
+        $branchHeadEmployee = Employee::find($branch->head_employee_id);
+        if (! $branchHeadEmployee) {
+            return collect([]);
+        }
+
+        // Get the user(s) associated with this employee
+        $branchHeadUsers = User::where('employee_id', $branchHeadEmployee->id)->get();
+
+        \Log::info('Branch head lookup', [
+            'branch_id' => $branchId,
+            'branch_head_employee_id' => $branch->head_employee_id,
+            'users_found' => $branchHeadUsers->count(),
+        ]);
+
+        return $branchHeadUsers;
+    }
+
+    /**
+     * Users who can act as Executive Director for leave tiers:
+     * Executive Director role, organogram.executive_director permission, or matching designation.
+     */
+    private function getExecutiveDirectors()
+    {
+        if ($this->cachedExecutiveDirectors !== null) {
+            return $this->cachedExecutiveDirectors;
+        }
+
+        $designationEmployeeIds = Employee::whereHas('designation', function ($q) {
+            $q->where(function ($inner) {
+                $inner->where('name', 'Executive Director')
+                    ->orWhereRaw('LOWER(name) LIKE ?', ['%executive director%']);
+            });
+        })->pluck('id');
+
+        $users = User::query()
+            ->with(['role', 'roles', 'employee.designation'])
+            ->where(function ($q) use ($designationEmployeeIds) {
+                $q->whereHas('role', fn ($r) => $r->where('name', 'Executive Director'))
+                    ->orWhereHas('roles', fn ($r) => $r->where('name', 'Executive Director'));
+
+                if ($designationEmployeeIds->isNotEmpty()) {
+                    $q->orWhereIn('employee_id', $designationEmployeeIds->all());
+                }
+            })
+            ->get();
+
+        // Also include users whose roles grant organogram.executive_director but use another role name.
+        $permissionHolders = User::query()
+            ->with(['role', 'roles'])
+            ->whereNotIn('id', $users->pluck('id')->all())
+            ->get()
+            ->filter(fn (User $u) => $u->hasDirectPermission('organogram.executive_director'));
+
+        $this->cachedExecutiveDirectors = $users->merge($permissionHolders)->unique('id')->values();
+
+        return $this->cachedExecutiveDirectors;
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -322,12 +1854,28 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
 
         // Check if user has permission to view this application
+<<<<<<< HEAD
         if (!$this->canViewApplication($user, $application)) {
+=======
+        if (! $this->canViewApplication($user, $application)) {
+>>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to view this leave application.');
         }
 
+<<<<<<< HEAD
         $application->load(['employee.department', 'employee.designation', 'leaveType', 'approver', 'approvals.approver']);
+=======
+        $application->load([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'employee.branch',
+            'leaveType',
+            'approver',
+            'approvals.approver',
+        ]);
+>>>>>>> feature/flutter-mobile-app
         $application->documents = json_decode($application->documents, true);
 
         $canApprove = $this->canApproveApplication($user, $application);
@@ -340,10 +1888,17 @@ class LeaveApplicationController extends Controller
             'canCancel' => $canCancel,
             'canEdit' => $canEdit,
             'userPermissions' => [
+<<<<<<< HEAD
                 'canView' => $user->hasPermission('leaves.view'),
                 'canCreate' => $user->hasPermission('leaves.create'),
                 'canEdit' => $user->hasPermission('leaves.edit'),
                 'canApprove' => $user->hasPermission('leaves.approve'),
+=======
+                'canView' => $user->hasPermission('leave-applications.view'),
+                'canCreate' => $user->hasPermission('leave-applications.create'),
+                'canEdit' => $user->hasPermission('leave-applications.edit'),
+                'canApprove' => $user->hasPermission('leave-applications.approve'),
+>>>>>>> feature/flutter-mobile-app
                 'isEmployee' => $user->employee_id ? true : false,
                 'employeeId' => $user->employee_id,
             ],
@@ -357,7 +1912,11 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
+<<<<<<< HEAD
         if (!$this->canCancelApplication($user, $application)) {
+=======
+        if (! $this->canCancelApplication($user, $application)) {
+>>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to cancel this leave application.');
         }
@@ -380,8 +1939,14 @@ class LeaveApplicationController extends Controller
     public function approve(Request $request, LeaveApplication $application)
     {
         $user = Auth::user();
+<<<<<<< HEAD
 
         if (!$this->canApproveApplication($user, $application)) {
+=======
+        $application->loadMissing(['employee.currentBranch', 'employee.branch']);
+
+        if (! $this->canApproveApplication($user, $application)) {
+>>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to approve this leave application.');
         }
@@ -395,6 +1960,7 @@ class LeaveApplicationController extends Controller
             'comments' => 'nullable|string',
         ]);
 
+<<<<<<< HEAD
         // Update leave application
         $application->status = 'approved';
         $application->approved_by = $user->id;
@@ -412,19 +1978,197 @@ class LeaveApplicationController extends Controller
 
         // Update leave balance
         $this->updateLeaveBalance($application->employee_id, $application->leave_type_id, $application->days);
+=======
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Update leave application
+            $application->status = 'approved';
+            $application->approved_by = $user->id;
+            $application->save();
+
+            // Create approval record
+            LeaveApproval::create([
+                'leave_application_id' => $application->id,
+                'approved_by' => $user->id,
+                'level' => 1,
+                'status' => 'approved',
+                'comments' => $request->comments,
+                'approved_at' => now(),
+            ]);
+
+            // Update leave balance
+            $this->updateLeaveBalance($application->employee_id, $application->leave_type_id, $application->days);
+
+            // Ensure attendance is marked as leave for the approved date range
+            $this->syncAttendanceForApprovedLeave($application);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error approving leave application: '.$e->getMessage(), [
+                'application_id' => $application->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'An error occurred while approving the leave application.');
+        }
+
+        $this->notifyEmployeeOfApprovedLeave($application);
+>>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('leave.applications.index')
             ->with('success', 'Leave application approved successfully.');
     }
 
     /**
+<<<<<<< HEAD
+=======
+     * Queue in-app and email notice after the approval transaction has committed.
+     */
+    private function notifyEmployeeOfApprovedLeave(LeaveApplication $application): void
+    {
+        $employee = Employee::find($application->employee_id);
+        $leaveType = LeaveType::find($application->leave_type_id);
+
+        if (! $employee || ! $leaveType) {
+            \Log::warning('Employee or leave type not found for approval notifications', [
+                'application_id' => $application->id,
+                'employee_id' => $application->employee_id,
+                'leave_type_id' => $application->leave_type_id,
+            ]);
+
+            return;
+        }
+
+        $employeeUser = User::where('employee_id', $employee->id)->first();
+        if (! $employeeUser) {
+            \Log::warning('Employee user account not found for notifications', [
+                'application_id' => $application->id,
+                'employee_id' => $employee->id,
+            ]);
+
+            return;
+        }
+
+        $startDate = Carbon::parse($application->start_date)->format('M d, Y');
+        $endDate = Carbon::parse($application->end_date)->format('M d, Y');
+        $title = 'Leave Application Approved';
+        $message = "Your {$application->days} day(s) {$leaveType->name} leave request from {$startDate} to {$endDate} has been approved.";
+        $link = route('leave.applications.show', $application->id);
+
+        try {
+            $employeeUser->notify(new \App\Notifications\HrmNotification(
+                $title,
+                $message,
+                'success',
+                $link
+            ));
+
+            \Log::info('In-app notification queued', [
+                'application_id' => $application->id,
+                'employee_id' => $employee->id,
+                'user_id' => $employeeUser->id,
+            ]);
+
+            if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
+                Mail::to($employeeUser->email)->queue(
+                    new \App\Mail\LeaveApprovedNotification($application, $employee, $leaveType)
+                );
+
+                \Log::info('Email notification queued', [
+                    'application_id' => $application->id,
+                    'employee_id' => $employee->id,
+                    'email' => $employeeUser->email,
+                ]);
+            } else {
+                \Log::warning('Email notification not queued - invalid or missing email', [
+                    'application_id' => $application->id,
+                    'employee_id' => $employee->id,
+                    'email' => $employeeUser->email ?? 'null',
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error queueing approval notifications: '.$e->getMessage(), [
+                'application_id' => $application->id,
+                'employee_id' => $employee->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * When a leave application is approved, make sure attendance is updated for all days in range.
+     *
+     * - Creates attendance rows if missing.
+     * - Converts "absent/holiday" without punches into "leave".
+     * - Does NOT override days where there is a punch (check_in/check_out), or already present/late/half_day/on_duty.
+     */
+    private function syncAttendanceForApprovedLeave(LeaveApplication $application): void
+    {
+        $start = Carbon::parse($application->start_date)->startOfDay();
+        $end = $application->inclusiveEndDate();
+
+        if ($end->lt($start)) {
+            return;
+        }
+
+        $employeeId = (int) $application->employee_id;
+        $cursor = $start->copy();
+
+        while ($cursor->lte($end)) {
+            $dateStr = $cursor->toDateString();
+
+            $attendance = Attendance::where('employee_id', $employeeId)
+                ->where('date', $dateStr)
+                ->first();
+
+            if (! $attendance) {
+                Attendance::create([
+                    'employee_id' => $employeeId,
+                    'date' => $dateStr,
+                    'check_in' => null,
+                    'check_out' => null,
+                    'status' => 'leave',
+                ]);
+            } else {
+                // If there is any punch, don't override (employee might have worked)
+                if (! empty($attendance->check_in) || ! empty($attendance->check_out)) {
+                    $cursor->addDay();
+
+                    continue;
+                }
+
+                // Only override safe statuses
+                if (in_array($attendance->status, ['absent', 'holiday'], true)) {
+                    $attendance->status = 'leave';
+                    $attendance->save();
+                }
+            }
+
+            $cursor->addDay();
+        }
+    }
+
+    /**
+>>>>>>> feature/flutter-mobile-app
      * Reject the specified leave application.
      */
     public function reject(Request $request, LeaveApplication $application)
     {
         $user = Auth::user();
+<<<<<<< HEAD
 
         if (!$this->canApproveApplication($user, $application)) {
+=======
+        $application->loadMissing(['employee.currentBranch', 'employee.branch']);
+
+        if (! $this->canApproveApplication($user, $application)) {
+>>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to reject leave applications.');
         }
@@ -465,18 +2209,31 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
+<<<<<<< HEAD
         if (!$this->canViewApplication($user, $application)) {
+=======
+        if (! $this->canViewApplication($user, $application)) {
+>>>>>>> feature/flutter-mobile-app
             abort(403, 'Unauthorized action.');
         }
 
         $documents = json_decode($application->documents, true);
 
+<<<<<<< HEAD
         if (!isset($documents[$index])) {
+=======
+        if (! isset($documents[$index])) {
+>>>>>>> feature/flutter-mobile-app
             abort(404);
         }
 
         $document = $documents[$index];
+<<<<<<< HEAD
         return response()->download(storage_path('app/public/' . $document['path']), $document['name']);
+=======
+
+        return response()->download(storage_path('app/public/'.$document['path']), $document['name']);
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -486,6 +2243,7 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
+<<<<<<< HEAD
         if (!$user->hasPermission('leaves.view') && !$user->hasPermission('reports.view')) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to view leave reports.');
@@ -515,6 +2273,34 @@ class LeaveApplicationController extends Controller
                 });
             }
         }
+=======
+        if (! $user->hasPermission('reports.view') && ! $user->hasPermission('leave-applications.view')) {
+            abort(403);
+        }
+
+        $hasViewPermission = $user->hasPermission('leave-applications.view');
+        $hasReportPermission = $user->hasPermission('reports.view');
+        $userEmployeeId = $user->employee_id;
+        $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
+        $isDepartmentHead = OrganogramAccessService::isHeadOfficeDepartmentHead($user);
+        $userDepartmentId = $isDepartmentHead
+            ? (OrganogramAccessService::departmentIdsForDepartmentHeadScope($user)[0] ?? $user->employee?->department_id)
+            : null;
+
+        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+
+        $query = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'employee.branch',
+            'leaveType',
+        ])
+            ->whereBetween('start_date', [$startDate, $endDate]);
+
+        OrganogramAccessService::constrainLeaveApplications($query, $user);
+>>>>>>> feature/flutter-mobile-app
 
         // Apply user-selected filters
         $query->when($request->status, function ($query, $status) {
@@ -563,14 +2349,25 @@ class LeaveApplicationController extends Controller
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
             'userPermissions' => [
+<<<<<<< HEAD
                 'canView' => $user->hasPermission('leaves.view'),
                 'canExport' => $user->hasPermission('reports.view'),
                 'isEmployee' => $user->employee_id ? true : false,
+=======
+                'canView' => $hasViewPermission,
+                'canExport' => $hasReportPermission,
+                'isEmployee' => $userEmployeeId ? true : false,
+                'employeeId' => $userEmployeeId,
+                'userDepartmentId' => $userDepartmentId,
+                'isBranchManager' => $isBranchManager,
+                'isDepartmentHead' => $isDepartmentHead,
+>>>>>>> feature/flutter-mobile-app
             ],
         ]);
     }
 
     /**
+<<<<<<< HEAD
      * Get departments accessible to the user based on permissions
      */
     private function getAccessibleDepartments($user)
@@ -779,6 +2576,8 @@ class LeaveApplicationController extends Controller
     }
 
     /**
+=======
+>>>>>>> feature/flutter-mobile-app
      * Check if user can edit a specific leave application
      */
     private function canEditApplication($user, $application)
@@ -789,7 +2588,11 @@ class LeaveApplicationController extends Controller
         }
 
         // Admins can edit all applications
+<<<<<<< HEAD
         if ($user->hasPermission('leaves.edit')) {
+=======
+        if ($user->hasPermission('leave-applications.edit')) {
+>>>>>>> feature/flutter-mobile-app
             return true;
         }
 
@@ -806,6 +2609,10 @@ class LeaveApplicationController extends Controller
      */
     private function updateLeaveBalance($employeeId, $leaveTypeId, $days)
     {
+<<<<<<< HEAD
+=======
+        $leaveType = LeaveType::find($leaveTypeId);
+>>>>>>> feature/flutter-mobile-app
         $currentYear = Carbon::now()->year;
         $balance = LeaveBalance::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
@@ -813,9 +2620,141 @@ class LeaveApplicationController extends Controller
             ->first();
 
         if ($balance) {
+<<<<<<< HEAD
             $balance->used_days += $days;
             $balance->remaining_days = $balance->allocated_days - $balance->used_days;
             $balance->save();
         }
     }
+=======
+            $balance->applyUsage((float) $days, ! ($leaveType && ! $leaveType->is_paid));
+            $balance->save();
+        } elseif ($leaveType && ! $leaveType->is_paid) {
+            LeaveBalance::create([
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'year' => $currentYear,
+                'allocated_days' => 0,
+                'used_days' => $days,
+                'remaining_days' => 0,
+            ]);
+        }
+    }
+
+    /**
+     * Generate PDF view for leave application
+     */
+    public function generatePdf(LeaveApplication $application)
+    {
+        $user = Auth::user();
+
+        // Check if user has permission to view this application
+        if (! $this->canViewApplication($user, $application)) {
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'You do not have permission to view this leave application.');
+        }
+
+        // Load all necessary relationships with error handling
+        try {
+            $application->load([
+                'employee.department',
+                'employee.designation',
+                'employee.currentBranch',
+                'employee.branch',
+                'leaveType',
+                'approver',
+                'approvals.approver',
+            ]);
+
+            // Load leave balances for current year (all types)
+            $currentYear = now()->year;
+            $leaveBalances = \App\Models\LeaveBalance::where('employee_id', $application->employee_id)
+                ->where('year', $currentYear)
+                ->with('leaveType')
+                ->get();
+
+            // Keep single selected leave balance for convenience
+            $application->leaveBalance = $leaveBalances->firstWhere('leave_type_id', (int) $application->leave_type_id);
+            $application->leaveBalances = $leaveBalances;
+        } catch (\Exception $e) {
+            \Log::error('Error loading leave application relationships: '.$e->getMessage());
+
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'Error loading leave application data.');
+        }
+
+        // Decode documents if they exist
+        if ($application->documents) {
+            try {
+                $application->documents = json_decode($application->documents, true);
+            } catch (\Exception $e) {
+                $application->documents = null;
+            }
+        }
+
+        // Determine addressee (dynamic first, fallback to legacy)
+        $days = (int) ($application->days ?? 0);
+        $addressee = [
+            'type' => null,
+            'title' => null,
+            'name' => null,
+        ];
+
+        if ($application->employee) {
+            $dynamic = $this->resolveTierApprovers($application->employee, $days);
+            $addressee = $dynamic['addressee'] ?: $addressee;
+        }
+
+        if (! $addressee['title']) {
+            $isShortLeave = $days <= 3;
+            $department = $application->employee?->department_id
+                ? Department::find($application->employee->department_id)
+                : null;
+
+            $isApplicantDepartmentHead = $department
+                && (int) $department->head_employee_id === (int) $application->employee_id;
+
+            if ($isShortLeave && ! $isApplicantDepartmentHead) {
+                $deptHeads = $this->getDepartmentHeads($application->employee?->department_id);
+                $deptHead = $deptHeads->first();
+                $deptHeadEmployee = null;
+                if ($deptHead?->employee_id) {
+                    $deptHeadEmployee = Employee::with('designation')->find($deptHead->employee_id);
+                }
+                $addressee = [
+                    'type' => 'department_head',
+                    'title' => $deptHeadEmployee?->designation?->name ?? 'Department Head',
+                    'name' => null,
+                    'routing_scope' => 'department',
+                ];
+            } else {
+                $eds = $this->getExecutiveDirectors();
+                $ed = $eds->first();
+                $edEmployee = null;
+                if ($ed?->employee_id) {
+                    $edEmployee = Employee::with('designation')->find($ed->employee_id);
+                }
+                $addressee = [
+                    'type' => 'executive_director',
+                    'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                    'name' => null,
+                    'routing_scope' => 'none',
+                ];
+            }
+        }
+
+        $addressee = $this->enrichLeaveAddresseeForPdf($application->employee, $addressee);
+
+        return Inertia::render('leave/applications/pdf', [
+            'application' => $application,
+            'currentDate' => now()->format('d/m/Y'),
+            'addressee' => $addressee,
+            'userPermissions' => [
+                'canView' => $user->hasPermission('leave-applications.view'),
+                'isEmployee' => $user->employee_id ? true : false,
+                'employeeId' => $user->employee_id,
+            ],
+        ]);
+    }
+>>>>>>> feature/flutter-mobile-app
 }

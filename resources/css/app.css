@@ -57,6 +57,7 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+<<<<<<< HEAD
 }
 
 /*
@@ -66,6 +67,20 @@
 
   If we ever want to remove these styles, we need to add an explicit border
   color utility to any element that depends on these defaults.
+=======
+
+    /* Custom success, info, warning colors */
+    --color-success: oklch(0.55 0.20 142);
+    --color-success-foreground: oklch(0.98 0.01 142);
+    --color-info: oklch(0.55 0.20 220);
+    --color-info-foreground: oklch(0.98 0.01 220);
+    --color-warning: oklch(0.70 0.15 70);
+    --color-warning-foreground: oklch(0.15 0.05 70);
+}
+
+/*
+  Border compatibility for Tailwind CSS v4
+>>>>>>> feature/flutter-mobile-app
 */
 @layer base {
     *,
@@ -77,6 +92,7 @@
     }
 }
 
+<<<<<<< HEAD
 :root {
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
@@ -146,6 +162,123 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(0.269 0 0);
     --sidebar-ring: oklch(0.439 0 0);
+=======
+/* Light Theme - High Contrast Blue & Emerald Green Color Scheme */
+:root {
+    /* Base colors */
+    --background: oklch(0.97 0.01 180); /* Crisp light background */
+    --foreground: oklch(0.18 0.04 220); /* Dark slate text - high contrast */
+
+    /* Card colors */
+    --card: oklch(1 0 0); /* Pure solid white for cards */
+    --card-foreground: oklch(0.18 0.04 220);
+
+    /* Popover colors */
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.18 0.04 220);
+
+    /* Primary - Green */
+    --primary: oklch(0.50 0.22 142); /* Deep vibrant green-600 */
+    --primary-foreground: oklch(0.99 0.01 142);
+
+    /* Secondary - Light Slate Blue */
+    --secondary: oklch(0.93 0.04 220);
+    --secondary-foreground: oklch(0.20 0.08 220);
+
+    /* Muted - High Contrast slate-600 */
+    --muted: oklch(0.94 0.02 220);
+    --muted-foreground: oklch(0.38 0.04 220); /* Darker slate for high legibility */
+
+    /* Accent - Bright Emerald/Blue */
+    --accent: oklch(0.90 0.06 220);
+    --accent-foreground: oklch(0.20 0.10 220);
+
+    /* Destructive - Red */
+    --destructive: oklch(0.55 0.25 27.325);
+    --destructive-foreground: oklch(0.99 0.01 27.325);
+
+    /* Border and input - High visibility slate-300 */
+    --border: oklch(0.82 0.03 220); /* Crisp border */
+    --input: oklch(0.80 0.03 220);
+    --ring: oklch(0.50 0.22 142);
+
+    /* Chart colors - Blue & Green spectrum */
+    --chart-1: oklch(0.50 0.22 142); /* Green */
+    --chart-2: oklch(0.50 0.22 220); /* Blue */
+    --chart-3: oklch(0.55 0.20 180); /* Cyan */
+    --chart-4: oklch(0.48 0.24 160); /* Teal */
+    --chart-5: oklch(0.60 0.18 200); /* Light Blue */
+
+    /* Radius */
+    --radius: 0.625rem;
+
+    /* Sidebar - High Contrast Theme */
+    --sidebar: oklch(0.98 0.01 220);
+    --sidebar-foreground: oklch(0.18 0.04 220);
+    --sidebar-primary: oklch(0.50 0.22 142);
+    --sidebar-primary-foreground: oklch(0.99 0.01 142);
+    --sidebar-accent: oklch(0.92 0.05 220);
+    --sidebar-accent-foreground: oklch(0.20 0.10 220);
+    --sidebar-border: oklch(0.82 0.03 220);
+    --sidebar-ring: oklch(0.50 0.22 142);
+}
+
+/* Dark Theme - Blue & Green Color Scheme */
+.dark {
+    /* Base colors - Dark blue background */
+    --background: oklch(0.12 0.05 220); /* Dark blue background */
+    --foreground: oklch(0.95 0.02 180); /* Light blue-white text */
+
+    /* Card colors */
+    --card: oklch(0.15 0.06 220); /* Dark blue cards */
+    --card-foreground: oklch(0.95 0.02 180);
+
+    /* Popover colors */
+    --popover: oklch(0.15 0.06 220);
+    --popover-foreground: oklch(0.95 0.02 180);
+
+    /* Primary - Bright Green */
+    --primary: oklch(0.70 0.25 142); /* Bright green for dark mode */
+    --primary-foreground: oklch(0.12 0.05 142); /* Dark green text */
+
+    /* Secondary - Medium Blue */
+    --secondary: oklch(0.25 0.10 220); /* Medium blue */
+    --secondary-foreground: oklch(0.90 0.05 220); /* Light blue */
+
+    /* Muted - Dark blue-gray */
+    --muted: oklch(0.22 0.08 220);
+    --muted-foreground: oklch(0.70 0.05 220);
+
+    /* Accent - Bright Blue */
+    --accent: oklch(0.35 0.15 220); /* Bright blue accent */
+    --accent-foreground: oklch(0.90 0.05 220);
+
+    /* Destructive - Bright Red */
+    --destructive: oklch(0.65 0.25 27.325);
+    --destructive-foreground: oklch(0.12 0.05 27.325);
+
+    /* Border and input - Medium blue */
+    --border: oklch(0.30 0.08 220);
+    --input: oklch(0.30 0.08 220);
+    --ring: oklch(0.70 0.25 142); /* Bright green ring */
+
+    /* Chart colors - Bright Blue & Green spectrum for dark mode */
+    --chart-1: oklch(0.70 0.25 142); /* Bright Green */
+    --chart-2: oklch(0.70 0.25 220); /* Bright Blue */
+    --chart-3: oklch(0.75 0.22 180); /* Bright Cyan */
+    --chart-4: oklch(0.65 0.28 160); /* Bright Teal */
+    --chart-5: oklch(0.80 0.18 200); /* Bright Light Blue */
+
+    /* Sidebar - Dark blue theme */
+    --sidebar: oklch(0.10 0.06 220); /* Very dark blue */
+    --sidebar-foreground: oklch(0.90 0.03 180);
+    --sidebar-primary: oklch(0.70 0.25 142); /* Bright green */
+    --sidebar-primary-foreground: oklch(0.12 0.05 142);
+    --sidebar-accent: oklch(0.25 0.12 220); /* Medium blue accent */
+    --sidebar-accent-foreground: oklch(0.90 0.05 220);
+    --sidebar-border: oklch(0.25 0.08 220);
+    --sidebar-ring: oklch(0.70 0.25 142);
+>>>>>>> feature/flutter-mobile-app
 }
 
 @layer base {
@@ -155,5 +288,134 @@
 
     body {
         @apply bg-background text-foreground;
+<<<<<<< HEAD
     }
 }
+=======
+        font-feature-settings: "rlig" 1, "calt" 1;
+    }
+
+    /* Remove increment/decrement spinner arrows on number inputs */
+    input[type="number"]::-webkit-inner-spin-button, 
+    input[type="number"]::-webkit-outer-spin-button { 
+        -webkit-appearance: none; 
+        margin: 0; 
+    }
+    input[type="number"] {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+}
+
+.office-map-root .leaflet-container {
+    height: 100%;
+    width: 100%;
+    font-family: inherit;
+}
+
+.office-map-pin {
+    background: transparent !important;
+    border: none !important;
+}
+
+.office-map-marker {
+    display: flex;
+    align-items: flex-end;
+    gap: 5px;
+    width: 168px;
+    height: 100%;
+}
+
+.office-map-pin-body {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--pin-size);
+    height: var(--pin-size);
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: var(--pin-color);
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.office-map-pin-is-selected .office-map-pin-body {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pin-color) 35%, white), 0 4px 12px rgba(15, 23, 42, 0.4);
+}
+
+.office-map-pin-logo-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 62%;
+    height: 62%;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: white;
+    transform: rotate(45deg);
+}
+
+.office-map-pin-logo-wrap img {
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+}
+
+.office-map-pin-caption {
+    display: flex;
+    min-width: 0;
+    max-width: 118px;
+    flex-direction: column;
+    margin-bottom: 3px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 3px 7px 4px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+.office-map-pin-is-selected .office-map-pin-caption {
+    border-color: var(--pin-color);
+}
+
+.office-map-pin-caption strong {
+    overflow: hidden;
+    color: rgb(15 23 42);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.office-map-pin-caption em {
+    color: var(--pin-color);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+.office-map-root .leaflet-popup-content-wrapper {
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+}
+
+.office-map-area-label {
+    border: none !important;
+    border-radius: 6px !important;
+    background: rgba(15, 23, 42, 0.88) !important;
+    color: white !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2) !important;
+}
+
+.office-map-root .leaflet-popup-content {
+    margin: 12px 14px;
+    font-family: inherit;
+}
+>>>>>>> feature/flutter-mobile-app

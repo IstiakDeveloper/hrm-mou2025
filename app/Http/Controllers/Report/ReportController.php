@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Department;
+<<<<<<< HEAD
 use App\Models\Employee;
 use App\Models\LeaveApplication;
 use App\Models\Movement;
@@ -13,14 +14,41 @@ use App\Models\Transfer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+=======
+use App\Models\Designation;
+use App\Models\Employee;
+use App\Models\LeaveApplication;
+use App\Models\LeaveType;
+use App\Models\Movement;
+use App\Models\Role;
+use App\Models\Transfer;
+use App\Models\User;
+use App\Services\ActiveSessionService;
+use App\Services\OrganogramAccessService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use App\Support\ProjectPdf;
+>>>>>>> feature/flutter-mobile-app
 
 class ReportController extends Controller
 {
     /**
      * Display report dashboard.
      */
+<<<<<<< HEAD
     public function index()
     {
+=======
+    public function index(Request $request)
+    {
+        $section = $request->query('section');
+
+        if ($section === 'administration') {
+            return redirect()->route('reports.administration', ['section' => 'administration']);
+        }
+
+>>>>>>> feature/flutter-mobile-app
         $reportTypes = [
             ['id' => 'attendance', 'name' => 'Attendance Report'],
             ['id' => 'leave', 'name' => 'Leave Report'],
@@ -35,6 +63,229 @@ class ReportController extends Controller
     }
 
     /**
+<<<<<<< HEAD
+=======
+     * Administration section — users, roles & active sessions summary (printable).
+     */
+    public function administration(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        if (! $authUser->hasPermission('reports.view')
+            && ! $authUser->hasPermission('users.view')
+            && ! $authUser->hasPermission('admin.access')) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:100',
+            'session_search' => 'nullable|string|max:100',
+            'role_search' => 'nullable|string|max:100',
+            'account_type' => 'nullable|in:all,staff,branch',
+            'active_status' => 'nullable|in:all,active,inactive',
+            'role_id' => 'nullable|integer|exists:roles,id',
+            'branch_id' => 'nullable|integer|exists:branches,id',
+            'created_from' => 'nullable|date',
+            'created_to' => 'nullable|date|after_or_equal:created_from',
+            'online_only' => 'nullable|boolean',
+            'show_users' => 'nullable|boolean',
+            'show_roles' => 'nullable|boolean',
+            'show_sessions' => 'nullable|boolean',
+        ]);
+
+        $filters = [
+            'search' => $validated['search'] ?? '',
+            'session_search' => $validated['session_search'] ?? '',
+            'role_search' => $validated['role_search'] ?? '',
+            'account_type' => $validated['account_type'] ?? 'all',
+            'active_status' => $validated['active_status'] ?? 'all',
+            'role_id' => isset($validated['role_id']) ? (string) $validated['role_id'] : '',
+            'branch_id' => isset($validated['branch_id']) ? (string) $validated['branch_id'] : '',
+            'created_from' => $validated['created_from'] ?? '',
+            'created_to' => $validated['created_to'] ?? '',
+            'online_only' => $request->boolean('online_only'),
+            'show_users' => $request->boolean('show_users', true),
+            'show_roles' => $request->boolean('show_roles', true),
+            'show_sessions' => $request->boolean('show_sessions', true),
+        ];
+
+        $sessionService = app(ActiveSessionService::class);
+        $sessionStats = $sessionService->stats();
+        $activeUserIds = $sessionService->activeUserIds();
+
+        $userQuery = User::query()->with(['role:id,name', 'roles:id,name', 'branch:id,name']);
+
+        if ($filters['search'] !== '') {
+            $like = '%'.$filters['search'].'%';
+            $userQuery->where(function ($q) use ($like) {
+                $q->where('name', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('username', 'like', $like);
+            });
+        }
+
+        if ($filters['account_type'] !== 'all') {
+            $userQuery->where('account_type', $filters['account_type']);
+        }
+
+        if ($filters['active_status'] === 'active') {
+            $userQuery->where('active_status', true);
+        } elseif ($filters['active_status'] === 'inactive') {
+            $userQuery->where('active_status', false);
+        }
+
+        if ($filters['branch_id'] !== '') {
+            $userQuery->where('branch_id', (int) $filters['branch_id']);
+        }
+
+        if ($filters['role_id'] !== '') {
+            $roleId = (int) $filters['role_id'];
+            $userQuery->where(function ($q) use ($roleId) {
+                $q->where('role_id', $roleId)
+                    ->orWhereHas('roles', fn ($r) => $r->where('roles.id', $roleId));
+            });
+        }
+
+        if ($filters['created_from'] !== '') {
+            $userQuery->whereDate('created_at', '>=', $filters['created_from']);
+        }
+
+        if ($filters['created_to'] !== '') {
+            $userQuery->whereDate('created_at', '<=', $filters['created_to']);
+        }
+
+        if ($filters['online_only'] && $activeUserIds !== []) {
+            $userQuery->whereIn('id', $activeUserIds);
+        } elseif ($filters['online_only']) {
+            $userQuery->whereRaw('1 = 0');
+        }
+
+        $filteredUsers = (clone $userQuery)->get();
+
+        $users = $filteredUsers
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->map(function (User $user) use ($activeUserIds) {
+                $roleNames = $user->roles->pluck('name');
+                if ($user->role) {
+                    $roleNames = $roleNames->prepend($user->role->name);
+                }
+
+                return [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'username' => $user->username,
+                    'account_type' => $user->account_type ?? 'staff',
+                    'branch_name' => $user->branch?->name,
+                    'roles' => $roleNames->unique()->values()->implode(', '),
+                    'active_status' => (bool) $user->active_status,
+                    'is_online' => in_array($user->id, $activeUserIds, true),
+                    'created_at' => $user->created_at?->format('Y-m-d'),
+                ];
+            })
+            ->all();
+
+        $roleQuery = Role::query()->withCount('users')->orderBy('name');
+        if ($filters['role_search'] !== '') {
+            $like = '%'.$filters['role_search'].'%';
+            $roleQuery->where(function ($q) use ($like) {
+                $q->where('name', 'like', $like)->orWhere('description', 'like', $like);
+            });
+        }
+        if ($filters['role_id'] !== '') {
+            $roleQuery->where('id', (int) $filters['role_id']);
+        }
+
+        $roles = $roleQuery
+            ->get(['id', 'name', 'description'])
+            ->map(fn (Role $role) => [
+                'name' => $role->name,
+                'description' => $role->description,
+                'users_count' => (int) $role->users_count,
+            ])
+            ->values()
+            ->all();
+
+        $activeSessions = $sessionService->listActive(
+            limit: 200,
+            search: $filters['session_search'] !== '' ? $filters['session_search'] : null,
+            roleId: $filters['role_id'] !== '' ? (int) $filters['role_id'] : null,
+            branchId: $filters['branch_id'] !== '' ? (int) $filters['branch_id'] : null,
+            accountType: $filters['account_type'] !== 'all' ? $filters['account_type'] : null,
+        );
+
+        $filterLabels = $this->administrationReportFilterLabels($filters, Role::find($filters['role_id'] ?: null), Branch::find($filters['branch_id'] ?: null));
+
+        return Inertia::render('report/administration', [
+            'companyName' => config('app.name'),
+            'generatedAt' => now()->format('Y-m-d H:i'),
+            'filters' => $filters,
+            'filterLabels' => $filterLabels,
+            'roleOptions' => Role::query()->orderBy('name')->get(['id', 'name']),
+            'branchOptions' => Branch::query()->active()->orderBy('name')->get(['id', 'name', 'branch_code']),
+            'summary' => [
+                'total_users' => $filteredUsers->count(),
+                'active_accounts' => $filteredUsers->where('active_status', true)->count(),
+                'inactive_accounts' => $filteredUsers->where('active_status', false)->count(),
+                'staff_accounts' => $filteredUsers->where('account_type', 'staff')->count(),
+                'branch_accounts' => $filteredUsers->where('account_type', 'branch')->count(),
+                'total_roles' => count($roles),
+                'active_sessions' => count($activeSessions),
+                'active_session_users' => $sessionStats['active_users'],
+                'online_in_results' => collect($users)->where('is_online', true)->count(),
+            ],
+            'users' => $users,
+            'roles' => $roles,
+            'activeSessions' => $activeSessions,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<string>
+     */
+    private function administrationReportFilterLabels(array $filters, ?Role $role, ?Branch $branch): array
+    {
+        $labels = [];
+        if ($filters['search'] !== '') {
+            $labels[] = 'Search: '.$filters['search'];
+        }
+        if ($filters['session_search'] !== '') {
+            $labels[] = 'Session search: '.$filters['session_search'];
+        }
+        if ($filters['role_search'] !== '') {
+            $labels[] = 'Role search: '.$filters['role_search'];
+        }
+        if ($filters['account_type'] !== 'all') {
+            $labels[] = 'Account type: '.ucfirst($filters['account_type']);
+        }
+        if ($filters['active_status'] !== 'all') {
+            $labels[] = 'Status: '.ucfirst($filters['active_status']);
+        }
+        if ($role) {
+            $labels[] = 'Role: '.$role->name;
+        }
+        if ($branch) {
+            $labels[] = 'Branch: '.$branch->name;
+        }
+        if ($filters['created_from'] !== '') {
+            $labels[] = 'Created from: '.$filters['created_from'];
+        }
+        if ($filters['created_to'] !== '') {
+            $labels[] = 'Created to: '.$filters['created_to'];
+        }
+        if ($filters['online_only']) {
+            $labels[] = 'Online users only';
+        }
+
+        return $labels;
+    }
+
+    /**
+>>>>>>> feature/flutter-mobile-app
      * Generate attendance report.
      */
     public function attendance(Request $request)
@@ -43,6 +294,10 @@ class ReportController extends Controller
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
         $query = Attendance::with(['employee.department', 'employee.designation', 'employee.branch'])
+<<<<<<< HEAD
+=======
+            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
+>>>>>>> feature/flutter-mobile-app
             ->whereBetween('date', [$startDate, $endDate])
             ->when($request->branch_id, function ($query, $branchId) {
                 $query->whereHas('employee', function ($q) use ($branchId) {
@@ -61,10 +316,16 @@ class ReportController extends Controller
                 $query->where('employee_id', $employeeId);
             });
 
+<<<<<<< HEAD
+=======
+        $summaryQuery = clone $query;
+
+>>>>>>> feature/flutter-mobile-app
         $attendances = $query->orderBy('date', 'desc')
             ->paginate(20)
             ->withQueryString();
 
+<<<<<<< HEAD
         $branches = Branch::all();
         $departments = Department::all();
         $employees = Employee::where('status', 'active')->get();
@@ -81,6 +342,25 @@ class ReportController extends Controller
 
         // Chart data
         $chartData = [];
+=======
+        $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name']);
+        $departments = Department::query()->orderBy('name')->get(['id', 'name']);
+
+        $statusCounts = $summaryQuery
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $summary = [
+            'totalDays' => $startDate->diffInDays($endDate) + 1,
+            'present' => (int) ($statusCounts['present'] ?? 0),
+            'absent' => (int) ($statusCounts['absent'] ?? 0),
+            'late' => (int) ($statusCounts['late'] ?? 0),
+            'halfDay' => (int) ($statusCounts['half_day'] ?? 0),
+            'onLeave' => (int) ($statusCounts['leave'] ?? 0),
+        ];
+
+>>>>>>> feature/flutter-mobile-app
         $statusColors = [
             'present' => '#22c55e', // green
             'absent' => '#ef4444',  // red
@@ -89,6 +369,7 @@ class ReportController extends Controller
             'leave' => '#3b82f6',   // blue
         ];
 
+<<<<<<< HEAD
         $dateRange = [];
         $current = $startDate->copy();
         while ($current <= $endDate) {
@@ -98,6 +379,18 @@ class ReportController extends Controller
 
         foreach ($dateRange as $date) {
             $dayData = [
+=======
+        $chartRows = (clone $summaryQuery)
+            ->selectRaw('date, status, COUNT(*) as total')
+            ->groupBy('date', 'status')
+            ->orderBy('date')
+            ->get();
+
+        $chartByDate = [];
+        foreach ($chartRows as $row) {
+            $date = Carbon::parse($row->date)->format('Y-m-d');
+            $chartByDate[$date] ??= [
+>>>>>>> feature/flutter-mobile-app
                 'date' => $date,
                 'present' => 0,
                 'absent' => 0,
@@ -105,6 +398,7 @@ class ReportController extends Controller
                 'half_day' => 0,
                 'leave' => 0,
             ];
+<<<<<<< HEAD
 
             foreach (array_keys($dayData) as $status) {
                 if ($status !== 'date') {
@@ -118,11 +412,23 @@ class ReportController extends Controller
             $chartData[] = $dayData;
         }
 
+=======
+            $chartByDate[$date][$row->status] = (int) $row->total;
+        }
+
+        $chartData = array_values($chartByDate);
+
+>>>>>>> feature/flutter-mobile-app
         return Inertia::render('report/attendance', [
             'attendances' => $attendances,
             'branches' => $branches,
             'departments' => $departments,
+<<<<<<< HEAD
             'employees' => $employees,
+=======
+            'employees' => [],
+            'employeeLookupUrl' => route('employees.lookup'),
+>>>>>>> feature/flutter-mobile-app
             'filters' => $request->only(['start_date', 'end_date', 'branch_id', 'department_id', 'status', 'employee_id']),
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
@@ -132,6 +438,7 @@ class ReportController extends Controller
         ]);
     }
 
+<<<<<<< HEAD
     /**
      * Generate leave report.
      */
@@ -172,18 +479,125 @@ class ReportController extends Controller
 
         $departments = Department::all();
         $employees = Employee::where('status', 'active')->get();
+=======
+    public function leave(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        [$baseQuery, $startDate, $endDate] = $this->leaveReportBaseQuery($request, $user);
+
+        // Get paginated results
+        $applications = $baseQuery->clone()
+            ->orderBy('start_date', 'desc')
+            ->paginate(15)
+            ->withQueryString();
+
+        // Summary statistics - using separate queries to avoid issues with pagination
+        $summary = [
+            'total' => $baseQuery->clone()->count(),
+            'approved' => $baseQuery->clone()->where('status', 'approved')->count(),
+            'rejected' => $baseQuery->clone()->where('status', 'rejected')->count(),
+            'pending' => $baseQuery->clone()->where('status', 'pending')->count(),
+            'totalDays' => $baseQuery->clone()->where('status', 'approved')->sum('days'),
+        ];
+
+        $departments = $this->accessibleDepartmentsForLeaveReport($user);
+        $employees = $this->accessibleEmployeesForLeaveReport($user);
+        $leaveTypes = LeaveType::select('id', 'name', 'days_allowed', 'is_paid')->orderBy('name')->get();
+        $branches = $this->accessibleBranchesForLeaveReport($user);
+>>>>>>> feature/flutter-mobile-app
 
         return Inertia::render('report/leave', [
             'applications' => $applications,
             'departments' => $departments,
             'employees' => $employees,
+<<<<<<< HEAD
             'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'leave_type_id', 'employee_id']),
+=======
+            'leaveTypes' => $leaveTypes,
+            'branches' => $branches,
+            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'leave_type_id', 'employee_id', 'branch_id']),
+>>>>>>> feature/flutter-mobile-app
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
         ]);
     }
 
+<<<<<<< HEAD
+=======
+    public function downloadLeaveReportPdf(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        [$baseQuery, $startDate, $endDate] = $this->leaveReportBaseQuery($request, $user);
+        $applications = $baseQuery->clone()
+            ->orderBy('start_date', 'desc')
+            ->get();
+
+        // Summary statistics
+        $summary = [
+            'total' => $baseQuery->clone()->count(),
+            'approved' => $baseQuery->clone()->where('status', 'approved')->count(),
+            'rejected' => $baseQuery->clone()->where('status', 'rejected')->count(),
+            'pending' => $baseQuery->clone()->where('status', 'pending')->count(),
+            'totalDays' => $baseQuery->clone()->where('status', 'approved')->sum('days'),
+        ];
+
+        // Get filter data for display (scoped to visible employees)
+        $departments = $this->accessibleDepartmentsForLeaveReport($user)->keyBy('id');
+        $employees = $this->accessibleEmployeesForLeaveReport($user)->keyBy('id');
+        $leaveTypes = LeaveType::select('id', 'name')->get()->keyBy('id');
+        $branches = $this->accessibleBranchesForLeaveReport($user)->keyBy('id');
+
+        // Prepare filter labels for display
+        $filterLabels = [];
+        if ($request->status) {
+            $filterLabels[] = 'Status: '.ucfirst($request->status);
+        }
+        if ($request->department_id && isset($departments[$request->department_id])) {
+            $filterLabels[] = 'Department: '.$departments[$request->department_id]->name;
+        }
+        if ($request->employee_id && isset($employees[$request->employee_id])) {
+            $emp = $employees[$request->employee_id];
+            $filterLabels[] = 'Employee: '.trim((string) ($emp->full_name ?? $emp->name_en ?? $emp->employee_id ?? ''));
+        }
+        if ($request->leave_type_id && isset($leaveTypes[$request->leave_type_id])) {
+            $filterLabels[] = 'Leave Type: '.$leaveTypes[$request->leave_type_id]->name;
+        }
+        if ($request->branch_id && isset($branches[$request->branch_id])) {
+            $filterLabels[] = 'Branch: '.$branches[$request->branch_id]->name;
+        }
+
+        $data = [
+            'applications' => $applications,
+            'summary' => $summary,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'filterLabels' => $filterLabels,
+            'generatedAt' => Carbon::now(),
+            'companyName' => config('app.name', 'Company Name'), // You can customize this
+        ];
+
+        // Generate PDF
+        $pdf = Pdf::loadView('reports.leave-report-pdf', $data);
+
+        // Set paper size and orientation
+        $pdf->setPaper('A4', 'landscape'); // Landscape for better table view
+
+        // Generate filename
+        $filename = 'leave-report-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.pdf';
+
+        return $pdf->download($filename);
+    }
+
+>>>>>>> feature/flutter-mobile-app
     /**
      * Generate movement report.
      */
@@ -254,6 +668,7 @@ class ReportController extends Controller
             'toBranch',
             'fromDepartment',
             'toDepartment',
+<<<<<<< HEAD
             'approver'
         ])
             ->whereBetween('effective_date', [$startDate, $endDate])
@@ -291,13 +706,82 @@ class ReportController extends Controller
         $departments = Department::all();
         $branches = Branch::all();
         $employees = Employee::where('status', 'active')->get();
+=======
+            'approver',
+        ])
+            ->whereHas('fromBranch', fn ($q) => $q->where('is_active', true))
+            ->whereHas('toBranch', fn ($q) => $q->where('is_active', true))
+            ->whereDate('effective_date', '>=', $startDate->format('Y-m-d'))
+            ->whereDate('effective_date', '<=', $endDate->format('Y-m-d'))
+            ->when($request->filled('status'), function ($query) use ($request) {
+                $query->where('status', $request->status);
+            })
+            ->when($request->filled('department_id'), function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
+                });
+            })
+            ->when($request->filled('from_branch_id'), function ($query) use ($request) {
+                $query->where('from_branch_id', $request->from_branch_id);
+            })
+            ->when($request->filled('to_branch_id'), function ($query) use ($request) {
+                $query->where('to_branch_id', $request->to_branch_id);
+            })
+            ->when($request->filled('employee_id'), function ($query) use ($request) {
+                $query->where('employee_id', $request->employee_id);
+            })
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $s = trim((string) $request->search);
+                $query->where(function ($inner) use ($s) {
+                    $inner->where('transfer_order_no', 'like', '%'.$s.'%')
+                        ->orWhere('reason', 'like', '%'.$s.'%')
+                        ->orWhereHas('employee', function ($eq) use ($s) {
+                            $eq->where('name_en', 'like', '%'.$s.'%')
+                                ->orWhere('name_bn', 'like', '%'.$s.'%')
+                                ->orWhere('employee_id', 'like', '%'.$s.'%');
+                        });
+                });
+            });
+
+        $transfers = (clone $query)->orderBy('effective_date', 'desc')
+            ->paginate(15)
+            ->withQueryString();
+
+        $summary = [
+            'total' => (clone $query)->count(),
+            'approved' => (clone $query)->where('status', 'approved')->count(),
+            'rejected' => (clone $query)->where('status', 'rejected')->count(),
+            'pending' => (clone $query)->where('status', 'pending')->count(),
+            'completed' => (clone $query)->where('status', 'completed')->count(),
+        ];
+
+        $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name']);
+        $departments = Department::orderBy('name')->get(['id', 'name']);
+        $employees = Employee::where('status', 'active')->orderBy('name_en')->get(['id', 'employee_id', 'name_en']);
+
+        $branchFlow = $this->transferBranchFlowStats(clone $query, $branches);
+>>>>>>> feature/flutter-mobile-app
 
         return Inertia::render('report/transfer', [
             'transfers' => $transfers,
             'departments' => $departments,
             'branches' => $branches,
             'employees' => $employees,
+<<<<<<< HEAD
             'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'from_branch_id', 'to_branch_id', 'employee_id']),
+=======
+            'branchFlow' => $branchFlow,
+            'filters' => $request->only([
+                'start_date',
+                'end_date',
+                'status',
+                'department_id',
+                'from_branch_id',
+                'to_branch_id',
+                'employee_id',
+                'search',
+            ]),
+>>>>>>> feature/flutter-mobile-app
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
@@ -305,11 +789,60 @@ class ReportController extends Controller
     }
 
     /**
+<<<<<<< HEAD
+=======
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Transfer>  $query
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Branch>  $branches
+     * @return array<int, array{id: int, name: string, outgoing: int, incoming: int, total: int}>
+     */
+    private function transferBranchFlowStats($query, $branches): array
+    {
+        $nameById = $branches->keyBy('id');
+
+        $outgoing = (clone $query)
+            ->whereNotNull('from_branch_id')
+            ->selectRaw('from_branch_id as branch_id, COUNT(*) as c')
+            ->groupBy('from_branch_id')
+            ->pluck('c', 'branch_id');
+
+        $incoming = (clone $query)
+            ->whereNotNull('to_branch_id')
+            ->selectRaw('to_branch_id as branch_id, COUNT(*) as c')
+            ->groupBy('to_branch_id')
+            ->pluck('c', 'branch_id');
+
+        $ids = $outgoing->keys()->merge($incoming->keys())->unique()->filter();
+
+        $rows = [];
+        foreach ($ids as $id) {
+            $bid = (int) $id;
+            $out = (int) ($outgoing[$id] ?? 0);
+            $in = (int) ($incoming[$id] ?? 0);
+            $rows[] = [
+                'id' => $bid,
+                'name' => optional($nameById->get($bid))->name ?? ('Branch #'.$bid),
+                'outgoing' => $out,
+                'incoming' => $in,
+                'total' => $out + $in,
+            ];
+        }
+
+        usort($rows, fn ($a, $b) => $b['total'] <=> $a['total']);
+
+        return array_slice($rows, 0, 12);
+    }
+
+    /**
+>>>>>>> feature/flutter-mobile-app
      * Generate employee report.
      */
     public function employee(Request $request)
     {
         $query = Employee::with(['department', 'designation', 'branch', 'manager'])
+<<<<<<< HEAD
+=======
+            ->whereHas('branch', fn ($q) => $q->where('is_active', true))
+>>>>>>> feature/flutter-mobile-app
             ->when($request->branch_id, function ($query, $branchId) {
                 $query->where('current_branch_id', $branchId);
             })
@@ -333,6 +866,7 @@ class ReportController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
+<<<<<<< HEAD
                     $q->where('first_name', 'like', "%{$search}%")
                       ->orWhere('last_name', 'like', "%{$search}%")
                       ->orWhere('employee_id', 'like', "%{$search}%")
@@ -362,6 +896,45 @@ class ReportController extends Controller
                 'id' => $department->id,
                 'name' => $department->name,
                 'designations' => $department->designations,
+=======
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+
+        $employees = (clone $query)->orderBy('id')
+            ->paginate(15)
+            ->withQueryString();
+
+        // Summary — clone the filtered query each time (do not chain where() on one builder)
+        $summary = [
+            'total' => (clone $query)->count(),
+            'active' => (clone $query)->where('status', 'active')->count(),
+            'inactive' => (clone $query)->where('status', 'inactive')->count(),
+            'onLeave' => 0,
+            'terminated' => 0,
+            'male' => (clone $query)->where('gender', 'male')->count(),
+            'female' => (clone $query)->where('gender', 'female')->count(),
+        ];
+
+        $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name', 'branch_code']);
+        $departments = Department::all();
+
+        // Designations are no longer scoped to departments (see migrations). Frontend still expects
+        // { id, name, designations[] } per department for the cascading select — attach the global list to each.
+        $designationList = Designation::orderBy('name')->get(['id', 'name']);
+        $designations = Department::orderBy('name')->get(['id', 'name'])->map(function ($department) use ($designationList) {
+            return [
+                'id' => $department->id,
+                'name' => $department->name,
+                'designations' => $designationList->map(fn ($d) => [
+                    'id' => $d->id,
+                    'name' => $d->name,
+                    'department_id' => $department->id,
+                ])->values()->all(),
+>>>>>>> feature/flutter-mobile-app
             ];
         });
 
@@ -371,16 +944,122 @@ class ReportController extends Controller
             'departments' => $departments,
             'designations' => $designations,
             'filters' => $request->only([
+<<<<<<< HEAD
                 'branch_id', 'department_id', 'designation_id', 'status',
                 'gender', 'join_start_date', 'join_end_date', 'search'
             ]),
             'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
+=======
+                'branch_id',
+                'department_id',
+                'designation_id',
+                'status',
+                'gender',
+                'join_start_date',
+                'join_end_date',
+                'search',
+            ]),
+            'statuses' => ['active', 'inactive'],
+>>>>>>> feature/flutter-mobile-app
             'genders' => ['male', 'female', 'other'],
             'summary' => $summary,
         ]);
     }
 
     /**
+<<<<<<< HEAD
+=======
+     * @return array{0: \Illuminate\Database\Eloquent\Builder, 1: Carbon, 2: Carbon}
+     */
+    private function leaveReportBaseQuery(Request $request, User $user): array
+    {
+        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+
+        $query = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'leaveType',
+        ])
+            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
+            ->whereBetween('start_date', [$startDate, $endDate]);
+
+        OrganogramAccessService::constrainLeaveApplications($query, $user);
+
+        $query
+            ->when($request->status, function ($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->department_id, function ($query, $departmentId) {
+                $query->whereHas('employee', function ($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                });
+            })
+            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
+                $query->where('leave_type_id', $leaveTypeId);
+            })
+            ->when($request->employee_id, function ($query, $employeeId) use ($user) {
+                if (OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId)) {
+                    $query->where('employee_id', $employeeId);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            })
+            ->when($request->branch_id, function ($query, $branchId) {
+                $query->whereHas('employee', function ($q) use ($branchId) {
+                    $q->where('current_branch_id', $branchId);
+                });
+            });
+
+        return [$query, $startDate, $endDate];
+    }
+
+    private function accessibleDepartmentsForLeaveReport(User $user)
+    {
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->select('id', 'name')->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
+        }
+
+        return Department::query()->select('id', 'name')->whereIn('id', $ids)->orderBy('name')->get();
+    }
+
+    private function accessibleBranchesForLeaveReport(User $user)
+    {
+        $ids = OrganogramAccessService::accessibleBranchIdList($user);
+        if ($ids === null) {
+            return Branch::query()->active()->select('id', 'name', 'branch_code')->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
+        }
+
+        return Branch::query()->active()->select('id', 'name', 'branch_code')->whereIn('id', $ids)->orderBy('name')->get();
+    }
+
+    private function accessibleEmployeesForLeaveReport(User $user)
+    {
+        $q = Employee::query()
+            ->select('id', 'name_en', 'employee_id', 'department_id')
+            ->with('department:id,name')
+            ->where('status', 'active')
+            ->orderBy('name_en');
+
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->get()->map(function ($employee) {
+            $employee->full_name = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
+
+            return $employee;
+        });
+    }
+
+    /**
+>>>>>>> feature/flutter-mobile-app
      * Export report to PDF.
      */
     public function exportPdf(Request $request)

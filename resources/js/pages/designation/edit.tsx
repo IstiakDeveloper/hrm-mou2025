@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+<<<<<<< HEAD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 
@@ -14,16 +15,24 @@ interface Department {
   name: string;
 }
 
+=======
+import { ArrowLeft, Briefcase } from 'lucide-react';
+
+>>>>>>> feature/flutter-mobile-app
 interface Designation {
   id: number;
   name: string;
   description: string | null;
+<<<<<<< HEAD
   department_id: number;
+=======
+>>>>>>> feature/flutter-mobile-app
   rank: number;
 }
 
 interface DesignationEditProps {
   designation: Designation;
+<<<<<<< HEAD
   departments: Department[];
 }
 
@@ -32,6 +41,14 @@ export default function DesignationEdit({ designation, departments }: Designatio
     name: designation.name || '',
     description: designation.description || '',
     department_id: designation.department_id?.toString() || '',
+=======
+}
+
+export default function DesignationEdit({ designation }: DesignationEditProps) {
+  const { data, setData, put, processing, errors } = useForm({
+    name: designation.name || '',
+    description: designation.description || '',
+>>>>>>> feature/flutter-mobile-app
     rank: designation.rank?.toString() || '',
   });
 
@@ -105,6 +122,7 @@ export default function DesignationEdit({ designation, departments }: Designatio
               </div>
 
               <div className="space-y-2">
+<<<<<<< HEAD
                 <Label htmlFor="department_id">
                   Department <span className="text-red-500">*</span>
                 </Label>
@@ -127,13 +145,19 @@ export default function DesignationEdit({ designation, departments }: Designatio
               </div>
 
               <div className="space-y-2">
+=======
+>>>>>>> feature/flutter-mobile-app
                 <Label htmlFor="rank">
                   Rank <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="rank"
                   type="number"
+<<<<<<< HEAD
                   min="1"
+=======
+                  min="0"
+>>>>>>> feature/flutter-mobile-app
                   value={data.rank}
                   onChange={e => setData('rank', e.target.value)}
                   placeholder="Enter rank number (e.g., 1, 2, 3)"

@@ -43,8 +43,13 @@ export default function PasswordForm({ errors }: PasswordFormProps) {
     let score = 0;
 
     // Length check
+<<<<<<< HEAD
     if (password.length >= 8) score += 1;
     if (password.length >= 12) score += 1;
+=======
+    if (password.length >= 4) score += 1;
+    if (password.length >= 8) score += 1;
+>>>>>>> feature/flutter-mobile-app
 
     // Complexity checks
     if (/[A-Z]/.test(password)) score += 1;  // Has uppercase
@@ -225,7 +230,11 @@ export default function PasswordForm({ errors }: PasswordFormProps) {
             <AlertDescription className="text-blue-700">
               <strong>Password Tips:</strong>
               <ul className="mt-1 list-inside list-disc text-sm">
+<<<<<<< HEAD
                 <li>Use at least 8 characters</li>
+=======
+                <li>Use at least 4 characters</li>
+>>>>>>> feature/flutter-mobile-app
                 <li>Include upper and lowercase letters</li>
                 <li>Include at least one number</li>
                 <li>Include at least one special character</li>

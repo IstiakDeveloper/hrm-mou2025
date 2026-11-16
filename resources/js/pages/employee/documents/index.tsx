@@ -31,11 +31,19 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+<<<<<<< HEAD
 
 interface Employee {
   id: number;
   first_name: string;
   last_name: string;
+=======
+import { PageSurface } from '@/components/page-surface';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Employee extends EmployeeNameFields {
+  id: number;
+>>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -94,9 +102,15 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
 
   return (
     <Layout>
+<<<<<<< HEAD
       <Head title={`${employee.first_name} ${employee.last_name} - Documents`} />
 
       <div className="container mx-auto py-8">
+=======
+      <Head title={`${employeeDisplayName(employee)} - Documents`} />
+
+      <PageSurface>
+>>>>>>> feature/flutter-mobile-app
         <div className="mb-6">
           <Link
             href={route('employees.show', employee.id)}
@@ -111,7 +125,11 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Employee Documents</h1>
             <p className="mt-1 text-gray-500">
+<<<<<<< HEAD
               Manage documents for {employee.first_name} {employee.last_name} ({employee.employee_id})
+=======
+              Manage documents for {employeeDisplayName(employee)} ({employee.employee_id})
+>>>>>>> feature/flutter-mobile-app
             </p>
           </div>
 
@@ -127,7 +145,75 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
 
         <Card>
           <CardContent className="p-0">
+<<<<<<< HEAD
             <Table>
+=======
+            {/* Mobile Card List View (sm:hidden) */}
+            <div className="p-2 space-y-2 sm:hidden">
+              {documents.length > 0 ? (
+                documents.map((doc) => (
+                  <div key={doc.id} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center min-w-0">
+                        {getFileIcon(doc.file_path)}
+                        <span className="ml-2 font-bold text-xs text-slate-900 truncate">{doc.title}</span>
+                      </div>
+                      <Badge className={getDocumentTypeLabel(doc.document_type).color + " text-[10px] shrink-0"}>
+                        {getDocumentTypeLabel(doc.document_type).label}
+                      </Badge>
+                    </div>
+
+                    {doc.description && (
+                      <p className="text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded">{doc.description}</p>
+                    )}
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                      <div>
+                        Expiry: {doc.expiry_date ? format(new Date(doc.expiry_date), 'MMM dd, yyyy') : 'No expiry'}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-lg text-blue-600 bg-blue-50"
+                          onClick={() => window.location.href = route('employees.documents.download', [employee.id, doc.id])}
+                          title="Download"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-lg text-emerald-600 bg-emerald-50"
+                          onClick={() => router.get(route('employees.documents.edit', [employee.id, doc.id]))}
+                          title="Edit"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-lg text-red-600 bg-red-50"
+                          onClick={() => handleDelete(doc.id)}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  No documents found.
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Table View (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <Table>
+>>>>>>> feature/flutter-mobile-app
               <TableHeader>
                 <TableRow>
                   <TableHead>Document</TableHead>
@@ -211,9 +297,16 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
                 )}
               </TableBody>
             </Table>
+<<<<<<< HEAD
           </CardContent>
         </Card>
       </div>
+=======
+            </div>
+          </CardContent>
+        </Card>
+      </PageSurface>
+>>>>>>> feature/flutter-mobile-app
     </Layout>
   );
 }

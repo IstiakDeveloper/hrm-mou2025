@@ -1,0 +1,136 @@
+import type { LucideIcon } from 'lucide-react';
+import { ArrowRightLeft, FileBarChart2, FileSpreadsheet, Gift, HandCoins, Landmark, List, Percent, Wallet } from 'lucide-react';
+
+export const STAFF_FUND_SECTION_ID = 'staff-fund' as const;
+
+export type StaffFundNavItem = {
+    title: string;
+    path: string;
+    permission?: string;
+    description?: string;
+};
+
+export type StaffFundNavGroup = {
+    id: 'pf' | 'gratuity' | 'final-payment' | 'financial-statement';
+    title: string;
+    icon: LucideIcon;
+    defaultPath: string;
+    items: StaffFundNavItem[];
+};
+
+/** Append `section=staff-fund` so the sidebar stays in Staff Fund context. */
+export function staffFundPath(path: string): string {
+    const [base, query = ''] = path.split('?');
+    const params = new URLSearchParams(query);
+    params.set('section', STAFF_FUND_SECTION_ID);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+}
+
+/** Employee self-service paths within Staff Fund section context. */
+export function staffFundEmployeePath(path: string): string {
+    return staffFundPath(path);
+}
+
+export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
+    {
+        id: 'pf',
+        title: 'PF',
+        icon: Landmark,
+        defaultPath: '/provident-fund',
+        items: [
+            {
+                title: 'PF Register',
+                path: '/provident-fund',
+                description: 'Employee PF register — initial balance, manual PF, ledger',
+            },
+            {
+                title: 'PF Interest',
+                path: '/provident-fund/interest',
+                description: 'Yearly interest by PF balance share — 50% own / 50% org',
+            },
+            {
+                title: 'PF Withdrawal',
+                path: '/provident-fund/withdrawals',
+                description: 'PF payment to employees',
+            },
+            {
+                title: 'PF Transfer',
+                path: '/provident-fund/transfer',
+                description: 'Move a whole PF account to an employee with an empty PF ledger',
+            },
+        ],
+    },
+    {
+        id: 'gratuity',
+        title: 'Gratuity',
+        icon: Gift,
+        defaultPath: '/gratuity',
+        items: [
+            {
+                title: 'Entitlements',
+                path: '/gratuity',
+                description: 'Calculated gratuity by tenure × basic salary',
+            },
+            {
+                title: 'Payment records',
+                path: '/gratuity/payments',
+            },
+            {
+                title: 'Gratuity rules',
+                path: '/gratuity/rules',
+            },
+        ],
+    },
+    {
+        id: 'final-payment',
+        title: 'Final Payment',
+        icon: HandCoins,
+        defaultPath: '/final-payments',
+        items: [
+            {
+                title: 'Final Payment',
+                path: '/final-payments',
+                description: 'Separation final payment & settlement records',
+            },
+        ],
+    },
+    {
+        id: 'financial-statement',
+        title: 'Financial Statement',
+        icon: FileSpreadsheet,
+        defaultPath: '/employee-financial-statement',
+        items: [
+            {
+                title: 'Financial Statement',
+                path: '/employee-financial-statement',
+                description: 'Employee financial status — PF, gratuity, active loans & net position',
+            },
+        ],
+    },
+];
+
+export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
+    pf: [
+        { title: 'PF Register', href: '/provident-fund', icon: List },
+        { title: 'PF Interest', href: '/provident-fund/interest', icon: Percent },
+        { title: 'PF Withdrawal', href: '/provident-fund/withdrawals', icon: Wallet },
+        { title: 'PF Transfer', href: '/provident-fund/transfer', icon: ArrowRightLeft },
+    ],
+    gratuity: [
+        { title: 'Entitlements', href: '/gratuity', icon: Gift },
+        { title: 'Payment records', href: '/gratuity/payments', icon: Wallet },
+        { title: 'Gratuity rules', href: '/gratuity/rules', icon: FileBarChart2 },
+    ],
+    finalPayment: [
+        { title: 'Final Payment', href: '/final-payments', icon: HandCoins },
+        { title: 'Final Payment Report', href: '/payroll/reports/final-payment', icon: FileBarChart2 },
+    ],
+    financialStatement: [
+        { title: 'Financial Statement', href: '/employee-financial-statement', icon: FileSpreadsheet },
+    ],
+    settlement: [
+        { title: 'Final Payment', href: '/final-payments', icon: HandCoins },
+        { title: 'Final Payment Report', href: '/payroll/reports/final-payment', icon: FileBarChart2 },
+    ],
+} as const;

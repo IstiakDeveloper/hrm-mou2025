@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Building, Users } from 'lucide-react';
+<<<<<<< HEAD
 
 interface Branch {
   id: number;
@@ -18,6 +19,12 @@ interface Employee {
   id: number;
   first_name: string;
   last_name: string;
+=======
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Employee extends EmployeeNameFields {
+  id: number;
+>>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -27,17 +34,27 @@ interface Department {
 }
 
 interface DepartmentCreateProps {
+<<<<<<< HEAD
   branches: Branch[];
+=======
+>>>>>>> feature/flutter-mobile-app
   employees: Employee[];
   departments: Department[];
 }
 
+<<<<<<< HEAD
 export default function DepartmentCreate({ branches, employees, departments }: DepartmentCreateProps) {
+=======
+export default function DepartmentCreate({ employees, departments }: DepartmentCreateProps) {
+>>>>>>> feature/flutter-mobile-app
   const { data, setData, post, processing, errors } = useForm({
     name: '',
     description: '',
     head_employee_id: null as string | null,
+<<<<<<< HEAD
     branch_id: null as string | null,
+=======
+>>>>>>> feature/flutter-mobile-app
     parent_department_id: null as string | null,
   });
 
@@ -111,6 +128,7 @@ export default function DepartmentCreate({ branches, employees, departments }: D
               </div>
 
               <div className="space-y-2">
+<<<<<<< HEAD
                 <Label htmlFor="branch_id">
                   Branch <span className="text-red-500">*</span>
                 </Label>
@@ -133,6 +151,8 @@ export default function DepartmentCreate({ branches, employees, departments }: D
               </div>
 
               <div className="space-y-2">
+=======
+>>>>>>> feature/flutter-mobile-app
                 <Label htmlFor="parent_department_id">
                   Parent Department
                 </Label>
@@ -173,7 +193,11 @@ export default function DepartmentCreate({ branches, employees, departments }: D
                     <SelectItem value="null">None</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
+<<<<<<< HEAD
                         {employee.first_name} {employee.last_name} ({employee.employee_id})
+=======
+                        {employeeDisplayName(employee)} ({employee.employee_id})
+>>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useState, FormEvent, useEffect } from 'react';
+=======
+import React, { useMemo, useState, FormEvent, useEffect } from 'react';
+>>>>>>> feature/flutter-mobile-app
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -12,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+<<<<<<< HEAD
 import {
     Select,
     SelectContent,
@@ -33,6 +38,17 @@ import {
     Building,
     Briefcase,
     User,
+=======
+import { DatePicker } from '@/components/ui/date-picker';
+import { format, addDays } from 'date-fns';
+import {
+    ArrowLeft,
+    ArrowRight,
+    Building,
+    Briefcase,
+    User,
+    CalendarDays,
+>>>>>>> feature/flutter-mobile-app
     FileText,
     CornerDownRight,
     AlertTriangle
@@ -40,6 +56,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+<<<<<<< HEAD
 
 // Create a safe calendar component to avoid SVG props issues
 const SafeCalendar = ({ disabledDates, ...props }: any) => {
@@ -57,6 +74,14 @@ interface Employee {
     id: number;
     first_name: string;
     last_name: string;
+=======
+import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Employee extends EmployeeNameFields {
+    id: number;
+>>>>>>> feature/flutter-mobile-app
     employee_id: string;
     department_id: number | null;
     designation_id: number | null;
@@ -91,6 +116,7 @@ interface CreateTransferProps {
     branches: Branch[];
     departments: Department[];
     designations: Designation[];
+<<<<<<< HEAD
 }
 
 export default function CreateTransfer({ employees, branches, departments, designations }: CreateTransferProps) {
@@ -107,6 +133,25 @@ export default function CreateTransfer({ employees, branches, departments, desig
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
     const [effectiveDateOpen, setEffectiveDateOpen] = useState(false);
+=======
+    suggestedOrderNo?: string;
+}
+
+export default function CreateTransfer({ employees, branches, departments, designations, suggestedOrderNo }: CreateTransferProps) {
+    const branchItems = useMemo(() => branchComboSelectItems(branches), [branches]);
+    const [employeeId, setEmployeeId] = useState('');
+    const [fromBranchId, setFromBranchId] = useState('');
+    const [toBranchId, setToBranchId] = useState('');
+    const [fromDepartmentId, setFromDepartmentId] = useState('none');
+    const [toDepartmentId, setToDepartmentId] = useState('same');
+    const [fromDesignationId, setFromDesignationId] = useState('none');
+    const [toDesignationId, setToDesignationId] = useState('same');
+    const [effectiveDate, setEffectiveDate] = useState<Date | undefined>(new Date());
+    const [transferOrderNo, setTransferOrderNo] = useState(suggestedOrderNo ?? '');
+    const [reason, setReason] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [submitting, setSubmitting] = useState(false);
+>>>>>>> feature/flutter-mobile-app
     // Selected employee details
     const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
 
@@ -188,6 +233,12 @@ export default function CreateTransfer({ employees, branches, departments, desig
 
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Create Transfer Request</h1>
+<<<<<<< HEAD
+=======
+                    <Link href={route('transfers.bulk.create')}>
+                        <Button variant="outline" size="sm">Bulk transfer</Button>
+                    </Link>
+>>>>>>> feature/flutter-mobile-app
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -201,6 +252,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                 <form onSubmit={handleSubmit} className="space-y-6">
                                     <div className="space-y-2">
                                         <Label htmlFor="employee">Employee</Label>
+<<<<<<< HEAD
                                         <Select
                                             value={employeeId}
                                             onValueChange={setEmployeeId}
@@ -216,6 +268,18 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                 ))}
                                             </SelectContent>
                                         </Select>
+=======
+                                        <ComboSelect<number>
+                                            value={employeeId ? Number(employeeId) : null}
+                                            onChange={(v) => setEmployeeId(v ? String(v) : '')}
+                                            placeholder="Search employee (PIN / name)…"
+                                            items={employees.map((e) => ({
+                                                value: e.id,
+                                                label: `${e.employee_id} — ${employeeDisplayName(e)}`.trim(),
+                                                keywords: `${e.employee_id} ${employeeDisplayName(e)}`,
+                                            }))}
+                                        />
+>>>>>>> feature/flutter-mobile-app
                                         {errors.employee_id && (
                                             <p className="text-sm font-medium text-red-500">{errors.employee_id}</p>
                                         )}
@@ -233,6 +297,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromBranch">Current Branch</Label>
+<<<<<<< HEAD
                                                 <Select
                                                     value={fromBranchId}
                                                     onValueChange={setFromBranchId}
@@ -249,6 +314,15 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+=======
+                                                <ComboSelect<string>
+                                                    value={fromBranchId || null}
+                                                    onChange={(v) => setFromBranchId(v ?? '')}
+                                                    placeholder="Select branch…"
+                                                    disabled={!selectedEmployee}
+                                                    items={branchItems}
+                                                />
+>>>>>>> feature/flutter-mobile-app
                                                 {errors.from_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.from_branch_id}</p>
                                                 )}
@@ -256,6 +330,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromDepartment">Current Department</Label>
+<<<<<<< HEAD
                                                 <Select
                                                     value={fromDepartmentId}
                                                     onValueChange={setFromDepartmentId}
@@ -273,10 +348,27 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+=======
+                                                <ComboSelect<string>
+                                                    value={fromDepartmentId || null}
+                                                    onChange={(v) => setFromDepartmentId(v ?? 'none')}
+                                                    placeholder="Select department…"
+                                                    disabled={!selectedEmployee}
+                                                    items={[
+                                                        { value: 'none', label: 'None' },
+                                                        ...departments.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
+>>>>>>> feature/flutter-mobile-app
                                             </div>
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromDesignation">Current Designation</Label>
+<<<<<<< HEAD
                                                 <Select
                                                     value={fromDesignationId}
                                                     onValueChange={setFromDesignationId}
@@ -294,6 +386,22 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+=======
+                                                <ComboSelect<string>
+                                                    value={fromDesignationId || null}
+                                                    onChange={(v) => setFromDesignationId(v ?? 'none')}
+                                                    placeholder="Select designation…"
+                                                    disabled={!selectedEmployee}
+                                                    items={[
+                                                        { value: 'none', label: 'None' },
+                                                        ...designations.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
+>>>>>>> feature/flutter-mobile-app
                                             </div>
                                         </div>
 
@@ -306,6 +414,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toBranch">Destination Branch</Label>
+<<<<<<< HEAD
                                                 <Select
                                                     value={toBranchId}
                                                     onValueChange={setToBranchId}
@@ -322,6 +431,15 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+=======
+                                                <ComboSelect<string>
+                                                    value={toBranchId || null}
+                                                    onChange={(v) => setToBranchId(v ?? '')}
+                                                    placeholder="Select destination branch…"
+                                                    disabled={!selectedEmployee}
+                                                    items={branchItems}
+                                                />
+>>>>>>> feature/flutter-mobile-app
                                                 {errors.to_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.to_branch_id}</p>
                                                 )}
@@ -329,6 +447,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toDepartment">Destination Department</Label>
+<<<<<<< HEAD
                                                 <Select
                                                     value={toDepartmentId}
                                                     onValueChange={setToDepartmentId}
@@ -346,10 +465,27 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+=======
+                                                <ComboSelect<string>
+                                                    value={toDepartmentId || null}
+                                                    onChange={(v) => setToDepartmentId(v ?? 'same')}
+                                                    placeholder="Select destination department…"
+                                                    disabled={!selectedEmployee}
+                                                    items={[
+                                                        { value: 'same', label: 'Same as current' },
+                                                        ...departments.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
+>>>>>>> feature/flutter-mobile-app
                                             </div>
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toDesignation">Destination Designation</Label>
+<<<<<<< HEAD
                                                 <Select
                                                     value={toDesignationId}
                                                     onValueChange={setToDesignationId}
@@ -367,6 +503,22 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+=======
+                                                <ComboSelect<string>
+                                                    value={toDesignationId || null}
+                                                    onChange={(v) => setToDesignationId(v ?? 'same')}
+                                                    placeholder="Select destination designation…"
+                                                    disabled={!selectedEmployee}
+                                                    items={[
+                                                        { value: 'same', label: 'Same as current' },
+                                                        ...designations.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
+>>>>>>> feature/flutter-mobile-app
                                             </div>
                                         </div>
                                     </div>
@@ -376,6 +528,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
                                             <Label>Effective Date</Label>
+<<<<<<< HEAD
                                             <Popover open={effectiveDateOpen} onOpenChange={setEffectiveDateOpen}>
                                                 <PopoverTrigger asChild>
                                                     <Button
@@ -405,6 +558,13 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                     />
                                                 </PopoverContent>
                                             </Popover>
+=======
+                                            <DatePicker
+                                                selected={effectiveDate ?? null}
+                                                onSelect={(d) => setEffectiveDate(d ?? undefined)}
+                                                placeholderText="DD/MM/YYYY"
+                                            />
+>>>>>>> feature/flutter-mobile-app
                                             {errors.effective_date && (
                                                 <p className="text-sm font-medium text-red-500">{errors.effective_date}</p>
                                             )}
@@ -463,7 +623,11 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                     <div className="space-y-4">
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Name</p>
+<<<<<<< HEAD
                                             <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+=======
+                                            <p className="font-medium">{employeeDisplayName(selectedEmployee)}</p>
+>>>>>>> feature/flutter-mobile-app
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Employee ID</p>
@@ -579,7 +743,11 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                         <div className="flex items-start">
                                                             <div className="flex flex-col items-center mr-2">
                                                                 <div className="rounded-full h-6 w-6 flex items-center justify-center bg-purple-100 text-purple-600">
+<<<<<<< HEAD
                                                                     <Calendar className="h-3 w-3" />
+=======
+                                                                    <CalendarDays className="h-3 w-3" />
+>>>>>>> feature/flutter-mobile-app
                                                                 </div>
                                                             </div>
                                                             <div>
@@ -593,10 +761,17 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                         </>
                                     )}
 
+<<<<<<< HEAD
                                     <Alert className="mt-6 bg-amber-50 border-amber-200">
                                         <AlertTriangle className="h-4 w-4 text-amber-700" />
                                         <AlertDescription className="text-amber-700">
                                             Transfer requests need approval before they take effect. The employee's records will be updated only after the transfer is completed.
+=======
+                                    <Alert className="mt-6 bg-blue-50 border-blue-200">
+                                        <AlertTriangle className="h-4 w-4 text-blue-700" />
+                                        <AlertDescription className="text-blue-700">
+                                            Transfers are approved on creation. If the effective date is today or earlier, the employee record updates immediately. Future effective dates are completed automatically on that date.
+>>>>>>> feature/flutter-mobile-app
                                         </AlertDescription>
                                     </Alert>
                                 </CardContent>

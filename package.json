@@ -2,8 +2,14 @@
     "private": true,
     "type": "module",
     "scripts": {
+<<<<<<< HEAD
         "build": "vite build",
         "build:ssr": "vite build && vite build --ssr",
+=======
+        "build": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build",
+        "build:ssr": "npm run build && node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build --ssr",
+        "icons:pwa": "node scripts/generate-pwa-icons.mjs",
+>>>>>>> feature/flutter-mobile-app
         "dev": "vite",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
@@ -12,6 +18,11 @@
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",
+<<<<<<< HEAD
+=======
+        "@types/leaflet": "^1.9.22",
+        "@types/leaflet.markercluster": "^1.5.6",
+>>>>>>> feature/flutter-mobile-app
         "eslint": "^9.17.0",
         "eslint-config-prettier": "^10.0.1",
         "eslint-plugin-react": "^7.37.3",
@@ -19,7 +30,16 @@
         "prettier": "^3.4.2",
         "prettier-plugin-organize-imports": "^4.1.0",
         "prettier-plugin-tailwindcss": "^0.6.11",
+<<<<<<< HEAD
         "typescript-eslint": "^8.23.0"
+=======
+        "puppeteer": "^25.2.0",
+        "sharp": "^0.34.5",
+        "typescript-eslint": "^8.23.0",
+        "vite-plugin-pwa": "^1.2.0",
+        "workbox-core": "^7.4.0",
+        "workbox-precaching": "^7.4.0"
+>>>>>>> feature/flutter-mobile-app
     },
     "dependencies": {
         "@headlessui/react": "^2.2.0",
@@ -37,7 +57,11 @@
         "@radix-ui/react-scroll-area": "^1.2.3",
         "@radix-ui/react-select": "^2.1.6",
         "@radix-ui/react-separator": "^1.1.2",
+<<<<<<< HEAD
         "@radix-ui/react-slot": "^1.1.2",
+=======
+        "@radix-ui/react-slot": "^1.2.0",
+>>>>>>> feature/flutter-mobile-app
         "@radix-ui/react-switch": "^1.1.3",
         "@radix-ui/react-tabs": "^1.1.3",
         "@radix-ui/react-toggle": "^1.1.2",
@@ -53,10 +77,20 @@
         "date-fns": "^4.1.0",
         "globals": "^15.14.0",
         "laravel-vite-plugin": "^1.0",
+<<<<<<< HEAD
         "lucide-react": "^0.475.0",
         "react": "^19.0.0",
         "react-day-picker": "^8.10.1",
         "react-dom": "^19.0.0",
+=======
+        "leaflet": "^1.9.4",
+        "leaflet.markercluster": "^1.5.3",
+        "lucide-react": "^0.475.0",
+        "react": "^19.0.0",
+        "react-day-picker": "^9.14.0",
+        "react-dom": "^19.0.0",
+        "react-leaflet": "^5.0.0",
+>>>>>>> feature/flutter-mobile-app
         "tailwind-merge": "^3.0.1",
         "tailwindcss": "^4.0.0",
         "tailwindcss-animate": "^1.0.7",

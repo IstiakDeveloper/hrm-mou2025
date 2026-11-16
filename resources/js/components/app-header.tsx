@@ -17,8 +17,13 @@ import AppLogoIcon from './app-logo-icon';
 
 const mainNavItems: NavItem[] = [
     {
+<<<<<<< HEAD
         title: 'Dashboard',
         url: '/dashboard',
+=======
+        title: 'Sections',
+        url: '/sections',
+>>>>>>> feature/flutter-mobile-app
         icon: LayoutGrid,
     },
 ];
@@ -94,7 +99,11 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                         </Sheet>
                     </div>
 
+<<<<<<< HEAD
                     <Link href="/dashboard" prefetch className="flex items-center space-x-2">
+=======
+                    <Link href="/sections" prefetch className="flex items-center space-x-2">
+>>>>>>> feature/flutter-mobile-app
                         <AppLogo />
                     </Link>
 
@@ -125,6 +134,20 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                     </div>
 
                     <div className="ml-auto flex items-center space-x-2">
+<<<<<<< HEAD
+=======
+                        <a
+                            href="https://app.mousumibd.org"
+                            target="_self"
+                            className="group mr-2 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 p-2 text-xs font-bold text-white shadow-md transition-colors hover:bg-sky-600 sm:px-3 sm:py-1.5 dark:bg-sky-600 dark:hover:bg-sky-500"
+                            title="Return to Mousumi Apps Launcher"
+                        >
+                            <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-sky-500 p-0.5 text-white shadow-sm transition-transform duration-300 group-hover:rotate-12 dark:bg-white/20">
+                                <LayoutGrid className="h-3.5 w-3.5" />
+                            </div>
+                            <span className="hidden tracking-wide sm:inline">Mousumi Apps</span>
+                        </a>
+>>>>>>> feature/flutter-mobile-app
                         <div className="relative flex items-center space-x-1">
                             <Button variant="ghost" size="icon" className="group h-9 w-9 cursor-pointer">
                                 <Search className="!size-5 opacity-80 group-hover:opacity-100" />

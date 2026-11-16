@@ -17,7 +17,11 @@ class EmployeeDocumentController extends Controller
     public function index(Employee $employee)
     {
         $documents = EmployeeDocument::where('employee_id', $employee->id)
+<<<<<<< HEAD
             ->orderBy('id', 'desc')
+=======
+            ->orderBy('id')
+>>>>>>> feature/flutter-mobile-app
             ->get();
 
         return Inertia::render('employee/documents/index', [

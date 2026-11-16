@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+<<<<<<< HEAD
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -19,3 +20,33 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
 });
+=======
+use App\Http\Controllers\Settings\PushNotificationController;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
+/*
+|--------------------------------------------------------------------------
+| Settings routes (loaded inside the main `auth` group in routes/web.php)
+|--------------------------------------------------------------------------
+*/
+
+Route::redirect('settings', 'settings/profile');
+
+Route::get('settings/profile', [ProfileController::class, 'edit'])->middleware('permission:profile.view')->name('settings.profile.edit');
+Route::patch('settings/profile', [ProfileController::class, 'update'])->middleware('permission:profile.edit')->name('settings.profile.update');
+Route::post('settings/profile/signature', [ProfileController::class, 'updateSignature'])->middleware('permission:profile.edit')->name('settings.profile.signature');
+Route::delete('settings/profile/signature', [ProfileController::class, 'destroySignature'])->middleware('permission:profile.edit')->name('settings.profile.signature.destroy');
+
+Route::get('settings/password', [PasswordController::class, 'edit'])->middleware('permission:profile.view')->name('settings.password.edit');
+Route::put('settings/password', [PasswordController::class, 'update'])->middleware('permission:profile.edit')->name('settings.password.update');
+
+Route::get('settings/appearance', function () {
+    return Inertia::render('settings/appearance');
+})->middleware('permission:profile.view')->name('settings.appearance');
+
+Route::get('settings/notifications', [PushNotificationController::class, 'edit'])->name('settings.notifications');
+Route::post('settings/notifications', [PushNotificationController::class, 'store'])->name('settings.notifications.store');
+Route::delete('settings/notifications', [PushNotificationController::class, 'destroy'])->name('settings.notifications.destroy');
+Route::post('settings/notifications/test', [PushNotificationController::class, 'sendTest'])->name('settings.notifications.test');
+>>>>>>> feature/flutter-mobile-app

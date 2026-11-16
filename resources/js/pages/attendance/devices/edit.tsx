@@ -9,6 +9,10 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+<<<<<<< HEAD
+=======
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+>>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -18,7 +22,34 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+<<<<<<< HEAD
 import { ArrowLeft, Building, Network } from 'lucide-react';
+=======
+import { ArrowLeft, Network, Radio } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+
+/** Laravel validation uses snake_case; form state uses camelCase for some fields */
+function mapServerErrorsToFormErrors(
+  raw: Record<string, string | string[]>
+): Record<string, string> {
+  const snakeToCamel: Record<string, string> = {
+    device_id: 'deviceId',
+    ip_address: 'ipAddress',
+    branch_id: 'branchId',
+    serial_number: 'serialNumber',
+    adms_enabled: 'admsEnabled',
+    adms_attlog_keep_days: 'attlogKeepDays',
+    agent_sync_enabled: 'agentSyncEnabled',
+  };
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    const msg = Array.isArray(val) ? val[0] : String(val);
+    const targetKey = snakeToCamel[key] ?? key;
+    out[targetKey] = msg;
+  }
+  return out;
+}
+>>>>>>> feature/flutter-mobile-app
 
 interface Branch {
   id: number;
@@ -31,8 +62,17 @@ interface AttendanceDevice {
   name: string;
   ip_address: string;
   port: number;
+<<<<<<< HEAD
   branch_id: number;
   status: string;
+=======
+  serial_number: string | null;
+  branch_id: number;
+  status: string;
+  adms_enabled?: boolean;
+  adms_attlog_keep_days?: number;
+  agent_sync_enabled?: boolean;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface EditProps {
@@ -45,9 +85,20 @@ export default function Edit({ device, branches, statuses }: EditProps) {
   const [deviceId, setDeviceId] = useState(device.device_id);
   const [name, setName] = useState(device.name);
   const [ipAddress, setIpAddress] = useState(device.ip_address);
+<<<<<<< HEAD
   const [port, setPort] = useState(device.port.toString());
   const [branchId, setBranchId] = useState(device.branch_id.toString());
   const [status, setStatus] = useState(device.status);
+=======
+  const [port, setPort] = useState(
+    String(device.port != null ? device.port : 4370)
+  );
+  const [serialNumber, setSerialNumber] = useState(device.serial_number ?? '');
+  const [branchId, setBranchId] = useState(device.branch_id.toString());
+  const [status, setStatus] = useState(device.status);
+  const [admsEnabled, setAdmsEnabled] = useState(!!device.adms_enabled);
+  const [agentSyncEnabled, setAgentSyncEnabled] = useState(device.agent_sync_enabled !== false);
+>>>>>>> feature/flutter-mobile-app
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,11 +135,22 @@ export default function Edit({ device, branches, statuses }: EditProps) {
       name,
       ip_address: ipAddress,
       port: parseInt(port),
+<<<<<<< HEAD
       branch_id: parseInt(branchId),
       status
     }, {
       onError: (errors) => {
         setErrors(errors);
+=======
+      serial_number: serialNumber || null,
+      branch_id: parseInt(branchId),
+      status,
+      adms_enabled: admsEnabled,
+      agent_sync_enabled: agentSyncEnabled,
+    }, {
+      onError: (errs) => {
+        setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
+>>>>>>> feature/flutter-mobile-app
         setSubmitting(false);
       },
       onFinish: () => setSubmitting(false)
@@ -195,6 +257,63 @@ export default function Edit({ device, branches, statuses }: EditProps) {
                 </div>
               </div>
 
+<<<<<<< HEAD
+=======
+              <div className="space-y-2">
+                <Label htmlFor="serialNumber">Device serial (ADMS SN)</Label>
+                <Input
+                  id="serialNumber"
+                  placeholder="QWC5244200223"
+                  value={serialNumber}
+                  onChange={(e) => setSerialNumber(e.target.value)}
+                  className="font-mono"
+                />
+                {errors.serialNumber && (
+                  <p className="text-sm font-medium text-red-500">{errors.serialNumber}</p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  Head Office unit SN from nginx log: QWC5244200223. Leave blank to auto-bind on first live handshake.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-lg border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Label htmlFor="admsEnabled" className="flex items-center gap-2">
+                      <Radio className="h-4 w-4 text-emerald-600" />
+                      Live ADMS
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Machine pushes punches to the VPS as they happen.
+                    </p>
+                  </div>
+                  <Switch
+                    id="admsEnabled"
+                    checked={admsEnabled}
+                    onCheckedChange={setAdmsEnabled}
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Label htmlFor="agentSyncEnabled">Local PC agent</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Office PC still posts to /api/zkteco/sync. Turn off after live ADMS is confirmed.
+                    </p>
+                  </div>
+                  <Switch
+                    id="agentSyncEnabled"
+                    checked={agentSyncEnabled}
+                    onCheckedChange={setAgentSyncEnabled}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <p className="text-sm text-muted-foreground">
+                    Punch logs older than the days set in Device Settings are removed on the machine. Names, fingerprints, and faces stay. The default is 15 days.
+                  </p>
+                </div>
+              </div>
+
+>>>>>>> feature/flutter-mobile-app
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch</Label>
@@ -206,9 +325,15 @@ export default function Edit({ device, branches, statuses }: EditProps) {
                       <SelectValue placeholder="Select Branch" />
                     </SelectTrigger>
                     <SelectContent>
+<<<<<<< HEAD
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id.toString()}>
                           {branch.name}
+=======
+                      {sortPayrollBranches(branches).map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id.toString()}>
+                          {formatBranchSelectLabel(branch)}
+>>>>>>> feature/flutter-mobile-app
                         </SelectItem>
                       ))}
                     </SelectContent>

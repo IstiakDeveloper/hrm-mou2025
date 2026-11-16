@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, User, FileText, CalendarDays } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+<<<<<<< HEAD
 
 interface Employee {
   id: number;
@@ -24,6 +25,18 @@ interface Employee {
     name: string;
   };
   designation: {
+=======
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Employee extends EmployeeNameFields {
+  id: number;
+  employee_id: string;
+  department?: {
+    id: number;
+    name: string;
+  };
+  designation?: {
+>>>>>>> feature/flutter-mobile-app
     id: number;
     name: string;
   };
@@ -42,8 +55,13 @@ interface LeaveBalance {
   allocated_days: number;
   used_days: number;
   remaining_days: number;
+<<<<<<< HEAD
   employee: Employee;
   leaveType: LeaveType;
+=======
+  employee?: Employee;
+  leaveType?: LeaveType;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface EditProps {
@@ -66,6 +84,10 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
     else if (parseInt(allocatedDays) < 0) newErrors.allocatedDays = 'Allocated days must be a positive number';
     if (!usedDays.trim()) newErrors.usedDays = 'Used days is required';
     else if (parseInt(usedDays) < 0) newErrors.usedDays = 'Used days must be a positive number';
+<<<<<<< HEAD
+=======
+    else if (parseInt(usedDays) > parseInt(allocatedDays || '0')) newErrors.usedDays = 'Used days cannot exceed allocated days';
+>>>>>>> feature/flutter-mobile-app
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -112,6 +134,13 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
     );
   }
 
+<<<<<<< HEAD
+=======
+  const allocNum = parseInt(allocatedDays || '0');
+  const usedNum = parseInt(usedDays || '0');
+  const remainingNum = Math.max(0, allocNum - usedNum);
+
+>>>>>>> feature/flutter-mobile-app
   return (
     <Layout>
       <Head title="Edit Leave Balance" />
@@ -141,11 +170,19 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                   <div className="flex items-center p-2 border rounded-md bg-gray-50">
                     <User className="mr-2 h-4 w-4 text-gray-500" />
                     <span className="font-medium">
+<<<<<<< HEAD
                       {leaveBalance.employee && `${leaveBalance.employee.first_name} ${leaveBalance.employee.last_name}`}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Employee ID: {leaveBalance.employee && leaveBalance.employee.employee_id}
+=======
+                      {leaveBalance.employee && employeeDisplayName(leaveBalance.employee)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Employee ID: {leaveBalance.employee?.employee_id || '—'}
+>>>>>>> feature/flutter-mobile-app
                   </p>
                 </div>
 
@@ -154,7 +191,11 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                   <div className="flex items-center p-2 border rounded-md bg-gray-50">
                     <FileText className="mr-2 h-4 w-4 text-gray-500" />
                     <span className="font-medium">
+<<<<<<< HEAD
                       {leaveBalance.leaveType && leaveBalance.leaveType.name}
+=======
+                      {leaveBalance.leaveType?.name || '—'}
+>>>>>>> feature/flutter-mobile-app
                     </span>
                   </div>
                 </div>
@@ -174,10 +215,19 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                 <div className="space-y-2">
                   <Label>Department</Label>
                   <div className="p-2 border rounded-md bg-gray-50">
+<<<<<<< HEAD
                     {leaveBalance.employee && leaveBalance.employee.department && (
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                         {leaveBalance.employee.department.name}
                       </Badge>
+=======
+                    {leaveBalance.employee?.department?.name ? (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        {leaveBalance.employee.department.name}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-gray-500">—</span>
+>>>>>>> feature/flutter-mobile-app
                     )}
                   </div>
                 </div>
@@ -229,7 +279,11 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                 <Label>Remaining Days</Label>
                 <div className="p-2 border rounded-md bg-gray-50">
                   <p className="text-lg font-medium">
+<<<<<<< HEAD
                     {Math.max(0, parseInt(allocatedDays || '0') - parseInt(usedDays || '0'))} days
+=======
+                    {remainingNum} days
+>>>>>>> feature/flutter-mobile-app
                   </p>
                 </div>
                 <p className="text-sm text-muted-foreground">

@@ -1,0 +1,680 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Concerns\CorrectsWorkflowComments;
+use App\Http\Controllers\Concerns\ResetsAppraisalWorkflow;
+use App\Models\Branch;
+use App\Models\TraineeEvaluation;
+use App\Models\TraineeEvaluationSignature;
+use App\Models\User;
+use App\Models\Zone;
+use App\Services\Appraisal\AppraisalEmployeeLookup;
+use App\Services\Appraisal\AppraisalListQuery;
+use App\Services\Appraisal\AppraisalTemplateCache;
+use App\Services\OrganogramAccessService;
+use App\Services\TraineeWorkflowService;
+use App\Support\AppraisalRequiredFields;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class TraineeEvaluationController extends Controller
+{
+    use CorrectsWorkflowComments;
+    use ResetsAppraisalWorkflow;
+
+    public function __construct(
+        protected TraineeWorkflowService $workflowService
+    ) {}
+
+    public function index(Request $request): Response
+    {
+        $user = $request->user();
+        $query = TraineeEvaluation::query()
+            ->with(array_merge([
+                'employee:id,pin,name_en,name_bn,designation_id,current_branch_id',
+                'employee.designation:id,name',
+                'employee.branch:id,name',
+                'branch:id,name',
+            ], AppraisalListQuery::listSignatures($user, 'trainee_evaluation_id')));
+
+        // Scope by User Role / Hierarchy
+        $branchId = $user->employee?->current_branch_id ?? $user->employee?->branch_id;
+        $roleNames = OrganogramAccessService::mergedRoleNames($user);
+
+        if ($user->isSuperAdmin() || OrganogramAccessService::isExecutiveDirector($user) || in_array('Executive Director', $roleNames, true)) {
+            // Unrestricted
+        } elseif ($this->workflowService->isBranchManager($user) || in_array('Branch Manager', $roleNames, true)) {
+            $query->where(function ($q) use ($branchId, $user) {
+                if ($branchId) {
+                    $q->where('branch_id', $branchId);
+                }
+                $q->orWhere('initiator_id', $user->id);
+            });
+        } elseif ($user->hasDirectPermission('organogram.regional_manager') || in_array('Regional Manager', $roleNames, true)) {
+            $regOfficeId = $user->employee?->branch?->regional_office_id;
+            if ($regOfficeId) {
+                $query->where('regional_office_id', $regOfficeId);
+            }
+        } elseif ($user->hasDirectPermission('organogram.zonal_manager') || in_array('Zonal Manager', $roleNames, true)) {
+            $zoneId = $user->employee?->branch?->regionalOffice?->zone_id;
+            if ($zoneId) {
+                $query->where('zone_id', $zoneId);
+            }
+        }
+
+        // Filters
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('form_type') && $request->input('form_type') !== 'all') {
+            $query->where('form_type', $request->form_type);
+        }
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+        if ($request->filled('zone_id')) {
+            $query->where('zone_id', $request->zone_id);
+        }
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('candidate_name', 'like', "%{$search}%")
+                    ->orWhere('designation_name', 'like', "%{$search}%")
+                    ->orWhere('pin', 'like', "%{$search}%")
+                    ->orWhere('branch_name', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        if (! in_array($perPage, [10, 15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
+
+        $metrics = AppraisalListQuery::summarize(clone $query, [
+            'pending' => "status NOT IN ('draft', 'approved', 'rejected')",
+            'approved' => "status = 'approved'",
+            'recommended' => "recommendation_type = 'recommend_appointment'",
+        ]);
+
+        $evaluations = $query->latest()->paginate($perPage)->withQueryString();
+
+        // Attach reviewer eligibility
+        $evaluations->getCollection()->transform(function ($ev) use ($user) {
+            $hasSigned = $ev->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
+            $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $ev);
+            $sentBackSig = $ev->signatures->where('action', 'sent_back')->last();
+
+            $isInitiator = (int) $ev->initiator_id === (int) $user->id;
+            $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $ev);
+
+            $ev->can_approve = $canReview && ! in_array($ev->status, ['draft', 'approved', 'rejected']);
+            $ev->can_edit = (($ev->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($ev->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+            $ev->can_send_back = $canReview && ! in_array($ev->status, ['draft', 'approved', 'rejected']);
+            $ev->can_delete = ($ev->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
+            $ev->can_submit = ($ev->status === 'draft' || $isStuckAtRm) && $isInitiator;
+            $ev->has_user_signed = $hasSigned;
+            $ev->sent_back_reason = ($ev->status === 'draft' && $sentBackSig) ? $sentBackSig->comments : null;
+            $ev->unsetRelation('signatures');
+            AppraisalListQuery::hideNarratives($ev);
+
+            return $ev;
+        });
+
+        // Current user digital signature verification
+        $userSignature = $user->signature ?? $user->employee?->signature;
+
+        $roleNames = \App\Services\OrganogramAccessService::mergedRoleNames($user);
+        $isLineManager = $user->hasDirectPermission('branch_manager') || in_array('Branch Manager', $roleNames, true) ||
+                         $user->hasDirectPermission('organogram.regional_manager') || in_array('Regional Manager', $roleNames, true) ||
+                         $user->hasDirectPermission('organogram.zonal_manager') || in_array('Zonal Manager', $roleNames, true) ||
+                         $user->hasDirectPermission('organogram.microfinance_director') || in_array('Director (Microfinance)', $roleNames, true) ||
+                         $user->hasDirectPermission('organogram.microfinance_assistant_director') || in_array('Assistant Director (Microfinance)', $roleNames, true) ||
+                         in_array('Director Finance and Accounts', $roleNames, true) || in_array('Director Finance and Account', $roleNames, true);
+
+        return Inertia::render('sections/human-resources/evaluations/trainee/index', [
+            'evaluations' => $evaluations,
+            'filters' => $request->only(['status', 'form_type', 'branch_id', 'zone_id', 'search']),
+            'metrics' => $metrics,
+            'branches' => Branch::select('id', 'name')->orderBy('name')->get(),
+            'zones' => Zone::select('id', 'name')->orderBy('name')->get(),
+            'canCreate' => $user->isSuperAdmin() || $isLineManager || $user->hasPermission('trainee-evaluations.create'),
+            'userHasSignature' => ! empty($userSignature),
+            'currentUserId' => $user->id,
+            'isSuperAdmin' => $user->isSuperAdmin(),
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        $user = $request->user();
+        $userSignature = $user->signature ?? $user->employee?->signature;
+
+        $user->loadMissing('employee.branch.regionalOffice.zone');
+        $branch = $user->employee?->branch;
+        $currentUserBranch = $branch ? [
+            'id' => $branch->id,
+            'name' => $branch->name,
+            'regional_office_id' => $branch->regional_office_id,
+            'regional_office' => $branch->regionalOffice ? [
+                'id' => $branch->regionalOffice->id,
+                'name' => $branch->regionalOffice->name,
+                'zone_id' => $branch->regionalOffice->zone_id,
+                'zone' => $branch->regionalOffice->zone ? [
+                    'id' => $branch->regionalOffice->zone->id,
+                    'name' => $branch->regionalOffice->zone->name,
+                ] : null,
+            ] : null,
+        ] : null;
+
+        return Inertia::render('sections/human-resources/evaluations/trainee/create', [
+            'employeeLookupUrl' => route('trainee-evaluations.employees.lookup'),
+            'templates' => AppraisalTemplateCache::load('trainee'),
+            'branches' => $this->branchOptions(),
+            'currentUserBranch' => $currentUserBranch,
+            'userHasSignature' => ! empty($userSignature),
+        ]);
+    }
+
+    public function lookupEmployees(Request $request)
+    {
+        $rows = app(AppraisalEmployeeLookup::class)->search(
+            $request->user(),
+            'trainee',
+            (string) $request->query('q', ''),
+            (int) $request->query('limit', 20),
+        );
+
+        return response()->json($rows);
+    }
+
+    private function branchOptions()
+    {
+        return Branch::query()
+            ->with([
+                'regionalOffice:id,name,zone_id',
+                'regionalOffice.zone:id,name',
+            ])
+            ->orderBy('name')
+            ->get(['id', 'name', 'regional_office_id']);
+    }
+
+    public function store(Request $request)
+    {
+        $user = $request->user();
+
+        AppraisalRequiredFields::assertInitiator($request, 'trainee', $request->input('form_type'));
+
+        $validated = $request->validate([
+            'employee_id' => 'nullable|exists:employees,id',
+            'form_type' => 'required|in:officer_abm,accountant,bm_and_above',
+            'candidate_name' => 'required|string|max:255',
+            'designation_name' => 'required|string|max:255',
+            'pin' => 'nullable|string|max:100',
+            'branch_name' => 'nullable|string|max:255',
+            'regional_office_name' => 'nullable|string|max:255',
+            'zone_name' => 'nullable|string|max:255',
+            'branch_id' => 'nullable|exists:branches,id',
+            'regional_office_id' => 'nullable|exists:regional_offices,id',
+            'zone_id' => 'nullable|exists:zones,id',
+
+            'evaluation_month' => 'nullable|string|max:100',
+            'training_joining_date' => 'nullable|date',
+            'training_completion_date' => 'nullable|date',
+
+            'total_score' => 'required|numeric|min:0|max:100',
+            'calculated_grade' => 'required|in:excellent,very_good,good,not_satisfactory',
+            'other_remarks' => 'nullable|string',
+
+            'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
+            'extension_days' => 'nullable|integer|min:1',
+            'supervisor_remarks' => 'nullable|string',
+
+            'scores' => 'required|array|min:1',
+            'scores.*.sl_no' => 'required|integer',
+            'scores.*.criteria_key' => 'required|string',
+            'scores.*.criteria_name' => 'required|string',
+            'scores.*.max_score' => 'required|numeric|min:1',
+            'scores.*.score' => 'required|numeric|min:0',
+
+            'ratings' => 'required|array|min:1',
+            'ratings.*.sl_no' => 'required|integer',
+            'ratings.*.indicator_key' => 'required|string',
+            'ratings.*.indicator_name' => 'required|string',
+            'ratings.*.rating' => 'nullable|in:excellent,good,satisfactory,needs_improvement,poor',
+        ]);
+
+        $evaluation = DB::transaction(function () use ($validated, $user) {
+            $eval = TraineeEvaluation::create([
+                'employee_id' => $validated['employee_id'] ?? null,
+                'initiator_id' => $user->id,
+                'branch_id' => $validated['branch_id'] ?? null,
+                'regional_office_id' => $validated['regional_office_id'] ?? null,
+                'zone_id' => $validated['zone_id'] ?? null,
+                'form_type' => $validated['form_type'],
+
+                'candidate_name' => $validated['candidate_name'],
+                'designation_name' => $validated['designation_name'],
+                'pin' => $validated['pin'] ?? null,
+                'branch_name' => $validated['branch_name'] ?? null,
+                'regional_office_name' => $validated['regional_office_name'] ?? null,
+                'zone_name' => $validated['zone_name'] ?? null,
+
+                'evaluation_month' => $validated['evaluation_month'] ?? null,
+                'training_joining_date' => $validated['training_joining_date'] ?? null,
+                'training_completion_date' => $validated['training_completion_date'] ?? null,
+
+                'total_score' => $validated['total_score'],
+                'calculated_grade' => $validated['calculated_grade'],
+                'other_remarks' => $validated['other_remarks'] ?? null,
+
+                'recommendation_type' => $validated['recommendation_type'] ?? 'recommend_appointment',
+                'extension_days' => $validated['extension_days'] ?? null,
+                'supervisor_remarks' => $validated['supervisor_remarks'] ?? null,
+
+                'status' => 'draft',
+            ]);
+
+            // Save criteria rubric scores
+            foreach ($validated['scores'] as $score) {
+                $eval->scores()->create([
+                    'sl_no' => $score['sl_no'],
+                    'criteria_key' => $score['criteria_key'],
+                    'criteria_name' => $score['criteria_name'],
+                    'max_score' => $score['max_score'],
+                    'score' => $score['score'],
+                ]);
+            }
+
+            // Save qualitative indicator ratings
+            foreach ($validated['ratings'] as $rating) {
+                $eval->ratings()->create([
+                    'sl_no' => $rating['sl_no'],
+                    'indicator_key' => $rating['indicator_key'],
+                    'indicator_name' => $rating['indicator_name'],
+                    'rating' => $rating['rating'] ?? null,
+                ]);
+            }
+
+            // Record initial signature by creator
+            $eval->signatures()->create([
+                'user_id' => $user->id,
+                'stage' => 'initiator',
+                'action' => 'submitted',
+                'comments' => $validated['supervisor_remarks'] ?? 'খসড়া তৈরি ও ১ম তত্ত্বাবধায়ক কর্তৃক মূল্যায়ন সম্পন্ন।',
+                'signed_at' => now(),
+            ]);
+
+            return $eval;
+        });
+
+        return redirect()->route('trainee-evaluations.show', $evaluation->id)
+            ->with('success', 'প্রশিক্ষণার্থী মূল্যায়ন ফরম সফলভাবে সংরক্ষিত হয়েছে।');
+    }
+
+    public function show(TraineeEvaluation $evaluation, Request $request): Response
+    {
+        $evaluation->load([
+            'employee.designation',
+            'employee.branch',
+            'initiator.employee.designation',
+            'branch.regionalOffice.zone',
+            'regionalOffice.zone',
+            'zone',
+            'scores',
+            'ratings',
+            ...AppraisalListQuery::signerWith(),
+        ]);
+
+        $user = $request->user();
+        $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
+        $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $evaluation);
+        $userSignature = $user->signature ?? $user->employee?->signature;
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
+
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+        $canDelete = ($evaluation->status === 'draft' && $isInitiator) || $user->isSuperAdmin();
+        $canSubmit = ($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator;
+        $canApprove = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
+        $canSendBack = $canReview && ! in_array($evaluation->status, ['draft', 'approved', 'rejected']);
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+        $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
+
+        return Inertia::render('sections/human-resources/evaluations/trainee/show', [
+            'evaluation' => $evaluation,
+            'isSuperAdmin' => $user->isSuperAdmin(),
+            'currentUserId' => $user->id,
+            'userHasSignature' => ! empty($userSignature),
+            'canEdit' => $canEdit,
+            'canDelete' => $canDelete,
+            'canSubmit' => $canSubmit,
+            'canApprove' => $canApprove,
+            'canSendBack' => $canSendBack,
+            'hasUserSigned' => $hasSigned,
+            'sentBackReason' => ($evaluation->status === 'draft' && $sentBackSig) ? $sentBackSig->comments : null,
+            'currentStageLabel' => $this->workflowService->getNextStageRole($evaluation->status, $evaluation->form_type),
+        ]);
+    }
+
+    public function edit(TraineeEvaluation $evaluation, Request $request): Response
+    {
+        $user = $request->user();
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
+        $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
+        $canReview = (! $hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+
+        if (! $canEdit) {
+            abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
+        }
+
+        $evaluation->load(array_merge(
+            ['scores', 'ratings', 'employee.designation', 'employee.branch'],
+            AppraisalListQuery::signerWith(),
+        ));
+
+        $templates = AppraisalTemplateCache::load('trainee');
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
+
+        return Inertia::render('sections/human-resources/evaluations/trainee/edit', [
+            'evaluation' => $evaluation,
+            'templates' => $templates,
+            'branches' => $this->branchOptions(),
+        ]);
+    }
+
+    public function update(Request $request, TraineeEvaluation $evaluation)
+    {
+        $user = $request->user();
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
+        $hasSigned = $evaluation->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
+        $canReview = (! $hasSigned && $this->workflowService->canUserReview($user, $evaluation)) || $user->isSuperAdmin();
+        $canEdit = (($evaluation->status === 'draft' || $isStuckAtRm) && $isInitiator) || ($canReview && ! in_array($evaluation->status, ['approved', 'rejected'])) || $user->isSuperAdmin();
+
+        if (! $canEdit) {
+            abort(403, 'আপনার এই মূল্যায়ন সম্পাদনা করার অনুমতি নেই।');
+        }
+
+        AppraisalRequiredFields::assertInitiator($request, 'trainee', $evaluation->form_type);
+
+        $validated = $request->validate([
+            'candidate_name' => 'required|string|max:255',
+            'designation_name' => 'required|string|max:255',
+            'pin' => 'nullable|string|max:100',
+            'branch_name' => 'nullable|string|max:255',
+            'regional_office_name' => 'nullable|string|max:255',
+            'zone_name' => 'nullable|string|max:255',
+            'branch_id' => 'nullable|exists:branches,id',
+            'regional_office_id' => 'nullable|exists:regional_offices,id',
+            'zone_id' => 'nullable|exists:zones,id',
+
+            'evaluation_month' => 'nullable|string|max:100',
+            'training_joining_date' => 'nullable|date',
+            'training_completion_date' => 'nullable|date',
+
+            'total_score' => 'required|numeric|min:0|max:100',
+            'calculated_grade' => 'required|in:excellent,very_good,good,not_satisfactory',
+            'other_remarks' => 'nullable|string',
+
+            'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
+            'extension_days' => 'nullable|integer|min:1',
+            'supervisor_remarks' => 'nullable|string',
+
+            'scores' => 'required|array|min:1',
+            'scores.*.id' => 'nullable|integer',
+            'scores.*.sl_no' => 'required|integer',
+            'scores.*.criteria_key' => 'required|string',
+            'scores.*.criteria_name' => 'required|string',
+            'scores.*.max_score' => 'required|numeric|min:1',
+            'scores.*.score' => 'required|numeric|min:0',
+
+            'ratings' => 'required|array|min:1',
+            'ratings.*.id' => 'nullable|integer',
+            'ratings.*.sl_no' => 'required|integer',
+            'ratings.*.indicator_key' => 'required|string',
+            'ratings.*.indicator_name' => 'required|string',
+            'ratings.*.rating' => 'nullable|in:excellent,good,satisfactory,needs_improvement,poor',
+        ]);
+
+        DB::transaction(function () use ($evaluation, $validated) {
+            $evaluation->update([
+                'candidate_name' => $validated['candidate_name'],
+                'designation_name' => $validated['designation_name'],
+                'pin' => $validated['pin'] ?? null,
+                'branch_name' => $validated['branch_name'] ?? null,
+                'regional_office_name' => $validated['regional_office_name'] ?? null,
+                'zone_name' => $validated['zone_name'] ?? null,
+                'branch_id' => $validated['branch_id'] ?? $evaluation->branch_id,
+                'regional_office_id' => $validated['regional_office_id'] ?? $evaluation->regional_office_id,
+                'zone_id' => $validated['zone_id'] ?? $evaluation->zone_id,
+
+                'evaluation_month' => $validated['evaluation_month'] ?? null,
+                'training_joining_date' => $validated['training_joining_date'] ?? null,
+                'training_completion_date' => $validated['training_completion_date'] ?? null,
+
+                'total_score' => $validated['total_score'],
+                'calculated_grade' => $validated['calculated_grade'],
+                'other_remarks' => $validated['other_remarks'] ?? null,
+
+                'recommendation_type' => $validated['recommendation_type'] ?? $evaluation->recommendation_type,
+                'extension_days' => $validated['extension_days'] ?? null,
+                'supervisor_remarks' => $validated['supervisor_remarks'] ?? $evaluation->supervisor_remarks,
+            ]);
+
+            // Sync scores
+            foreach ($validated['scores'] as $score) {
+                $evaluation->scores()->updateOrCreate(
+                    ['criteria_key' => $score['criteria_key']],
+                    [
+                        'sl_no' => $score['sl_no'],
+                        'criteria_name' => $score['criteria_name'],
+                        'max_score' => $score['max_score'],
+                        'score' => $score['score'],
+                    ]
+                );
+            }
+
+            // Sync ratings
+            foreach ($validated['ratings'] as $rating) {
+                $evaluation->ratings()->updateOrCreate(
+                    ['indicator_key' => $rating['indicator_key']],
+                    [
+                        'sl_no' => $rating['sl_no'],
+                        'indicator_name' => $rating['indicator_name'],
+                        'rating' => $rating['rating'] ?? null,
+                    ]
+                );
+            }
+        });
+
+        return redirect()->route('trainee-evaluations.show', $evaluation->id)
+            ->with('success', 'প্রশিক্ষণার্থী মূল্যায়ন সফলভাবে আপডেট করা হয়েছে।');
+    }
+
+    public function forward(Request $request, TraineeEvaluation $evaluation)
+    {
+        $user = $request->user();
+        $isInitiator = (int) $evaluation->initiator_id === (int) $user->id;
+        $isStuckAtRm = $this->workflowService->initiatorMayResubmitPastRm($user, $evaluation);
+
+        if (! $this->workflowService->canUserReview($user, $evaluation) && ! $isStuckAtRm) {
+            abort(403, 'আপনার এই মূল্যায়নে স্বাক্ষর বা ফরোয়ার্ড করার অনুমতি নেই।');
+        }
+
+        if ($evaluation->status === 'draft' || $isStuckAtRm) {
+            AppraisalRequiredFields::assertStored('trainee', $evaluation);
+        } else {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'reviewer');
+        }
+
+        $isSubmitStage = $evaluation->status === 'draft' || $isStuckAtRm;
+        $request->validate([
+            'comments' => $isSubmitStage ? 'nullable|string|max:1000' : 'required|string|max:1000',
+            'recommendation_type' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
+            'supervisor_recommendation' => 'nullable|in:recommend_appointment,extend_probation,not_satisfactory',
+            'extension_days' => 'nullable|integer',
+        ]);
+
+        $nextStatus = $this->workflowService->determineNextStatus($evaluation, $isStuckAtRm ? 'draft' : $evaluation->status);
+        $comments = $isSubmitStage
+            ? (trim((string) $request->input('comments', '')) !== ''
+                ? trim((string) $request->input('comments'))
+                : ($nextStatus === 'submitted_to_zm'
+                    ? 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।'
+                    : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।'))
+            : trim((string) $request->input('comments'));
+
+        if ($isStuckAtRm) {
+            $this->workflowService->resubmitPastRm($evaluation, $user, $comments);
+
+            return back()->with('success', 'মূল্যায়ন পরবর্তী স্তরে সফলভাবে অগ্রবর্তী করা হয়েছে।');
+        }
+
+        $recommendation = $request->input('recommendation_type') ?? $request->input('supervisor_recommendation');
+
+        $this->workflowService->forward(
+            $evaluation,
+            $request->user(),
+            $comments,
+            $recommendation,
+            $request->extension_days ? (int) $request->extension_days : null
+        );
+
+        return back()->with('success', 'মূল্যায়ন পরবর্তী স্তরে সফলভাবে অগ্রবর্তী করা হয়েছে।');
+    }
+
+    public function sendBack(Request $request, TraineeEvaluation $evaluation)
+    {
+        $request->validate([
+            'comments' => 'required|string|max:1000',
+        ]);
+
+        $this->workflowService->sendBack(
+            $evaluation,
+            $request->user(),
+            $request->comments
+        );
+
+        return back()->with('success', 'মূল্যায়ন সংশোধনের জন্য প্রস্তুতকারীর নিকট ফেরত পাঠানো হয়েছে।');
+    }
+
+    public function hrVerify(Request $request, TraineeEvaluation $evaluation)
+    {
+        AppraisalRequiredFields::assertActor($request, 'trainee', 'hr');
+
+        $request->validate([
+            'comments' => 'required|string|max:1000',
+        ]);
+
+        $this->workflowService->forward(
+            $evaluation,
+            $request->user(),
+            trim((string) $request->input('comments'))
+        );
+
+        return back()->with('success', 'এইচআর যাচাই সম্পন্ন হয়েছে এবং ইডি মহোদয়ের অনুমোদনের জন্য অগ্রবর্তী করা হয়েছে।');
+    }
+
+    public function edApprove(Request $request, TraineeEvaluation $evaluation)
+    {
+        AppraisalRequiredFields::assertActor($request, 'trainee', 'ed');
+
+        $request->validate([
+            'comments' => 'required|string|max:1000',
+            'is_approved' => 'required|boolean',
+        ]);
+
+        $this->workflowService->edApprove(
+            $evaluation,
+            $request->user(),
+            trim((string) $request->input('comments')),
+            (bool) $request->is_approved
+        );
+
+        return back()->with('success', $request->is_approved ? 'মূল্যায়ন চূড়ান্ত অনুমোদন সম্পন্ন হয়েছে।' : 'মূল্যায়ন নামঞ্জুর করা হয়েছে।');
+    }
+
+    public function quickApprove(Request $request, TraineeEvaluation $evaluation)
+    {
+        if ($evaluation->status === 'draft') {
+            AppraisalRequiredFields::assertStored('trainee', $evaluation);
+        } elseif ($evaluation->status === 'submitted_to_hr') {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'hr');
+        } elseif ($evaluation->status === 'submitted_to_ed') {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'ed');
+        } else {
+            AppraisalRequiredFields::assertActor($request, 'trainee', 'reviewer');
+        }
+
+        $request->validate([
+            'comments' => $evaluation->status === 'draft' ? 'nullable|string|max:1000' : 'required|string|max:1000',
+        ]);
+
+        $comments = $evaluation->status === 'draft'
+            ? (trim((string) $request->input('comments', '')) !== '' ? trim((string) $request->input('comments')) : 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।')
+            : trim((string) $request->input('comments'));
+
+        if ($evaluation->status === 'submitted_to_ed') {
+            $this->workflowService->edApprove($evaluation, $request->user(), $comments, $request->boolean('is_approved', true));
+        } else {
+            $this->workflowService->forward(
+                $evaluation,
+                $request->user(),
+                $comments,
+                $request->input('recommendation_type') ?? $request->input('supervisor_recommendation'),
+                $request->filled('extension_days') ? (int) $request->input('extension_days') : null
+            );
+        }
+
+        return back()->with('success', 'মূল্যায়ন সফলভাবে অনুমোদন ও অগ্রবর্তী করা হয়েছে।');
+    }
+
+    public function print(Request $request, TraineeEvaluation $evaluation): Response
+    {
+        $evaluation->load([
+            'employee.designation',
+            'employee.branch',
+            'branch.regionalOffice.zone',
+            'regionalOffice.zone',
+            'zone',
+            'scores',
+            'ratings',
+            ...AppraisalListQuery::signerWith(),
+        ]);
+
+        \App\Services\Appraisal\AppraisalSignatureVisibility::apply($request->user(), $evaluation);
+
+        return Inertia::render('sections/human-resources/evaluations/trainee/print', [
+            'evaluation' => $evaluation,
+        ]);
+    }
+
+    public function resetWorkflow(Request $request, TraineeEvaluation $evaluation)
+    {
+        return $this->resetAppraisalWorkflow($request, $evaluation);
+    }
+
+    public function destroy(Request $request, TraineeEvaluation $evaluation)
+    {
+        \App\Support\ConfirmedPassword::validate($request);
+
+        $evaluation->delete();
+
+        return redirect()->route('trainee-evaluations.index')
+            ->with('success', 'মূল্যায়ন রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।');
+    }
+
+    public function correctComment(Request $request, TraineeEvaluation $evaluation, TraineeEvaluationSignature $signature)
+    {
+        return $this->correctSignatureComment($request, $signature, (int) $evaluation->id, 'trainee_evaluation_id');
+    }
+}

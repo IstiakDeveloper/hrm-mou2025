@@ -22,9 +22,41 @@ export interface NavItem {
 }
 
 export interface SharedData {
+<<<<<<< HEAD
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+=======
+    csrf_token?: string;
+    name: string;
+    quote: { message: string; author: string };
+    auth: Auth;
+    push?: {
+        vapidPublicKey: string | null;
+        configured: boolean;
+        subscriptionCount?: number;
+    };
+    flash?: {
+        success?: string | null;
+        error?: string | null;
+        warning?: string | null;
+    };
+    assetFinancialYear?: {
+        id: number;
+        label: string;
+        start_date: string;
+        end_date: string;
+    } | null;
+    pendingLeaveCount?: number;
+    pendingAppraisalCounts?: {
+        promotion: number;
+        confirmation: number;
+        probation_increment: number;
+        trainee: number;
+        total: number;
+    };
+    pendingFinalClearanceCount?: number;
+>>>>>>> feature/flutter-mobile-app
     [key: string]: unknown;
 }
 
@@ -34,6 +66,10 @@ export interface User {
     email: string;
     avatar?: string;
     email_verified_at: string | null;
+<<<<<<< HEAD
+=======
+    signature?: string | null;
+>>>>>>> feature/flutter-mobile-app
     created_at: string;
     updated_at: string;
     [key: string]: unknown; // This allows for additional properties...

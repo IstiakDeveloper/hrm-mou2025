@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
+=======
+import React, { useMemo, useState } from 'react';
+>>>>>>> feature/flutter-mobile-app
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+<<<<<<< HEAD
+=======
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+>>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,12 +18,49 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { EyeIcon, EyeOffIcon, ArrowLeft, User as UserIcon, Lock, Building, Users, Briefcase, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+<<<<<<< HEAD
 
 interface Employee {
   id: number;
   employee_id: string;
   first_name: string;
   last_name: string;
+=======
+import { Checkbox } from '@/components/ui/checkbox';
+import { resolveEmployeeEmail, type UserFormEmployee } from '@/lib/user-employee-email';
+
+interface Employee extends UserFormEmployee {
+  first_name?: string | null;
+  last_name?: string | null;
+  name_en?: string | null;
+}
+
+function employeeFullName(employee: Employee): string {
+  const nameEn = (employee.name_en ?? '').trim();
+  if (nameEn) {
+    return nameEn;
+  }
+
+  return [employee.first_name, employee.last_name]
+    .map((part) => (part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function previewLoginUsername(emp: Employee | undefined): string {
+  if (!emp) {
+    return '';
+  }
+  const id = (emp.employee_id ?? '').trim();
+  if (id !== '') {
+    return id.slice(0, 191);
+  }
+  const pin = (emp.biometric_id != null ? String(emp.biometric_id) : '').trim();
+  if (pin !== '') {
+    return pin.slice(0, 191);
+  }
+  return `emp_${emp.id}`;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface Branch {
@@ -32,12 +77,22 @@ interface Role {
 interface User {
   id: number;
   name: string;
+<<<<<<< HEAD
   email: string;
   role_id: number | null;
   employee_id: number | null;
   branch_id: number | null;
   active_status: boolean;
   role?: Role;
+=======
+  username?: string;
+  email: string;
+  role_id?: number | null;
+  employee_id: number | null;
+  branch_id: number | null;
+  active_status: boolean;
+  roles?: Role[]; // Changed from role to roles array
+>>>>>>> feature/flutter-mobile-app
   employee?: Employee;
   branch?: Branch;
 }
@@ -47,11 +102,16 @@ interface UserEditProps {
   roles: Role[];
   employees: Employee[];
   branches: Branch[];
+<<<<<<< HEAD
+=======
+  autoEmailDomain: string;
+>>>>>>> feature/flutter-mobile-app
   errors: {
     [key: string]: string;
   };
 }
 
+<<<<<<< HEAD
 export default function UserEdit({ user, roles, employees, branches, errors }: UserEditProps) {
   const { data, setData, put, processing } = useForm({
     name: user.name || '',
@@ -59,6 +119,34 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
     password: '',
     password_confirmation: '',
     role_id: user.role_id ? user.role_id.toString() : '',
+=======
+export default function UserEdit({ user, roles, employees, branches, autoEmailDomain, errors }: UserEditProps) {
+  // Extract role IDs from user.roles
+  const userRoleIds = user.roles ? user.roles.map(role => role.id) : [];
+
+  const initialPrimaryRoleId =
+    user.role_id && userRoleIds.includes(user.role_id)
+      ? user.role_id
+      : (userRoleIds.length > 0 ? userRoleIds[0] : '');
+
+  const linkedEmployeeOnLoad = employees.find((emp) => emp.id === user.employee_id);
+  const initialUsername =
+    user.username != null && String(user.username).trim() !== ''
+      ? String(user.username).trim()
+      : previewLoginUsername(linkedEmployeeOnLoad);
+  const initialEmail = linkedEmployeeOnLoad
+    ? resolveEmployeeEmail(linkedEmployeeOnLoad, autoEmailDomain)
+    : (user.email || '');
+
+  const { data, setData, put, processing } = useForm({
+    name: user.name || '',
+    username: initialUsername,
+    email: initialEmail,
+    password: '',
+    password_confirmation: '',
+    role_ids: userRoleIds, // Use the array of role IDs
+    primary_role_id: initialPrimaryRoleId as number | string,
+>>>>>>> feature/flutter-mobile-app
     employee_id: user.employee_id ? user.employee_id.toString() : '',
     branch_id: user.branch_id ? user.branch_id.toString() : '',
     active_status: user.active_status,
@@ -69,6 +157,18 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
 
   const [passwordStrength, setPasswordStrength] = useState<number>(0);
 
+<<<<<<< HEAD
+=======
+  const selectedEmployeeForLogin = useMemo(
+    () => employees.find(emp => emp.id.toString() === data.employee_id),
+    [employees, data.employee_id],
+  );
+  const loginUsernamePreview = useMemo(
+    () => previewLoginUsername(selectedEmployeeForLogin),
+    [selectedEmployeeForLogin],
+  );
+
+>>>>>>> feature/flutter-mobile-app
   const checkPasswordStrength = (password: string) => {
     if (!password) {
       setPasswordStrength(0);
@@ -78,8 +178,13 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
     let score = 0;
 
     // Length check
+<<<<<<< HEAD
     if (password.length >= 8) score += 1;
     if (password.length >= 12) score += 1;
+=======
+    if (password.length >= 4) score += 1;
+    if (password.length >= 8) score += 1;
+>>>>>>> feature/flutter-mobile-app
 
     // Complexity checks
     if (/[A-Z]/.test(password)) score += 1;  // Has uppercase
@@ -118,8 +223,60 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
     }
   };
 
+<<<<<<< HEAD
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+=======
+  // Handle role selection
+  const handleRoleToggle = (roleId: number) => {
+    const currentRoles = [...data.role_ids];
+    
+    if (currentRoles.includes(roleId)) {
+      // Remove role if already selected
+      const newRoles = currentRoles.filter(id => id !== roleId);
+      setData('role_ids', newRoles);
+
+      // If we're removing the primary role, update primary_role_id
+      if (Number(data.primary_role_id) === roleId) {
+        setData('primary_role_id', newRoles.length > 0 ? newRoles[0] : '');
+      }
+    } else {
+      // Add role if not selected
+      const newRoles = [...currentRoles, roleId];
+      setData('role_ids', newRoles);
+
+      // If this is the first role or primary is not set, set it as primary automatically
+      if (newRoles.length === 1 || !data.primary_role_id) {
+        setData('primary_role_id', roleId);
+      }
+    }
+  };
+
+  const handleEmployeeChange = (value: string) => {
+    const employeeId = value === 'none' ? '' : value;
+    setData('employee_id', employeeId);
+
+    const selectedEmployee = employees.find(employee => employee.id.toString() === employeeId);
+    if (selectedEmployee) {
+      const fullName = employeeFullName(selectedEmployee);
+      if (fullName) {
+        setData('name', fullName);
+      }
+      const resolvedEmail = resolveEmployeeEmail(selectedEmployee, autoEmailDomain);
+      if (resolvedEmail) {
+        setData('email', resolvedEmail);
+      }
+    }
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (data.role_ids.length > 0 && !data.primary_role_id) {
+      data.primary_role_id = data.role_ids[0];
+    }
+
+>>>>>>> feature/flutter-mobile-app
     put(route('admin.users.update', user.id));
   };
 
@@ -177,6 +334,30 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                   </div>
 
                   <div className="space-y-2">
+<<<<<<< HEAD
+=======
+                    <Label htmlFor="username">
+                      Username <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="username"
+                      type="text"
+                      value={data.username}
+                      onChange={(e) => setData('username', e.target.value)}
+                      placeholder="Login username"
+                      className="font-mono text-sm"
+                      spellCheck={false}
+                      autoComplete="username"
+                    />
+                    {errors.username && <p className="mt-1 text-sm text-red-500">{errors.username}</p>}
+                    <p className="text-xs text-gray-500">
+                      Suggested from linked employee:{' '}
+                      <span className="font-mono text-gray-700">{loginUsernamePreview || '—'}</span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+>>>>>>> feature/flutter-mobile-app
                     <Label htmlFor="email">
                       Email Address <span className="text-red-500">*</span>
                     </Label>
@@ -186,8 +367,20 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       value={data.email}
                       onChange={e => setData('email', e.target.value)}
                       placeholder="user@example.com"
+<<<<<<< HEAD
                     />
                     {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+=======
+                      readOnly={!!data.employee_id}
+                      className={data.employee_id ? 'bg-gray-50' : ''}
+                    />
+                    {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+                    {!!data.employee_id && (
+                      <p className="text-xs text-gray-500">
+                        Email is taken from the linked employee, or auto-generated if none is set
+                      </p>
+                    )}
+>>>>>>> feature/flutter-mobile-app
                   </div>
 
                   <Separator className="my-2" />
@@ -298,14 +491,20 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                     <Lock className="h-5 w-5 text-purple-600" />
                   </div>
                   <div>
+<<<<<<< HEAD
                     <CardTitle>Role & Association</CardTitle>
                     <CardDescription>Update user system role and associations</CardDescription>
+=======
+                    <CardTitle>Roles & Association</CardTitle>
+                    <CardDescription>Update user system roles and associations</CardDescription>
+>>>>>>> feature/flutter-mobile-app
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-5">
                   <div className="space-y-2">
+<<<<<<< HEAD
                     <Label htmlFor="role">
                       System Role <span className="text-red-500">*</span>
                     </Label>
@@ -328,6 +527,57 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                     {data.role_id && (
                       <p className="mt-1 text-xs text-gray-500">
                         {roles.find(r => r.id.toString() === data.role_id)?.description || ''}
+=======
+                    <Label htmlFor="roles">
+                      System Roles <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="space-y-3 border rounded-md p-3">
+                      {roles.map(role => (
+                        <div key={role.id} className="space-y-1.5 border-b last:border-0 pb-2 last:pb-0">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox 
+                              id={`role-${role.id}`} 
+                              checked={data.role_ids.includes(role.id)}
+                              onCheckedChange={() => handleRoleToggle(role.id)}
+                            />
+                            <Label 
+                              htmlFor={`role-${role.id}`} 
+                              className="font-normal cursor-pointer"
+                            >
+                              {role.name}
+                            </Label>
+                          </div>
+                          {data.role_ids.includes(role.id) && (
+                            <div className="pl-6">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="radio"
+                                  id={`primary-${role.id}`}
+                                  name="primary_role"
+                                  value={role.id}
+                                  checked={Number(data.primary_role_id) === role.id}
+                                  onChange={() => setData('primary_role_id', role.id)}
+                                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary cursor-pointer"
+                                />
+                                <Label
+                                  htmlFor={`primary-${role.id}`}
+                                  className="text-xs text-gray-600 font-normal cursor-pointer"
+                                >
+                                  Set as primary role
+                                </Label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {errors.role_ids && <p className="mt-1 text-sm text-red-500">{errors.role_ids}</p>}
+                    {errors.primary_role_id && <p className="mt-1 text-sm text-red-500">{errors.primary_role_id}</p>}
+                    {data.role_ids.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {data.role_ids.length} role(s) selected
+                        {data.primary_role_id && ` (Primary: ${roles.find(r => r.id === Number(data.primary_role_id))?.name})`}
+>>>>>>> feature/flutter-mobile-app
                       </p>
                     )}
                   </div>
@@ -340,8 +590,13 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       <span>Link to Employee (Optional)</span>
                     </Label>
                     <Select
+<<<<<<< HEAD
                       value={data.employee_id ? data.employee_id.toString() : undefined}
                       onValueChange={value => setData('employee_id', value === 'none' ? '' : value)}
+=======
+                      value={data.employee_id ? data.employee_id.toString() : 'none'}
+                      onValueChange={handleEmployeeChange}
+>>>>>>> feature/flutter-mobile-app
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select an employee" />
@@ -350,7 +605,11 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       <SelectItem value="none">None</SelectItem>
                         {employees.map(employee => (
                           <SelectItem key={employee.id} value={employee.id.toString()}>
+<<<<<<< HEAD
                             {employee.first_name} {employee.last_name} ({employee.employee_id})
+=======
+                            {employeeFullName(employee)} ({employee.employee_id})
+>>>>>>> feature/flutter-mobile-app
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -375,9 +634,15 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
+<<<<<<< HEAD
                         {branches.map(branch => (
                           <SelectItem key={branch.id} value={branch.id.toString()}>
                             {branch.name}
+=======
+                        {sortPayrollBranches(branches).map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id.toString()}>
+                            {formatBranchSelectLabel(branch)}
+>>>>>>> feature/flutter-mobile-app
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -406,4 +671,8 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
       </div>
     </Layout>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> feature/flutter-mobile-app

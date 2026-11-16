@@ -30,7 +30,11 @@ test('email can be verified', function () {
 
     Event::assertDispatched(Verified::class);
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+<<<<<<< HEAD
     $response->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+=======
+    $response->assertRedirect(route('sections.index', absolute: false).'?verified=1');
+>>>>>>> feature/flutter-mobile-app
 });
 
 test('email is not verified with invalid hash', function () {
@@ -45,4 +49,8 @@ test('email is not verified with invalid hash', function () {
     $this->actingAs($user)->get($verificationUrl);
 
     expect($user->fresh()->hasVerifiedEmail())->toBeFalse();
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> feature/flutter-mobile-app

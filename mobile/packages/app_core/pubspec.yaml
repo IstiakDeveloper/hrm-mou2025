@@ -1,0 +1,20 @@
+name: app_core
+description: Shared app wiring helpers for Mousumi Flutter clients.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  api_client:
+    path: ../api_client
+  auth_session:
+    path: ../auth_session
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0

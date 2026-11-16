@@ -1,0 +1,325 @@
+import React, { useState } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import Layout from '@/layouts/AdminLayout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { PageSurface } from '@/components/page-surface';
+import { Badge } from '@/components/ui/badge';
+import { Edit, MoreHorizontal, Plus, Search, Trash2, Map, ChevronLeft, ChevronRight, Trash, Eye, User, X } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Zone {
+  id: number;
+  name: string;
+  code: string;
+  description?: string | null;
+  is_active: boolean;
+  zone_manager?: (EmployeeNameFields & {
+    id: number;
+    employee_id: string;
+  }) | null;
+}
+
+interface PaginationLinks {
+  url: string | null;
+  label: string;
+  active: boolean;
+}
+
+interface PaginationMeta {
+  current_page: number;
+  from: number;
+  last_page: number;
+  links: PaginationLinks[];
+  path: string;
+  per_page: number;
+  to: number;
+  total: number;
+}
+
+interface ZonesResponse {
+  data: Zone[];
+  links?: {
+    first: string;
+    last: string;
+    prev: string | null;
+    next: string | null;
+  };
+  meta?: PaginationMeta;
+}
+
+interface ZoneIndexProps {
+  zones: ZonesResponse;
+  filters: { search?: string; per_page?: string };
+}
+
+export default function ZoneIndex({ zones, filters }: ZoneIndexProps) {
+  const [search, setSearch] = useState(filters.search || '');
+  const [perPage, setPerPage] = useState(filters.per_page || '10');
+  const hasPagination = zones.meta && zones.links;
+
+  const handleSearch = () => {
+    router.get(route('zones.index'), { search, per_page: perPage }, { preserveState: true });
+  };
+
+  const handlePerPageChange = (value: string) => {
+    setPerPage(value);
+    router.get(route('zones.index'), { search, per_page: value }, { preserveState: true });
+  };
+
+  const resetFilters = () => {
+    setSearch('');
+    setPerPage('10');
+    router.get(route('zones.index'), { per_page: '10' }, { preserveState: true });
+  };
+
+  const handleDelete = (id: number) => {
+    if (confirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
+      router.delete(route('zones.destroy', id));
+    }
+  };
+
+  return (
+    <Layout>
+      <Head title="Zones" />
+
+      <PageSurface>
+        <Link
+          href={route('organization-structure.index')}
+          className="mb-4 inline-flex items-center text-sm text-slate-500 hover:text-emerald-700"
+        >
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Back to organization structure
+        </Link>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-5">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Zones</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage zones (Head Office → Zone → Regional Office → Branch)</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search zones..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+              />
+              {search && (
+                <button
+                  onClick={resetFilters}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button onClick={handleSearch} size="sm" className="h-9 w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">Search</Button>
+              <Link href={route('zones.create')} className="w-full sm:w-auto">
+                <Button size="sm" className="h-9 w-full sm:w-auto flex items-center bg-emerald-600 hover:bg-emerald-700">
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add Zone
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Name</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Code</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Manager</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {zones.data.length > 0 ? (
+                    zones.data.map((zone) => (
+                      <TableRow key={zone.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                        <TableCell className="pl-6">
+                          <div className="flex items-center">
+                            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center mr-3 text-emerald-600">
+                              <Map className="h-4 w-4" />
+                            </div>
+                            <span className="font-semibold text-[13px] text-slate-800">
+                              {zone.name}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-[13px] text-slate-600 font-medium">{zone.code}</TableCell>
+                        <TableCell>
+                          {zone.zone_manager ? (
+                            <div className="flex items-center text-[13px] text-slate-600 font-medium">
+                              <User className="h-4 w-4 mr-1.5 text-slate-400" />
+                              <span>
+                                {employeeDisplayName(zone.zone_manager)} ({zone.zone_manager.employee_id})
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[13px] text-slate-400 italic">Not assigned</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {zone.is_active ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0 font-medium">Active</Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-100 text-slate-500 border-0 font-medium">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors" 
+                              title="Edit Zone"
+                              onClick={() => router.get(route('zones.edit', zone.id))}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                              title="Delete Zone"
+                              onClick={() => handleDelete(zone.id)}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                        No zones found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {hasPagination && zones.meta && (
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-[13px] text-slate-500">
+                <span className="hidden sm:inline">Rows per page:</span>
+                <Select
+                  value={perPage}
+                  onValueChange={handlePerPageChange}
+                >
+                  <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
+                    <SelectValue placeholder="10" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="200">200</SelectItem>
+                    <SelectItem value="500">500</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="hidden sm:block">
+                <p className="text-[13px] text-slate-500">
+                  Showing <span className="font-semibold text-slate-700">{zones.meta.total > 0 ? (zones.meta.current_page - 1) * zones.meta.per_page + 1 : 0}</span> to{' '}
+                  <span className="font-semibold text-slate-700">
+                    {Math.min(zones.meta.current_page * zones.meta.per_page, zones.meta.total)}
+                  </span>{' '}
+                  of <span className="font-semibold text-slate-700">{zones.meta.total}</span> entries
+                </p>
+              </div>
+            </div>
+            
+            {zones.meta.last_page > 1 && (
+              <div className="flex items-center justify-end">
+                <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
+                  {zones.meta.current_page > 1 && zones.links?.prev && (
+                    <Link
+                      href={zones.links.prev}
+                      preserveState
+                      className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
+                    >
+                      <span className="sr-only">Previous</span>
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  )}
+
+                  {zones.meta.links && zones.meta.links.slice(1, -1).map((link, i) => {
+                    const isActive = link.active;
+                    const isDots = link.label === '...';
+                    
+                    if (isDots) {
+                      return (
+                        <span key={i} className="relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-medium text-slate-400">
+                          ...
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={i}
+                        href={link.url || '#'}
+                        preserveState
+                        className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
+                          isActive
+                            ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
+                            : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-200 focus:z-20'
+                        }`}
+                        dangerouslySetInnerHTML={{ __html: link.label }}
+                      />
+                    );
+                  })}
+
+                  {zones.meta.current_page < zones.meta.last_page && zones.links?.next && (
+                    <Link
+                      href={zones.links.next}
+                      preserveState
+                      className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
+                    >
+                      <span className="sr-only">Next</span>
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  )}
+                </nav>
+              </div>
+            )}
+          </div>
+        )}
+      </PageSurface>
+    </Layout>
+  );
+}
+

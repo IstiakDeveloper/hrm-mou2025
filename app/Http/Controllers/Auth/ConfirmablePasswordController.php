@@ -36,6 +36,10 @@ class ConfirmablePasswordController extends Controller
 
         $request->session()->put('auth.password_confirmed_at', time());
 
+<<<<<<< HEAD
         return redirect()->intended(route('dashboard', absolute: false));
+=======
+        return redirect()->intended(route('sections.index', absolute: false));
+>>>>>>> feature/flutter-mobile-app
     }
 }

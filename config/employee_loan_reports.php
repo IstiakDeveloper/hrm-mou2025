@@ -1,0 +1,80 @@
+<?php
+
+return [
+    'company_name' => env('EMPLOYEE_LOAN_REPORT_COMPANY') ?: config('payroll_reports.company_name', env('APP_NAME', 'Mousumi')),
+
+    'reports' => [
+        'loan-ledger' => [
+            'title' => 'Loan Ledger',
+            'description' => 'Installment ledger for one employee, one loan type, and one cycle (defaults to the running cycle).',
+            'filters' => ['employee_id', 'loan_type', 'loan_cycle'],
+            'require_employee' => true,
+            'template' => 'loan-installment-ledger',
+            'report' => 'loan_ledger',
+        ],
+        'loan-disburse-register' => [
+            'title' => 'Loan Disburse Register (Employee Wise)',
+            'description' => 'Loans disbursed in the selected period, listed employee wise.',
+            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'template' => 'loan-table',
+            'report' => 'loan_disburse_register',
+        ],
+        'loan-recoverable' => [
+            'title' => 'Loan Recoverable',
+            'description' => 'Active loans with outstanding balance recoverable from payroll or collection.',
+            'filters' => ['as_of', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'template' => 'loan-table',
+            'report' => 'loan_recoverable',
+        ],
+        'loan-collection-register' => [
+            'title' => 'Loan Collection Register',
+            'description' => 'All collections including payroll installment deductions, manual collections, advance payments, rebates, and waivers.',
+            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'template' => 'loan-collection-register',
+            'report' => 'loan_collection_register',
+        ],
+        'loan-pf-balance' => [
+            'title' => 'Loan and PF Balance',
+            'description' => 'Employee-wise provident fund balance and loan outstanding.',
+            'filters' => ['as_of', 'branch_id', 'department_id', 'employee_id'],
+            'template' => 'loan-table',
+            'report' => 'loan_pf_balance',
+        ],
+        'full-paid-register' => [
+            'title' => 'Full Paid Register',
+            'description' => 'Loans fully paid and closed in the system.',
+            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'template' => 'loan-table',
+            'report' => 'full_paid_register',
+        ],
+        'rebate-register' => [
+            'title' => 'Rebate Register',
+            'description' => 'Loan rebate entries from collection module.',
+            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id'],
+            'template' => 'loan-table',
+            'report' => 'rebate_register',
+        ],
+        'loan-statement-employee' => [
+            'title' => 'Loan Statement (Employee Wise)',
+            'description' => 'Summary of all loans for selected employee(s).',
+            'filters' => ['as_of', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'template' => 'loan-statement-employee',
+            'report' => 'loan_statement_employee',
+            'require_employee' => false,
+        ],
+        'loan-statement-component' => [
+            'title' => 'Loan Statement (Component Wise)',
+            'description' => 'Outstanding loans grouped by loan type / component.',
+            'filters' => ['as_of', 'branch_id', 'loan_type'],
+            'template' => 'loan-grouped',
+            'report' => 'loan_statement_component',
+        ],
+        'loan-statement-branch' => [
+            'title' => 'Loan Statement (Branch Wise)',
+            'description' => 'Outstanding loans grouped by branch.',
+            'filters' => ['as_of', 'branch_id', 'loan_type'],
+            'template' => 'loan-grouped',
+            'report' => 'loan_statement_branch',
+        ],
+    ],
+];

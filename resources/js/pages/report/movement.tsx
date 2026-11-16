@@ -48,6 +48,10 @@ import { format, parseISO } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+<<<<<<< HEAD
+=======
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+>>>>>>> feature/flutter-mobile-app
 
 interface Movement {
   id: number;
@@ -57,11 +61,17 @@ interface Movement {
   from_datetime: string;
   to_datetime: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed';
+<<<<<<< HEAD
   employee: {
     id: number;
     employee_id: string;
     first_name: string;
     last_name: string;
+=======
+  employee: EmployeeNameFields & {
+    id: number;
+    employee_id: string;
+>>>>>>> feature/flutter-mobile-app
     department: {
       id: number;
       name: string;
@@ -71,11 +81,15 @@ interface Movement {
       name: string;
     };
   };
+<<<<<<< HEAD
   approver: {
     id: number;
     first_name: string;
     last_name: string;
   } | null;
+=======
+  approver: (EmployeeNameFields & { id: number }) | null;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface Department {
@@ -83,11 +97,17 @@ interface Department {
   name: string;
 }
 
+<<<<<<< HEAD
 interface Employee {
   id: number;
   employee_id: string;
   first_name: string;
   last_name: string;
+=======
+interface Employee extends EmployeeNameFields {
+  id: number;
+  employee_id: string;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface PaginationLinks {
@@ -781,7 +801,11 @@ export default function MovementReport({
                     <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
+<<<<<<< HEAD
                         {employee.employee_id} - {employee.first_name} {employee.last_name}
+=======
+                        {employee.employee_id} - {employeeDisplayName(employee)}
+>>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -821,7 +845,11 @@ export default function MovementReport({
                   movements.data.map((movement) => (
                     <TableRow key={movement.id}>
                       <TableCell className="font-medium">
+<<<<<<< HEAD
                         {movement.employee.first_name} {movement.employee.last_name}
+=======
+                        {employeeDisplayName(movement.employee)}
+>>>>>>> feature/flutter-mobile-app
                         <div className="text-xs text-gray-500">{movement.employee.employee_id}</div>
                       </TableCell>
                       <TableCell>{getMovementTypeBadge(movement.movement_type)}</TableCell>
@@ -832,7 +860,11 @@ export default function MovementReport({
                       <TableCell>{movement.employee.department.name}</TableCell>
                       <TableCell>
                         {movement.approver ? (
+<<<<<<< HEAD
                           `${movement.approver.first_name} ${movement.approver.last_name}`
+=======
+                          employeeDisplayName(movement.approver)
+>>>>>>> feature/flutter-mobile-app
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}

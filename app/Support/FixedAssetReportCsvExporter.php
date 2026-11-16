@@ -1,0 +1,120 @@
+<?php
+
+namespace App\Support;
+
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class FixedAssetReportCsvExporter
+{
+    /**
+     * @param  list<string>  $headers
+     * @param  list<list<string|int|float|null>>  $rows
+     */
+    public static function download(string $filename, array $headers, array $rows): StreamedResponse
+    {
+        return response()->streamDownload(function () use ($headers, $rows) {
+            $out = fopen('php://output', 'w');
+            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($out, $headers);
+            foreach ($rows as $row) {
+                fputcsv($out, $row);
+            }
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{0: list<string>, 1: list<list<string|int|float|null>>}
+     */
+    public static function rowsFromPayload(array $payload): array
+    {
+        $headers = $payload['headers'] ?? [];
+        $rows = $payload['rows'] ?? [];
+        $sections = $payload['sections'] ?? [];
+        $expanded = $payload['expanded'] ?? 'none';
+        $expandedSections = $payload['expanded_sections'] ?? [];
+
+        $template = $payload['template'] ?? '';
+
+        if ($rows === [] && $sections !== []) {
+            $exportRows = [];
+            $sampleRow = $sections[0]['rows'][0] ?? [];
+            $keys = self::keysForPayload($template, $sampleRow, $payload);
+
+            $titleKey = $keys[0] ?? 'category';
+            $countKey = in_array('location', $keys, true) ? 'location' : 'asset_count';
+            $purchaseKey = in_array('purchase_amount', $keys, true) ? 'purchase_amount' : (in_array('purchase_cost', $keys, true) ? 'purchase_cost' : null);
+            $closingKey = in_array('closing_value', $keys, true) ? 'closing_value' : (in_array('book_value', $keys, true) ? 'book_value' : null);
+
+            foreach ($sections as $section) {
+                $secTitle = $section['title'] ?? '';
+                $isExpanded = $expanded === 'all' || in_array($secTitle, $expandedSections, true);
+
+                $parentRow = [];
+                foreach ($keys as $k) {
+                    if ($k === $titleKey) {
+                        $parentRow[$k] = $secTitle;
+                    } elseif ($k === $countKey) {
+                        $parentRow[$k] = $section['subtotal']['asset_count'] ?? count($section['rows'] ?? []);
+                    } elseif ($purchaseKey && $k === $purchaseKey) {
+                        $parentRow[$k] = $section['subtotal']['purchase_amount'] ?? $section['subtotal']['purchase_cost'] ?? '';
+                    } elseif ($closingKey && $k === $closingKey) {
+                        $parentRow[$k] = $section['subtotal']['closing_value'] ?? $section['subtotal']['book_value'] ?? '';
+                    } else {
+                        $parentRow[$k] = '';
+                    }
+                }
+
+                $exportRows[] = $parentRow;
+
+                if ($isExpanded && ! empty($section['rows'])) {
+                    foreach ($section['rows'] as $childRow) {
+                        $exportRows[] = $childRow;
+                    }
+                }
+            }
+
+            $rows = $exportRows;
+        }
+
+        $firstRow = $rows[0] ?? [];
+        $keys = self::keysForPayload($template, $firstRow, $payload);
+
+        if ($keys === []) {
+            return [$headers, []];
+        }
+
+        $csvRows = collect($rows)->map(function ($r) use ($keys) {
+            return collect($keys)->map(fn ($k) => $r[$k] ?? '')->all();
+        })->all();
+
+        return [$headers, $csvRows];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $firstRow
+     * @return list<string>
+     */
+    private static function keysForPayload(string $template, array $firstRow, array $payload): array
+    {
+        if ($firstRow !== []) {
+            return array_keys($firstRow);
+        }
+
+        return match ($template) {
+            'asset-tracking' => ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'book_value', 'floor', 'room', 'voucher', 'ledger', 'description'],
+            'purchase-list' => ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status'],
+            'disposal-list' => ['category', 'sub_category', 'asset_no', 'branch', 'purchase_date', 'purchase_amount', 'opening_value', 'depreciation', 'disposal_amount', 'closing_value'],
+            'depreciation-schedule' => match ($payload['schedule_variant'] ?? '') {
+                'audit' => ['sl', 'group_label', 'asset_count', 'cost_opening', 'cost_addition', 'cost_sales_adj', 'cost_closing', 'depreciation_rate', 'dep_opening', 'dep_charged', 'dep_sales_adj', 'dep_closing', 'written_down_value'],
+                'summary' => ['category', 'sub_category', 'branch', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day'],
+                default => ['category', 'sub_category', 'asset_no', 'location', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value'],
+            },
+            default => [],
+        };
+    }
+}

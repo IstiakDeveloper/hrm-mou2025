@@ -1,11 +1,18 @@
 <?php
 
+<<<<<<< HEAD
 use App\Models\User;
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
+=======
+uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+
+test('profile page is displayed', function () {
+    $user = userWithProfileAccess();
+>>>>>>> feature/flutter-mobile-app
 
     $response = $this
         ->actingAs($user)
@@ -15,7 +22,11 @@ test('profile page is displayed', function () {
 });
 
 test('profile information can be updated', function () {
+<<<<<<< HEAD
     $user = User::factory()->create();
+=======
+    $user = userWithProfileAccess();
+>>>>>>> feature/flutter-mobile-app
 
     $response = $this
         ->actingAs($user)
@@ -36,7 +47,11 @@ test('profile information can be updated', function () {
 });
 
 test('email verification status is unchanged when the email address is unchanged', function () {
+<<<<<<< HEAD
     $user = User::factory()->create();
+=======
+    $user = userWithProfileAccess();
+>>>>>>> feature/flutter-mobile-app
 
     $response = $this
         ->actingAs($user)
@@ -50,6 +65,7 @@ test('email verification status is unchanged when the email address is unchanged
         ->assertRedirect('/settings/profile');
 
     expect($user->refresh()->email_verified_at)->not->toBeNull();
+<<<<<<< HEAD
 });
 
 test('user can delete their account', function () {
@@ -84,4 +100,6 @@ test('correct password must be provided to delete account', function () {
         ->assertRedirect('/settings/profile');
 
     expect($user->fresh())->not->toBeNull();
+=======
+>>>>>>> feature/flutter-mobile-app
 });

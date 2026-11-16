@@ -8,9 +8,16 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
+<<<<<<< HEAD
         default: "bg-background text-foreground",
         destructive:
           "text-destructive-foreground [&>svg]:text-current *:data-[slot=alert-description]:text-destructive-foreground/80",
+=======
+        default:
+          "bg-background text-foreground *:data-[slot=alert-description]:text-muted-foreground",
+        destructive:
+          "border-destructive/50 bg-destructive/10 text-destructive [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90 dark:bg-destructive/20 dark:border-destructive/50",
+>>>>>>> feature/flutter-mobile-app
       },
     },
     defaultVariants: {
@@ -55,7 +62,11 @@ function AlertDescription({
     <div
       data-slot="alert-description"
       className={cn(
+<<<<<<< HEAD
         "text-muted-foreground col-start-2 grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed",
+=======
+        "col-start-2 grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed",
+>>>>>>> feature/flutter-mobile-app
         className
       )}
       {...props}

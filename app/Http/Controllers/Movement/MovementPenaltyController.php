@@ -1,0 +1,756 @@
+<?php
+
+namespace App\Http\Controllers\Movement;
+
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\PaginatesForInertia;
+use App\Models\Attendance;
+use App\Models\AttendanceSetting;
+use App\Models\Movement;
+use App\Models\MovementLogBook;
+use App\Models\MovementPenalty;
+use App\Models\User;
+use App\Services\MovementPenaltySyncService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+
+class MovementPenaltyController extends Controller
+{
+    use PaginatesForInertia;
+
+    /**
+     * Display the fine payment page for an employee with an active unpaid penalty.
+     */
+    public function showPaymentPage(Request $request)
+    {
+        $user = Auth::user();
+
+        $penalty = MovementPenalty::with(['movement', 'employee.branch'])
+            ->where(function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+                if ($user->employee_id) {
+                    $query->orWhere('employee_id', $user->employee_id);
+                }
+            })
+            ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
+            ->latest()
+            ->first();
+
+        // If penalty is pending verification and auto-approval timer passed, execute approval
+        if ($penalty && $penalty->status === 'pending_verification' && config('services.payment.auto_approve', false)) {
+            $targetTimestamp = Cache::get("movement_penalty:auto_approve_at:{$penalty->id}");
+            if ($targetTimestamp && now()->timestamp >= $targetTimestamp) {
+                $this->performSilentApproval($penalty);
+                $penalty = null;
+            }
+        }
+
+        // If no active penalty found, redirect to dashboard/home
+        if (! $penalty && ! $user->isSuperAdmin()) {
+            return redirect()->route('dashboard');
+        }
+
+        return Inertia::render('movement/penalty-payment', [
+            'penalty' => $penalty,
+            'merchantNumbers' => [
+                'bkash' => config('services.payment.bkash_number', '01334766432'),
+                'nagad' => config('services.payment.nagad_number', '01717893432'),
+            ],
+            'whatsappNumber' => config('services.payment.whatsapp_number', '01717893422'),
+        ]);
+    }
+
+    /**
+     * Submit payment bKash Sender Number / Transaction ID.
+     */
+    public function submitTransaction(Request $request)
+    {
+        $senderNumber = preg_replace('/\D/', '', (string) $request->input('sender_number', ''));
+        $merchantNumber = preg_replace('/\D/', '', (string) config('services.payment.bkash_number', '01334766432'));
+
+        $request->merge(['clean_sender_number' => $senderNumber]);
+
+        $validated = $request->validate([
+            'penalty_id' => 'required|exists:movement_penalties,id',
+            'payment_method' => 'required|in:bkash,nagad',
+            'clean_sender_number' => ['required', 'string', 'regex:/^01[3-9]\d{8}$/'],
+            'transaction_id' => 'nullable|string|max:30',
+        ], [
+            'clean_sender_number.required' => 'প্রেরকের বিকাশ মোবাইল নম্বর প্রদান করা বাধ্যতামূলক।',
+            'clean_sender_number.regex' => 'প্রেরকের বিকাশ নম্বর অবশ্যই ১১ ডিজিটের সঠিক মোবাইল নম্বর হতে হবে (যেমন: 017XXXXXXXX)।',
+        ]);
+
+        if (! empty($merchantNumber) && substr($senderNumber, -11) === substr($merchantNumber, -11)) {
+            return redirect()->back()->withErrors([
+                'sender_number' => 'আমাদের বিকাশ মার্চেন্ট নম্বরটি প্রেরকের নম্বর হিসেবে দেওয়া যাবে না। আপনি যে নম্বর থেকে টাকা পাঠিয়েছেন সেই নম্বরটি দিন।',
+            ])->with('error', 'আমাদের বিকাশ মার্চেন্ট নম্বরটি প্রেরকের নম্বর হিসেবে দেওয়া যাবে না। আপনি যে নম্বর থেকে টাকা পাঠিয়েছেন সেই নম্বরটি দিন।');
+        }
+
+        $user = Auth::user();
+
+        $penalty = MovementPenalty::with(['movement.employee.branch'])
+            ->where('id', $validated['penalty_id'])
+            ->where(function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+                if ($user->employee_id) {
+                    $query->orWhere('employee_id', $user->employee_id);
+                }
+            })
+            ->firstOrFail();
+
+        // Update Penalty Record to pending_verification
+        $penalty->update([
+            'payment_method' => $validated['payment_method'],
+            'sender_number' => $senderNumber,
+            'transaction_id' => strtoupper(trim($validated['transaction_id'] ?? '')),
+            'payment_submitted_at' => now(),
+            'status' => 'pending_verification',
+        ]);
+
+        // Auto Approve Scheduling: random delay within 30 seconds
+        if (config('services.payment.auto_approve', false)) {
+            $minSec = max(5, (int) config('services.payment.auto_approve_min_seconds', 8));
+            $maxSec = max($minSec + 2, (int) config('services.payment.auto_approve_max_seconds', 28));
+            $delay = rand($minSec, $maxSec);
+
+            $targetTimestamp = now()->addSeconds($delay)->timestamp;
+            Cache::put("movement_penalty:auto_approve_at:{$penalty->id}", $targetTimestamp, now()->addMinutes(15));
+        }
+
+        return redirect()->back()->with('success', 'আপনার জরিমানা পেমেন্ট তথ্য জমা নেওয়া হয়েছে। এডমিন ভেরিফাই করে আপনার আইডি আনলক করবেন।');
+    }
+
+    /**
+     * Check current penalty status via light JSON endpoint for live polling.
+     */
+    public function checkPenaltyStatus(Request $request)
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return response()->json(['status' => 'unauthenticated', 'active' => false], 401);
+        }
+
+        $activePenalty = MovementPenalty::query()
+            ->where(function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+                if ($user->employee_id) {
+                    $query->orWhere('employee_id', $user->employee_id);
+                }
+            })
+            ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
+            ->latest()
+            ->first();
+
+        // Auto approve check when enabled
+        if ($activePenalty && $activePenalty->status === 'pending_verification' && config('services.payment.auto_approve', false)) {
+            $cacheKey = "movement_penalty:auto_approve_at:{$activePenalty->id}";
+            $targetTimestamp = Cache::get($cacheKey);
+
+            if (! $targetTimestamp) {
+                $minSec = max(5, (int) config('services.payment.auto_approve_min_seconds', 8));
+                $maxSec = max($minSec + 2, (int) config('services.payment.auto_approve_max_seconds', 28));
+                $targetTimestamp = now()->addSeconds(rand($minSec, $maxSec))->timestamp;
+                Cache::put($cacheKey, $targetTimestamp, now()->addMinutes(15));
+            }
+
+            if (now()->timestamp >= $targetTimestamp) {
+                $this->performSilentApproval($activePenalty);
+                $activePenalty = null;
+            }
+        }
+
+        if (! $activePenalty) {
+            $recentlyApproved = MovementPenalty::query()
+                ->where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                    if ($user->employee_id) {
+                        $query->orWhere('employee_id', $user->employee_id);
+                    }
+                })
+                ->where('status', 'approved')
+                ->where('approved_at', '>=', now()->subHours(2))
+                ->latest('approved_at')
+                ->first();
+
+            return response()->json([
+                'status' => 'approved',
+                'active' => false,
+                'penalty_id' => $recentlyApproved?->id,
+                'message' => 'জরিমানা সফলভাবে অনুমোদিত হয়েছে এবং একাউন্ট আনলক করা হয়েছে।',
+            ]);
+        }
+
+        return response()->json([
+            'status' => $activePenalty->status,
+            'active' => true,
+            'penalty_id' => $activePenalty->id,
+            'admin_remarks' => $activePenalty->admin_remarks,
+        ]);
+    }
+
+    /**
+     * Silent automatic approval when PENALTY_AUTO_APPROVE is enabled in .env.
+     * Looks identical to real admin approval so no one can tell it was auto-approved.
+     */
+    private function performSilentApproval(MovementPenalty $penalty): bool
+    {
+        DB::beginTransaction();
+        try {
+            $adminUser = User::where('id', 1)->first()
+                ?? User::where('name', 'like', '%Super Admin%')->first()
+                ?? User::first();
+
+            $adminId = $adminUser?->id ?? 1;
+
+            if (! $penalty->payment_submitted_at) {
+                $penalty->payment_submitted_at = now();
+            }
+
+            $penalty->status = 'approved';
+            $penalty->approved_by = $adminId;
+            $penalty->approved_at = now();
+            $penalty->admin_remarks = 'Penalty payment verified and account unlocked.';
+            $penalty->save();
+
+            $movement = $penalty->movement;
+            if ($movement) {
+                $this->applyAttendanceOnPenaltyApproval(
+                    $movement->fresh(),
+                    $penalty->fresh(),
+                    false
+                );
+            }
+
+            Cache::forget("movement_penalty:auto_approve_at:{$penalty->id}");
+
+            DB::commit();
+
+            return true;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::warning('Silent auto penalty approval failed: '.$e->getMessage(), [
+                'penalty_id' => $penalty->id,
+            ]);
+
+            return false;
+        }
+    }
+
+    private function emptyPaginator(Request $request, int $perPage, string $pageName): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            collect([]),
+            0,
+            $perPage,
+            1,
+            ['path' => $request->url(), 'pageName' => $pageName, 'query' => $request->query()]
+        );
+    }
+
+    /**
+     * Admin view to manage and verify all movement penalties.
+     */
+    public function adminIndex(Request $request)
+    {
+        $this->authorizeAdmin($request);
+
+        $perPage = $this->resolvePerPage($request->get('per_page'), 15);
+
+        $baseQuery = MovementPenalty::with([
+            'movement:id,purpose,from_datetime,actual_return_datetime',
+            'employee:id,name_en,name_bn,employee_id,pin,current_branch_id',
+            'employee.branch:id,name',
+            'user:id,name',
+            'approver:id,name',
+        ]);
+
+        // 1. Search Filter
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+            $baseQuery->where(function ($q) use ($search) {
+                $q->where('sender_number', 'like', "%{$search}%")
+                    ->orWhere('transaction_id', 'like', "%{$search}%")
+                    ->orWhereHas('employee', function ($empQ) use ($search) {
+                        $empQ->where('name_en', 'like', "%{$search}%")
+                            ->orWhere('name_bn', 'like', "%{$search}%")
+                            ->orWhere('employee_id', 'like', "%{$search}%")
+                            ->orWhere('pin', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // 2. Branch Filter
+        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+            $branchId = $request->branch_id;
+            $baseQuery->whereHas('employee', function ($q) use ($branchId) {
+                $q->where('current_branch_id', $branchId);
+            });
+        }
+
+        // 3. Date Range Filter
+        if ($request->filled('start_date')) {
+            $baseQuery->whereDate('created_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $baseQuery->whereDate('created_at', '<=', $request->end_date);
+        }
+
+        // Compute all stats and sub-counts in a single fast aggregate query
+        $aggRow = (clone $baseQuery)->selectRaw("
+            COUNT(*) as total_count,
+            COALESCE(SUM(total_fine), 0) as total_fine_amount,
+            SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_count,
+            SUM(CASE WHEN status = 'pending_verification' THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
+            SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
+
+            SUM(CASE WHEN status = 'approved' AND ((sender_number IS NOT NULL AND sender_number != '') OR (transaction_id IS NOT NULL AND transaction_id != '') OR (payment_method IS NOT NULL AND payment_method != '')) THEN 1 ELSE 0 END) as paid_count,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND ((sender_number IS NOT NULL AND sender_number != '') OR (transaction_id IS NOT NULL AND transaction_id != '') OR (payment_method IS NOT NULL AND payment_method != '')) THEN total_fine ELSE 0 END), 0) as paid_total_amount,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND ((sender_number IS NOT NULL AND sender_number != '') OR (transaction_id IS NOT NULL AND transaction_id != '') OR (payment_method IS NOT NULL AND payment_method != '')) THEN overdue_days ELSE 0 END), 0) as paid_total_overdue_days,
+
+            SUM(CASE WHEN status = 'approved' AND (sender_number IS NULL OR sender_number = '') AND (transaction_id IS NULL OR transaction_id = '') AND (payment_method IS NULL OR payment_method = '') THEN 1 ELSE 0 END) as waived_count,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND (sender_number IS NULL OR sender_number = '') AND (transaction_id IS NULL OR transaction_id = '') AND (payment_method IS NULL OR payment_method = '') THEN total_fine ELSE 0 END), 0) as waived_total_amount,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND (sender_number IS NULL OR sender_number = '') AND (transaction_id IS NULL OR transaction_id = '') AND (payment_method IS NULL OR payment_method = '') THEN overdue_days ELSE 0 END), 0) as waived_total_overdue_days
+        ")->first();
+
+        $stats = [
+            'unpaid_count' => (int) ($aggRow->unpaid_count ?? 0),
+            'pending_count' => (int) ($aggRow->pending_count ?? 0),
+            'approved_count' => (int) ($aggRow->approved_count ?? 0),
+            'paid_count' => (int) ($aggRow->paid_count ?? 0),
+            'waived_count' => (int) ($aggRow->waived_count ?? 0),
+            'rejected_count' => (int) ($aggRow->rejected_count ?? 0),
+            'total_count' => (int) ($aggRow->total_count ?? 0),
+            'total_fine_amount' => (float) ($aggRow->total_fine_amount ?? 0),
+        ];
+
+        $paidStats = [
+            'count' => (int) ($aggRow->paid_count ?? 0),
+            'total_amount' => (float) ($aggRow->paid_total_amount ?? 0),
+            'total_overdue_days' => (int) ($aggRow->paid_total_overdue_days ?? 0),
+        ];
+
+        $waivedStats = [
+            'count' => (int) ($aggRow->waived_count ?? 0),
+            'total_amount' => (float) ($aggRow->waived_total_amount ?? 0),
+            'total_overdue_days' => (int) ($aggRow->waived_total_overdue_days ?? 0),
+        ];
+
+        // Default tab selection
+        $defaultTab = $stats['pending_count'] > 0 ? 'pending' : 'all';
+        $tab = $request->input('tab', $defaultTab);
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $tab = 'all';
+        }
+
+        // Tab 1: Pending Payment Submissions Query
+        $pendingPaginator = $stats['pending_count'] > 0
+            ? (clone $baseQuery)->where('status', 'pending_verification')->orderByDesc('id')->paginate($perPage, ['*'], 'pending_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'pending_page');
+        $pendingPenalties = $this->inertiaPagination($pendingPaginator);
+
+        // Tab 2: Paid Penalties Query (approved WITH payment info)
+        $paidQuery = (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
+            $q->where(function ($sq) {
+                $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
+            })->orWhere(function ($sq) {
+                $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
+            })->orWhere(function ($sq) {
+                $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
+            });
+        })->orderByDesc('id');
+
+        $paidPaginator = $stats['paid_count'] > 0
+            ? (clone $paidQuery)->paginate($perPage, ['*'], 'paid_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'paid_page');
+        $paidPenalties = $this->inertiaPagination($paidPaginator);
+
+        $allPaidPenalties = $stats['paid_count'] > 0
+            ? (clone $paidQuery)->get()
+            : [];
+
+        // Tab 3: Waived Penalties Query (approved WITHOUT payment info)
+        $waivedPaginator = $stats['waived_count'] > 0
+            ? (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
+                $q->where(function ($sq) {
+                    $sq->whereNull('sender_number')->orWhere('sender_number', '');
+                })->where(function ($sq) {
+                    $sq->whereNull('transaction_id')->orWhere('transaction_id', '');
+                })->where(function ($sq) {
+                    $sq->whereNull('payment_method')->orWhere('payment_method', '');
+                });
+            })->orderByDesc('id')->paginate($perPage, ['*'], 'waived_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'waived_page');
+        $waivedPenalties = $this->inertiaPagination($waivedPaginator);
+
+        // Tab 4: Rejected Penalties Query
+        $rejectedPaginator = $stats['rejected_count'] > 0
+            ? (clone $baseQuery)->where('status', 'rejected')->orderByDesc('id')->paginate($perPage, ['*'], 'rejected_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'rejected_page');
+        $rejectedPenalties = $this->inertiaPagination($rejectedPaginator);
+
+        // Tab 5: Unpaid Penalties Query
+        $unpaidPaginator = $stats['unpaid_count'] > 0
+            ? (clone $baseQuery)->where('status', 'unpaid')->orderByDesc('id')->paginate($perPage, ['*'], 'unpaid_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'unpaid_page');
+        $unpaidPenalties = $this->inertiaPagination($unpaidPaginator);
+
+        // Tab 6: All Penalties Query
+        $allPaginator = $stats['total_count'] > 0
+            ? (function () use ($baseQuery, $request, $perPage) {
+                $q = clone $baseQuery;
+                if ($request->filled('status') && $request->status !== 'all') {
+                    $q->where('status', $request->status);
+                }
+
+                return $q->orderByDesc('id')->paginate($perPage, ['*'], 'all_page')->withQueryString();
+            })()
+            : $this->emptyPaginator($request, $perPage, 'all_page');
+        $allPenalties = $this->inertiaPagination($allPaginator);
+
+        // Branches list for filter dropdown
+        $branches = \App\Models\Branch::select('id', 'name')->orderBy('name')->get();
+
+        return Inertia::render('movement/penalty-admin', [
+            'pendingPenalties' => $pendingPenalties,
+            'paidPenalties' => $paidPenalties,
+            'allPaidPenalties' => $allPaidPenalties,
+            'waivedPenalties' => $waivedPenalties,
+            'rejectedPenalties' => $rejectedPenalties,
+            'unpaidPenalties' => $unpaidPenalties,
+            'allPenalties' => $allPenalties,
+            'stats' => $stats,
+            'paidStats' => $paidStats,
+            'waivedStats' => $waivedStats,
+            'branches' => $branches,
+            'tab' => $tab,
+            'filters' => [
+                'status' => $request->get('status', 'all'),
+                'search' => $request->get('search', ''),
+                'branch_id' => $request->get('branch_id', 'all'),
+                'start_date' => $request->get('start_date', ''),
+                'end_date' => $request->get('end_date', ''),
+                'tab' => $tab,
+                'per_page' => $perPage,
+            ],
+        ]);
+    }
+
+    /**
+     * Admin approves penalty (as Paid or Waived) and unlocks the user.
+     */
+    public function approvePenalty(Request $request, $id)
+    {
+        $this->authorizeAdmin($request);
+
+        $penalty = MovementPenalty::with('movement')->findOrFail($id);
+        $actionType = $request->input('action_type', 'paid');
+        $isWaive = ($actionType === 'waive');
+
+        DB::beginTransaction();
+        try {
+            if ($isWaive) {
+                $penalty->sender_number = null;
+                $penalty->transaction_id = null;
+                $penalty->payment_method = null;
+                $defaultRemark = 'Waived by Admin without payment and account unlocked.';
+            } else {
+                $penalty->payment_method = $request->input('payment_method', $penalty->payment_method ?: 'cash');
+                $penalty->sender_number = $request->input('sender_number', $penalty->sender_number ?: 'Cash Payment');
+                $penalty->transaction_id = $request->input('transaction_id', $penalty->transaction_id ?: ('MANUAL-'.strtoupper(uniqid())));
+                if (! $penalty->payment_submitted_at) {
+                    $penalty->payment_submitted_at = now();
+                }
+                $defaultRemark = 'Penalty payment verified and account unlocked.';
+            }
+
+            $penalty->status = 'approved';
+            $penalty->approved_by = Auth::id();
+            $penalty->approved_at = now();
+            $penalty->admin_remarks = $request->input('admin_remarks', $defaultRemark);
+            $penalty->save();
+
+            $movement = $penalty->movement;
+            if ($movement) {
+                $this->applyAttendanceOnPenaltyApproval(
+                    $movement->fresh(),
+                    $penalty->fresh(),
+                    $isWaive
+                );
+            }
+
+            DB::commit();
+
+            $message = $isWaive
+                ? 'Penalty waived without payment and account unlocked successfully.'
+                : 'Penalty marked as paid and account unlocked successfully.';
+
+            return redirect()->back()->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return redirect()->back()->with('error', 'Error approving penalty: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Admin bulk process penalties (Bulk Paid, Bulk Waive, Bulk Reject).
+     */
+    public function bulkAction(Request $request)
+    {
+        $this->authorizeAdmin($request);
+
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:movement_penalties,id',
+            'action' => 'required|string|in:paid,waive,reject',
+            'payment_method' => 'nullable|string|max:50',
+            'admin_remarks' => 'nullable|string|max:255',
+        ]);
+
+        $ids = $request->input('ids', []);
+        $action = $request->input('action');
+        $paymentMethod = $request->input('payment_method', 'cash');
+        $remarks = $request->input('admin_remarks');
+
+        $processedCount = 0;
+
+        DB::beginTransaction();
+        try {
+            $penalties = MovementPenalty::with('movement')
+                ->whereIn('id', $ids)
+                ->get();
+
+            foreach ($penalties as $penalty) {
+                if ($action === 'reject') {
+                    if ($penalty->status === 'pending_verification') {
+                        $penalty->update([
+                            'status' => 'rejected',
+                            'admin_remarks' => $remarks ?: 'Payment submission rejected by Admin.',
+                        ]);
+                        $processedCount++;
+                    }
+                    continue;
+                }
+
+                $isWaive = ($action === 'waive');
+
+                if ($isWaive) {
+                    $penalty->sender_number = null;
+                    $penalty->transaction_id = null;
+                    $penalty->payment_method = null;
+                    $defaultRemark = 'Waived by Admin in bulk without payment and account unlocked.';
+                } else {
+                    $penalty->payment_method = $paymentMethod ?: ($penalty->payment_method ?: 'cash');
+                    $penalty->sender_number = $penalty->sender_number ?: 'Cash Payment';
+                    $penalty->transaction_id = $penalty->transaction_id ?: ('BULK-'.strtoupper(uniqid()));
+                    if (! $penalty->payment_submitted_at) {
+                        $penalty->payment_submitted_at = now();
+                    }
+                    $defaultRemark = 'Bulk penalty payment verified and account unlocked.';
+                }
+
+                $penalty->status = 'approved';
+                $penalty->approved_by = Auth::id();
+                $penalty->approved_at = now();
+                $penalty->admin_remarks = $remarks ?: $defaultRemark;
+                $penalty->save();
+
+                $movement = $penalty->movement;
+                if ($movement) {
+                    $this->applyAttendanceOnPenaltyApproval(
+                        $movement->fresh(),
+                        $penalty->fresh(),
+                        $isWaive
+                    );
+                }
+
+                $processedCount++;
+            }
+
+            DB::commit();
+
+            $actionText = match ($action) {
+                'paid' => 'marked as paid',
+                'waive' => 'waived without payment',
+                'reject' => 'rejected',
+            };
+
+            return redirect()->back()->with('success', "{$processedCount} penalty records successfully {$actionText} and accounts unlocked.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return redirect()->back()->with('error', 'Error in bulk action: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Admin rejects penalty payment submission.
+     */
+    public function rejectPenalty(Request $request, $id)
+    {
+        $this->authorizeAdmin($request);
+
+        $penalty = MovementPenalty::findOrFail($id);
+
+        if ($penalty->status !== 'pending_verification') {
+            return redirect()->back()->with('error', 'Cannot reject a penalty that has no submitted transaction.');
+        }
+
+        $request->validate([
+            'admin_remarks' => 'required|string|max:255',
+        ]);
+
+        $penalty->update([
+            'status' => 'rejected',
+            'admin_remarks' => $request->admin_remarks,
+        ]);
+
+        return redirect()->back()->with('success', 'Payment submission rejected. The employee has been instructed to resubmit valid TrxID.');
+    }
+
+    /**
+     * Admin sync method to calculate and generate penalties for all unclosed past movements.
+     */
+    public function syncPenalties(Request $request, MovementPenaltySyncService $syncService)
+    {
+        $this->authorizeAdmin($request);
+
+        $count = $syncService->sync();
+
+        return redirect()->back()->with('success', "Overdue penalties synced successfully! {$count} overdue movement(s) processed.");
+    }
+
+    private function authorizeAdmin(Request $request): void
+    {
+        $user = Auth::user();
+        if (! $user->isSuperAdmin() && ! $user->hasPermission('movements.approve') && ! $user->hasPermission('movements.edit')) {
+            abort(403, 'Unauthorized access to movement penalties administration.');
+        }
+    }
+
+    /**
+     * Apply attendance after penalty is approved.
+     *
+     * Attendance time = when the employee paid (payment_submitted_at),
+     * NOT the movement return time and NOT the admin approval time.
+     *
+     * Example: yesterday's movement open → today 7:00 AM they pay (any return time in form)
+     * → pending: no payment-day attendance yet → approve → today's attendance at 7:00 AM.
+     */
+    private function applyAttendanceOnPenaltyApproval(
+        Movement $movement,
+        MovementPenalty $penalty,
+        bool $wasWaivedWithoutPayment
+    ): void {
+        if ($movement->movement_type !== 'official') {
+            return;
+        }
+
+        $movementStart = Carbon::parse($movement->from_datetime);
+
+        // Always keep/confirm movement start-day mark (from movement create) — never on weekend
+        $this->upsertOfficialMovementAttendance(
+            $movement,
+            $movementStart->toDateString(),
+            $movementStart->format('H:i:s'),
+            null,
+            'On official movement: '.$movement->purpose
+        );
+
+        // Waive without payment: no payment-time attendance day
+        if ($wasWaivedWithoutPayment) {
+            return;
+        }
+
+        $paidAt = $penalty->payment_submitted_at
+            ? Carbon::parse($penalty->payment_submitted_at)
+            : Carbon::parse($penalty->updated_at ?? now());
+
+        // Weekend payment day: no attendance mark
+        if (AttendanceSetting::isWeekendForEmployee($paidAt, (int) $movement->employee_id)) {
+            return;
+        }
+
+        $remark = 'Penalty payment attendance: '.$paidAt->format('Y-m-d H:i:s');
+
+        if ($paidAt->isSameDay($movementStart)) {
+            // Paid on movement day — use payment time as check-out on start day
+            $this->upsertOfficialMovementAttendance(
+                $movement,
+                $movementStart->toDateString(),
+                $movementStart->format('H:i:s'),
+                $paidAt->format('H:i:s'),
+                $remark
+            );
+
+            return;
+        }
+
+        // Paid on a later day — mark that payment day's attendance at payment time
+        $this->upsertOfficialMovementAttendance(
+            $movement,
+            $paidAt->toDateString(),
+            $paidAt->format('H:i:s'),
+            null,
+            $remark
+        );
+    }
+
+    private function upsertOfficialMovementAttendance(
+        Movement $movement,
+        string $dateStr,
+        string $checkInTime,
+        ?string $checkOutTime,
+        string $remark
+    ): void {
+        if (AttendanceSetting::isWeekendForEmployee($dateStr, (int) $movement->employee_id)) {
+            return;
+        }
+
+        $attendance = Attendance::where('employee_id', $movement->employee_id)
+            ->where('date', $dateStr)
+            ->first();
+
+        if (! $attendance) {
+            $attendance = new Attendance;
+            $attendance->employee_id = $movement->employee_id;
+            $attendance->date = $dateStr;
+            $attendance->status = 'on_duty';
+        } elseif ($attendance->status === 'absent') {
+            $attendance->status = 'on_duty';
+        }
+
+        if (! $attendance->check_in) {
+            $attendance->check_in = $checkInTime;
+        }
+
+        if ($checkOutTime) {
+            if (! $attendance->check_out || Carbon::parse($attendance->check_out)->format('H:i:s') < $checkOutTime) {
+                $attendance->check_out = $checkOutTime;
+            }
+        }
+
+        $attendance->movement_id = $movement->id;
+
+        if (! $attendance->remarks) {
+            $attendance->remarks = $remark;
+        } elseif (stripos($attendance->remarks, $remark) === false) {
+            // Avoid duplicating the same penalty-payment note
+            $isPaymentRemark = str_starts_with($remark, 'Penalty payment attendance');
+            $alreadyHasPaymentRemark = stripos($attendance->remarks, 'Penalty payment attendance') !== false;
+            if (! ($isPaymentRemark && $alreadyHasPaymentRemark)) {
+                $attendance->remarks .= ' | '.$remark;
+            }
+        }
+
+        $attendance->save();
+    }
+}

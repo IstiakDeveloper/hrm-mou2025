@@ -2,12 +2,21 @@
 
 namespace App\Models;
 
+<<<<<<< HEAD
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+=======
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+>>>>>>> feature/flutter-mobile-app
 
 class Branch extends Model
 {
     use HasFactory;
+<<<<<<< HEAD
 
     protected $fillable = [
         'name',
@@ -16,22 +25,120 @@ class Branch extends Model
         'branch_code',
         'head_employee_id',
         'is_head_office',
+=======
+    use SoftDeletes;
+
+    protected $fillable = [
+        'regional_office_id',
+        'name',
+        'address',
+        'contact_number',
+        'email',
+        'branch_code',
+        'head_employee_id',
+        'branch_head_designation_id',
+        'is_head_office',
+        'is_active',
+        'login_pin',
+        'branch_user_id',
+        'allow_multi_day_movement',
+        'geofence_latitude',
+        'geofence_longitude',
+        'geofence_radius_meters',
+        'geofence_max_accuracy_meters',
+        'geofence_enabled',
+    ];
+
+    protected $hidden = [
+        'login_pin',
+>>>>>>> feature/flutter-mobile-app
     ];
 
     protected $casts = [
         'is_head_office' => 'boolean',
+<<<<<<< HEAD
     ];
 
     public function headEmployee()
+=======
+        'allow_multi_day_movement' => 'boolean',
+        'is_active' => 'boolean',
+        'geofence_latitude' => 'float',
+        'geofence_longitude' => 'float',
+        'geofence_radius_meters' => 'integer',
+        'geofence_max_accuracy_meters' => 'integer',
+        'geofence_enabled' => 'boolean',
+    ];
+
+    public function regionalOffice(): BelongsTo
+    {
+        return $this->belongsTo(RegionalOffice::class);
+    }
+
+    public function headEmployee(): BelongsTo
+>>>>>>> feature/flutter-mobile-app
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 
+<<<<<<< HEAD
+=======
+    public function branchHeadDesignation(): BelongsTo
+    {
+        return $this->belongsTo(Designation::class, 'branch_head_designation_id');
+    }
+
+    public function resolveBranchHeadEmployee(): ?Employee
+    {
+        if (! $this->branch_head_designation_id) {
+            return $this->headEmployee;
+        }
+
+        return Employee::query()
+            ->where('status', 'active')
+            ->where('current_branch_id', $this->id)
+            ->where('designation_id', $this->branch_head_designation_id)
+            ->orderBy('id', 'desc')
+            ->first();
+    }
+
+    public function isEmployeeBranchHead(Employee $employee): bool
+    {
+        if ((int) $employee->current_branch_id !== (int) $this->id) {
+            return false;
+        }
+
+        if ($this->branch_head_designation_id) {
+            return (int) $employee->designation_id === (int) $this->branch_head_designation_id;
+        }
+
+        return $this->head_employee_id && (int) $employee->id === (int) $this->head_employee_id;
+    }
+
+>>>>>>> feature/flutter-mobile-app
     public function employees()
     {
         return $this->hasMany(Employee::class, 'current_branch_id');
     }
 
+<<<<<<< HEAD
+=======
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where($query->getModel()->getTable().'.is_active', true);
+    }
+
+    public function hasActiveEmployees(): bool
+    {
+        return $this->employees()->where('status', 'active')->exists();
+    }
+
+    public function activeEmployeesCount(): int
+    {
+        return (int) $this->employees()->where('status', 'active')->count();
+    }
+
+>>>>>>> feature/flutter-mobile-app
     public function departments()
     {
         return $this->hasMany(Department::class);
@@ -51,4 +158,36 @@ class Branch extends Model
     {
         return $this->hasMany(User::class);
     }
+<<<<<<< HEAD
+=======
+
+    public function projectAttendance()
+    {
+        return $this->belongsToMany(Project::class, 'project_attendance_branches');
+    }
+
+    public function employeeAttendance()
+    {
+        return $this->belongsToMany(Employee::class, 'employee_attendance_branches');
+    }
+
+    public function branchUser()
+    {
+        return $this->belongsTo(User::class, 'branch_user_id');
+    }
+
+    public function hasLoginPin(): bool
+    {
+        return filled($this->login_pin);
+    }
+
+    public function verifyLoginPin(string $pin): bool
+    {
+        if (! $this->login_pin) {
+            return false;
+        }
+
+        return \Illuminate\Support\Facades\Hash::check($pin, $this->login_pin);
+    }
+>>>>>>> feature/flutter-mobile-app
 }

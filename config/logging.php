@@ -5,6 +5,18 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
+<<<<<<< HEAD
+=======
+$logLevel = strtolower((string) env('LOG_LEVEL', 'error'));
+if ($logLevel === '') {
+    $logLevel = 'error';
+}
+// Production must not keep debug/info chatter; device polls would fill laravel.log.
+if (env('APP_ENV') === 'production' && in_array($logLevel, ['debug', 'info', 'notice'], true)) {
+    $logLevel = 'error';
+}
+
+>>>>>>> feature/flutter-mobile-app
 return [
 
     /*
@@ -54,21 +66,33 @@ return [
 
         'stack' => [
             'driver' => 'stack',
+<<<<<<< HEAD
             'channels' => explode(',', env('LOG_STACK', 'single')),
+=======
+            'channels' => explode(',', env('LOG_STACK', 'daily')),
+>>>>>>> feature/flutter-mobile-app
             'ignore_exceptions' => false,
         ],
 
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
+<<<<<<< HEAD
             'level' => env('LOG_LEVEL', 'debug'),
+=======
+            'level' => $logLevel,
+>>>>>>> feature/flutter-mobile-app
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
+<<<<<<< HEAD
             'level' => env('LOG_LEVEL', 'debug'),
+=======
+            'level' => $logLevel,
+>>>>>>> feature/flutter-mobile-app
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
@@ -84,7 +108,11 @@ return [
 
         'papertrail' => [
             'driver' => 'monolog',
+<<<<<<< HEAD
             'level' => env('LOG_LEVEL', 'debug'),
+=======
+            'level' => $logLevel,
+>>>>>>> feature/flutter-mobile-app
             'handler' => env('LOG_PAPERTRAIL_HANDLER', SyslogUdpHandler::class),
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
@@ -96,7 +124,11 @@ return [
 
         'stderr' => [
             'driver' => 'monolog',
+<<<<<<< HEAD
             'level' => env('LOG_LEVEL', 'debug'),
+=======
+            'level' => $logLevel,
+>>>>>>> feature/flutter-mobile-app
             'handler' => StreamHandler::class,
             'formatter' => env('LOG_STDERR_FORMATTER'),
             'with' => [
@@ -107,14 +139,22 @@ return [
 
         'syslog' => [
             'driver' => 'syslog',
+<<<<<<< HEAD
             'level' => env('LOG_LEVEL', 'debug'),
+=======
+            'level' => $logLevel,
+>>>>>>> feature/flutter-mobile-app
             'facility' => env('LOG_SYSLOG_FACILITY', LOG_USER),
             'replace_placeholders' => true,
         ],
 
         'errorlog' => [
             'driver' => 'errorlog',
+<<<<<<< HEAD
             'level' => env('LOG_LEVEL', 'debug'),
+=======
+            'level' => $logLevel,
+>>>>>>> feature/flutter-mobile-app
             'replace_placeholders' => true,
         ],
 

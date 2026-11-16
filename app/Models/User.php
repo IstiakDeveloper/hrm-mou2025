@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+<<<<<<< HEAD
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -12,12 +13,35 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name',
+=======
+use App\Services\OrganogramAccessService;
+use App\Services\WebPushService;
+use App\Support\SectionRegistry;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Traits\TracksActivity;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasApiTokens, HasFactory, Notifiable, TracksActivity;
+
+    protected $fillable = [
+        'name',
+        'username',
+>>>>>>> feature/flutter-mobile-app
         'email',
         'password',
         'role_id',
         'employee_id',
         'branch_id',
         'active_status',
+<<<<<<< HEAD
+=======
+        'account_type',
+        'signature',
+>>>>>>> feature/flutter-mobile-app
     ];
 
     protected $hidden = [
@@ -41,15 +65,424 @@ class User extends Authenticatable
         return $this->belongsTo(Employee::class);
     }
 
+<<<<<<< HEAD
+=======
+    public function hasSignature(): bool
+    {
+        return !empty($this->signature) || !empty($this->employee?->signature);
+    }
+
+    public function getSignaturePath(): ?string
+    {
+        return $this->signature ?: $this->employee?->signature;
+    }
+
+>>>>>>> feature/flutter-mobile-app
     public function branch()
     {
         return $this->belongsTo(Branch::class);
     }
 
+<<<<<<< HEAD
     public function hasPermission($permission)
     {
         return $this->role && in_array($permission, json_decode($this->role->permissions, true) ?? []);
     }
 
 
+=======
+    public function pushSubscriptions()
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
+    public function movementPenalties()
+    {
+        return $this->hasMany(MovementPenalty::class);
+    }
+
+    public function activeMovementPenalty()
+    {
+        return $this->hasOne(MovementPenalty::class)
+            ->whereIn('status', ['unpaid', 'pending_verification'])
+            ->latestOfMany();
+    }
+
+    public function setUsernameAttribute(?string $value): void
+    {
+        $this->attributes['username'] = $value !== null && $value !== ''
+            ? trim($value)
+            : null;
+    }
+
+    // In User.php model
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        $this->loadMissing(['role', 'roles']);
+
+        if ($this->role && $this->role->name === 'Super Admin') {
+            return true;
+        }
+
+        return $this->roles->contains(static fn ($r) => $r->name === 'Super Admin');
+    }
+
+    /**
+     * Role.permissions may be JSON string (legacy) or array (cast on Role model).
+     *
+     * @return list<string>
+     */
+    private static function coercePermissionList(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            return array_values(array_filter($raw, static fn ($p) => is_string($p) && $p !== ''));
+        }
+
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded)
+                ? array_values(array_filter($decoded, static fn ($p) => is_string($p) && $p !== ''))
+                : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Leave module historically used leaves.* in roles; routes use leave-applications.*.
+     * Leave types: leaves_type.* vs leave-types.*
+     *
+     * @return list<list<string>>
+     */
+    private static function permissionAliasGroups(): array
+    {
+        return [
+            ['leave-applications.view', 'leaves.view'],
+            ['leave-applications.create', 'leaves.create'],
+            ['leave-applications.edit', 'leaves.edit'],
+            ['leave-applications.delete', 'leaves.delete'],
+            ['leave-applications.approve', 'leaves.approve'],
+            ['leave-applications.cancel', 'leaves.create', 'leaves.edit'],
+            ['leave-types.view', 'leaves_type.view'],
+            ['leave-types.create', 'leaves_type.create'],
+            ['leave-types.edit', 'leaves_type.edit'],
+            ['leave-types.delete', 'leaves_type.delete'],
+            ['employee-loan.view', 'payroll.view'],
+            ['employee-loan.create', 'payroll.create'],
+            ['employee-loan.edit', 'payroll.edit'],
+            ['employee-loan.delete', 'payroll.delete'],
+            ['staff-fund.view', 'payroll.view'],
+            ['staff-fund.create', 'payroll.create'],
+            ['staff-fund.edit', 'payroll.edit'],
+            ['staff-fund.delete', 'payroll.delete'],
+            ['employees.view', 'employee-loan.view', 'staff-fund.view', 'payroll.view'],
+        ];
+    }
+
+    /** @var list<string>|null */
+    private ?array $resolvedPermissions = null;
+
+    /**
+     * @return list<string>
+     */
+    private function allPermissionsFromRoles(): array
+    {
+        if ($this->resolvedPermissions !== null) {
+            return $this->resolvedPermissions;
+        }
+
+        $set = [];
+        $this->loadMissing(['role', 'roles']);
+
+        $merge = function ($role) use (&$set) {
+            if (! $role) {
+                return;
+            }
+            foreach (self::coercePermissionList($role->permissions) as $p) {
+                $set[$p] = true;
+            }
+        };
+
+        if ($this->roles && $this->roles->isNotEmpty()) {
+            foreach ($this->roles as $role) {
+                $merge($role);
+            }
+        } elseif ($this->role) {
+            $merge($this->role);
+        }
+
+        $this->resolvedPermissions = array_keys($set);
+
+        return $this->resolvedPermissions;
+    }
+
+    /** @return list<string> */
+    public static function payrollModulePermissions(): array
+    {
+        return [
+            'payroll.view', 'payroll.create', 'payroll.edit', 'payroll.delete',
+            'employee-loan.view', 'employee-loan.create', 'employee-loan.edit', 'employee-loan.delete',
+            'staff-fund.view', 'staff-fund.create', 'staff-fund.edit', 'staff-fund.delete',
+        ];
+    }
+
+    private static function isPayrollModulePermission(string $permission): bool
+    {
+        return in_array($permission, self::payrollModulePermissions(), true);
+    }
+
+    /**
+     * Organogram line roles block payroll, loan, and staff fund until Super Admin turns this off.
+     * Super Admin is exempt. A role with employees.admin is not flagged.
+     */
+    public function payrollModuleIsBlocked(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return false;
+        }
+
+        $this->loadMissing(['role', 'roles']);
+        $roles = ($this->roles && $this->roles->isNotEmpty())
+            ? $this->roles
+            : collect([$this->role])->filter();
+
+        foreach ($roles as $role) {
+            if ($role && (bool) $role->block_payroll_module) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Role-granted permission only (no alias expansion). Used by organogram scoping to avoid recursion.
+     */
+    public function hasDirectPermission(string $permission): bool
+    {
+        if ($permission === '') {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return in_array($permission, $this->allPermissionsFromRoles(), true);
+    }
+
+    // Helper method to check permissions
+    public function hasPermission($permission)
+    {
+        if (! is_string($permission) || $permission === '') {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if (self::isPayrollModulePermission($permission) && $this->payrollModuleIsBlocked()) {
+            return false;
+        }
+
+        $granted = $this->allPermissionsFromRoles();
+
+        if (in_array($permission, $granted, true)) {
+            return true;
+        }
+
+        if (
+            str_starts_with($permission, 'resignation-applications.') ||
+            str_starts_with($permission, 'promotion-evaluations.') || 
+            str_starts_with($permission, 'confirmation-evaluations.') ||
+            str_starts_with($permission, 'probation-increment-evaluations.') ||
+            str_starts_with($permission, 'trainee-evaluations.')
+        ) {
+            $roleNames = OrganogramAccessService::mergedRoleNames($this);
+            if (
+                OrganogramAccessService::hasOrganogramLineRole($this) ||
+                OrganogramAccessService::isZonalManager($this) ||
+                OrganogramAccessService::isRegionalManager($this) ||
+                OrganogramAccessService::shouldApplyBranchOnlyEmployeeScope($this) ||
+                in_array('Director Finance and Accounts', $roleNames, true) ||
+                in_array('Director Finance and Account', $roleNames, true) ||
+                in_array('HR Manager', $roleNames, true) ||
+                in_array('HR Admin', $roleNames, true) ||
+                in_array('Assistant Director (HR)', $roleNames, true)
+            ) {
+                return true;
+            }
+
+            // Also check employee designation title for any manager/director
+            $this->loadMissing('employee.designation');
+            $desigName = mb_strtolower(trim((string) optional($this->employee?->designation)->name));
+            if ($desigName !== '') {
+                if (
+                    str_contains($desigName, 'manager') ||
+                    str_contains($desigName, 'ব্যবস্থাপক') ||
+                    str_contains($desigName, 'director') ||
+                    str_contains($desigName, 'পরিচালক')
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        foreach (self::permissionAliasGroups() as $group) {
+            if (! in_array($permission, $group, true)) {
+                continue;
+            }
+            foreach ($group as $alias) {
+                if (in_array($alias, $granted, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public function hasPermissionTo($permission): bool
+    {
+        return (bool) $this->hasPermission($permission);
+    }
+
+    public function isBranchAccount(): bool
+    {
+        return $this->account_type === 'branch';
+    }
+
+    public function isStaffAccount(): bool
+    {
+        return $this->account_type !== 'branch';
+    }
+
+    /** @var list<string> */
+    public const ACCOUNTANT_SECTION_IDS = [
+        'employee-loan',
+        'staff-fund',
+        'fixed-asset',
+        'inventory',
+    ];
+
+    public function isAccountant(): bool
+    {
+        $this->loadMissing(['role', 'roles']);
+
+        if ($this->role?->name === 'Accountant') {
+            return true;
+        }
+
+        return $this->roles->contains(static fn ($role) => $role->name === 'Accountant');
+    }
+
+    public function isAccountsDeskOnly(): bool
+    {
+        if ($this->isSuperAdmin() || $this->isAccountant()) {
+            return $this->isAccountant();
+        }
+
+        $hasAccountsModule = $this->hasPermission('employee-loan.view')
+            || $this->hasPermission('staff-fund.view')
+            || $this->hasPermission('fixed-assets.view')
+            || $this->hasPermission('inventory.view');
+
+        $hasHrModule = $this->hasPermission('employees.admin')
+            || $this->hasPermission('employees.create')
+            || $this->hasPermission('employees.edit')
+            || $this->hasPermission('transfers.view')
+            || $this->hasPermission('leave-applications.approve');
+
+        return $hasAccountsModule && ! $hasHrModule;
+    }
+
+    /** @var list<string> */
+    public const DEPARTMENT_HEAD_DENIED_SECTION_IDS = [
+        'employee-loan',
+        'staff-fund',
+        'payroll',
+    ];
+
+    /**
+     * @return list<string>
+     */
+    public function effectiveBlockedSections(): array
+    {
+        if (! SectionRegistry::supportsRoleSectionLocks()) {
+            return [];
+        }
+
+        $this->loadMissing(['role', 'roles']);
+
+        $blocked = [];
+
+        $merge = static function (?Role $role) use (&$blocked): void {
+            if (! $role) {
+                return;
+            }
+
+            foreach ($role->blockedSectionList() as $sectionId) {
+                $blocked[$sectionId] = true;
+            }
+        };
+
+        if ($this->roles && $this->roles->isNotEmpty()) {
+            foreach ($this->roles as $role) {
+                $merge($role);
+            }
+        } elseif ($this->role) {
+            $merge($this->role);
+        }
+
+        return array_values(array_intersect(SectionRegistry::ids(), array_keys($blocked)));
+    }
+
+    public function canAccessSection(string $sectionId): bool
+    {
+        if (! in_array($sectionId, SectionRegistry::ids(), true)) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        // Role Section Access (blocked_sections) is the source of truth when the column exists.
+        if (SectionRegistry::supportsRoleSectionLocks()) {
+            return ! in_array($sectionId, $this->effectiveBlockedSections(), true);
+        }
+
+        // Legacy fallbacks before the blocked_sections migration.
+        if ($this->isAccountant()) {
+            return in_array($sectionId, self::ACCOUNTANT_SECTION_IDS, true);
+        }
+
+        if ($this->isDepartmentHead()) {
+            return ! in_array($sectionId, self::DEPARTMENT_HEAD_DENIED_SECTION_IDS, true);
+        }
+
+        return true;
+    }
+
+    /** Head-office Department Head (department-scoped oversight, not branch). */
+    public function isDepartmentHead(): bool
+    {
+        return OrganogramAccessService::isHeadOfficeDepartmentHead($this);
+    }
+
+    /**
+     * Send a Web Push notification to all of this user's subscribed devices.
+     */
+    public function sendWebPush(string $title, string $body, ?string $url = null): void
+    {
+        app(WebPushService::class)->sendToUser($this, $title, $body, $url);
+    }
+>>>>>>> feature/flutter-mobile-app
 }

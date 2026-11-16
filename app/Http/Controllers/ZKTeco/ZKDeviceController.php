@@ -152,7 +152,11 @@ class ZKDeviceController extends Controller
             //     $zk->setUser(
             //         $employee->id,
             //         $employee->employee_id,
+<<<<<<< HEAD
             //         $employee->first_name . ' ' . $employee->last_name
+=======
+            //         $employee->name_en ?? $employee->full_name_en
+>>>>>>> feature/flutter-mobile-app
             //     );
             // }
 
@@ -215,6 +219,7 @@ class ZKDeviceController extends Controller
     private function processAttendanceLogs($logs, AttendanceDevice $device)
     {
         $processedCount = 0;
+<<<<<<< HEAD
         $settings = AttendanceSetting::where('branch_id', $device->branch_id)->first();
 
         if (!$settings) {
@@ -227,6 +232,9 @@ class ZKDeviceController extends Controller
                 'weekend_days' => json_encode([0, 6]), // Sunday and Saturday
             ]);
         }
+=======
+        $settings = AttendanceSetting::global();
+>>>>>>> feature/flutter-mobile-app
 
         // Group logs by employee and date
         $groupedLogs = [];
@@ -263,9 +271,14 @@ class ZKDeviceController extends Controller
         foreach ($groupedLogs as $employeeId => $dates) {
             foreach ($dates as $date => $record) {
                 // Skip weekend days if configured
+<<<<<<< HEAD
                 $dayOfWeek = Carbon::parse($date)->dayOfWeek;
                 $weekendDays = json_decode($settings->weekend_days);
                 if (in_array($dayOfWeek, $weekendDays)) {
+=======
+                $weekendDays = $settings->weekendDayNumbers();
+                if (AttendanceSetting::dateFallsOnWeekend($date, $weekendDays)) {
+>>>>>>> feature/flutter-mobile-app
                     continue;
                 }
 
@@ -279,10 +292,13 @@ class ZKDeviceController extends Controller
                     $existing->check_in = $record['check_in'] ? Carbon::parse($record['check_in'])->format('H:i:s') : null;
                     $existing->check_out = $record['check_out'] ? Carbon::parse($record['check_out'])->format('H:i:s') : null;
                     $existing->device_id = $device->id;
+<<<<<<< HEAD
 
                     // Determine status
                     $existing->status = $this->determineAttendanceStatus($record, $settings);
 
+=======
+>>>>>>> feature/flutter-mobile-app
                     $existing->save();
                 } else {
                     // Create new record
@@ -291,7 +307,10 @@ class ZKDeviceController extends Controller
                         'date' => $date,
                         'check_in' => $record['check_in'] ? Carbon::parse($record['check_in'])->format('H:i:s') : null,
                         'check_out' => $record['check_out'] ? Carbon::parse($record['check_out'])->format('H:i:s') : null,
+<<<<<<< HEAD
                         'status' => $this->determineAttendanceStatus($record, $settings),
+=======
+>>>>>>> feature/flutter-mobile-app
                         'device_id' => $device->id,
                     ]);
                 }
@@ -304,6 +323,7 @@ class ZKDeviceController extends Controller
     }
 
     /**
+<<<<<<< HEAD
      * Determine attendance status based on check-in/out times and settings.
      */
     private function determineAttendanceStatus($record, $settings)
@@ -339,6 +359,8 @@ class ZKDeviceController extends Controller
     }
 
     /**
+=======
+>>>>>>> feature/flutter-mobile-app
      * Simulate connection to device (for demo purposes).
      */
     private function simulateConnection(AttendanceDevice $device)

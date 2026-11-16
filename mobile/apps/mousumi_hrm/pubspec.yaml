@@ -1,0 +1,52 @@
+name: mousumi_hrm
+description: Mousumi ERP Flutter client for Android and iOS.
+publish_to: "none"
+version: 1.0.6+7
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # 13.x pulls geolocator_android 4.6 which needs Flutter 3.27+ gradle APIs
+  geolocator: 11.1.0
+  local_auth: ^2.3.0
+  permission_handler: ^11.3.1
+  flutter_secure_storage: ^9.2.2
+  design_system:
+    path: ../../packages/design_system
+  api_client:
+    path: ../../packages/api_client
+  auth_session:
+    path: ../../packages/auth_session
+  app_core:
+    path: ../../packages/app_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+dependency_overrides:
+  # Avoid flutter.compileSdkVersion usage that breaks on Flutter 3.24
+  geolocator_android: 4.5.5
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/branding/logo.png
+  fonts:
+    - family: Noto Sans Bengali
+      fonts:
+        - asset: fonts/NotoSansBengali-Regular.ttf
+          weight: 400
+        - asset: fonts/NotoSansBengali-Medium.ttf
+          weight: 500
+        - asset: fonts/NotoSansBengali-Medium.ttf
+          weight: 600
+        - asset: fonts/NotoSansBengali-Bold.ttf
+          weight: 700

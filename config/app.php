@@ -13,7 +13,11 @@ return [
     |
     */
 
+<<<<<<< HEAD
     'name' => env('APP_NAME', 'Laravel'),
+=======
+    'name' => env('APP_NAME', 'Mousumi'),
+>>>>>>> feature/flutter-mobile-app
 
     /*
     |--------------------------------------------------------------------------
@@ -28,6 +32,33 @@ return [
 
     'env' => env('APP_ENV', 'production'),
 
+<<<<<<< HEAD
+=======
+
+    /*
+    |--------------------------------------------------------------------------
+    | ZKTeco Integration Settings
+    |--------------------------------------------------------------------------
+    |
+    | These settings are used by the ZKTeco attendance integration
+    |
+    */
+    'zkteco_api_key' => env('ZKTECO_API_KEY'),
+    'zkteco_auto_register_devices' => env('ZKTECO_AUTO_REGISTER_DEVICES', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | HRM Sync API Key
+    |--------------------------------------------------------------------------
+    |
+    | Bearer token for organization/user sync endpoints consumed by MisLoan.
+    |
+    */
+    'sync_api_key' => env('HRM_SYNC_API_KEY'),
+
+
+
+>>>>>>> feature/flutter-mobile-app
     /*
     |--------------------------------------------------------------------------
     | Application Debug Mode
@@ -52,7 +83,11 @@ return [
     |
     */
 
+<<<<<<< HEAD
     'url' => env('APP_URL', 'http://localhost'),
+=======
+    'url' => env('APP_URL', 'http://hrm.mousumibd.org'),
+>>>>>>> feature/flutter-mobile-app
 
     /*
     |--------------------------------------------------------------------------
@@ -65,7 +100,11 @@ return [
     |
     */
 
+<<<<<<< HEAD
     'timezone' => 'UTC',
+=======
+    'timezone' => 'Asia/Dhaka',
+>>>>>>> feature/flutter-mobile-app
 
     /*
     |--------------------------------------------------------------------------

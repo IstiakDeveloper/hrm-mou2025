@@ -1,0 +1,709 @@
+[
+    {
+      "SL": 1,
+      "CATEGORY NAME": "Land",
+      "CATEGORY SHORT NAME": "LND",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 0,
+      "ORDER SERIAL": 1
+    },
+    {
+      "SL": 2,
+      "CATEGORY NAME": "Building",
+      "CATEGORY SHORT NAME": "BUI",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 5,
+      "ORDER SERIAL": 2
+    },
+    {
+      "SL": 3,
+      "CATEGORY NAME": "Vehicle/Microbus",
+      "CATEGORY SHORT NAME": "VEH",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 3
+    },
+    {
+      "SL": 4,
+      "CATEGORY NAME": "Furniture",
+      "CATEGORY SHORT NAME": "FUR",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 4
+    },
+    {
+      "SL": 5,
+      "CATEGORY NAME": "Electric Equipment(Fan)",
+      "CATEGORY SHORT NAME": "ELE",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 5
+    },
+    {
+      "SL": 6,
+      "CATEGORY NAME": "Office Equipment",
+      "CATEGORY SHORT NAME": "OFF",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 6
+    },
+    {
+      "SL": 7,
+      "CATEGORY NAME": "Computer & Other Equipment",
+      "CATEGORY SHORT NAME": "COM",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 30,
+      "ORDER SERIAL": 7
+    },
+    {
+      "SL": 8,
+      "CATEGORY NAME": "Generator/Soler Energy",
+      "CATEGORY SHORT NAME": "GEN",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 8
+    },
+    {
+      "SL": 9,
+      "CATEGORY NAME": "IPS",
+      "CATEGORY SHORT NAME": "IPS",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 9
+    },
+    {
+      "SL": 10,
+      "CATEGORY NAME": "Telephone & Mobile Set",
+      "CATEGORY SHORT NAME": "TEL",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 10
+    },
+    {
+      "SL": 11,
+      "CATEGORY NAME": "Liberary Books",
+      "CATEGORY SHORT NAME": "LIB",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 11
+    },
+    {
+      "SL": 12,
+      "CATEGORY NAME": "Photo Copy Machine",
+      "CATEGORY SHORT NAME": "PHO",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 12
+    },
+    {
+      "SL": 13,
+      "CATEGORY NAME": "Television",
+      "CATEGORY SHORT NAME": "TV",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 13
+    },
+    {
+      "SL": 14,
+      "CATEGORY NAME": "Multi Media Projector",
+      "CATEGORY SHORT NAME": "MUL",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 14
+    },
+    {
+      "SL": 15,
+      "CATEGORY NAME": "Refrigerator",
+      "CATEGORY SHORT NAME": "REF",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 15
+    },
+    {
+      "SL": 16,
+      "CATEGORY NAME": "Air-Cooler",
+      "CATEGORY SHORT NAME": "AIR",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 16
+    },
+    {
+      "SL": 17,
+      "CATEGORY NAME": "Water Pump",
+      "CATEGORY SHORT NAME": "WAT",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 17
+    },
+    {
+      "SL": 18,
+      "CATEGORY NAME": "Sound System & Cordless Microphone",
+      "CATEGORY SHORT NAME": "SOU",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 18
+    },
+    {
+      "SL": 19,
+      "CATEGORY NAME": "Gas Stove & Cylinder",
+      "CATEGORY SHORT NAME": "GAS",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 19
+    },
+    {
+      "SL": 20,
+      "CATEGORY NAME": "Interior Design & Setting",
+      "CATEGORY SHORT NAME": "INT",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 20
+    },
+    {
+      "SL": 21,
+      "CATEGORY NAME": "Money Counting Machine",
+      "CATEGORY SHORT NAME": "MCM",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 21
+    },
+    {
+      "SL": 22,
+      "CATEGORY NAME": "CCTV",
+      "CATEGORY SHORT NAME": "CCT",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 22
+    },
+    {
+      "SL": 23,
+      "CATEGORY NAME": "Attendance Machine",
+      "CATEGORY SHORT NAME": "ATM",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 23
+    },
+    {
+      "SL": 24,
+      "CATEGORY NAME": "Construction",
+      "CATEGORY SHORT NAME": "CON",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 0,
+      "ORDER SERIAL": 24
+    },
+    {
+      "SL": 25,
+      "CATEGORY NAME": "Smart Board Display",
+      "CATEGORY SHORT NAME": "SBD",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 25
+    },
+    {
+      "SL": 26,
+      "CATEGORY NAME": "Water Filter",
+      "CATEGORY SHORT NAME": "WFI",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 26
+    },
+    {
+      "SL": 27,
+      "CATEGORY NAME": "Money Check Machine",
+      "CATEGORY SHORT NAME": "MCH",
+      "DEPRECIATION METHOD": "002",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 27
+    }
+  ]
+
+  [
+    {
+      "SL": 1,
+      "CATEGORY NAME": "LND - Land",
+      "SUB CATEGORY NAME": "Land",
+      "SUB CATEGORY SHORT CODE": "LND",
+      "DEPRECIATION RATE": 0,
+      "ORDER SERIAL": 1
+    },
+    {
+      "SL": 2,
+      "CATEGORY NAME": "BUI - Building",
+      "SUB CATEGORY NAME": "Building",
+      "SUB CATEGORY SHORT CODE": "BUI",
+      "DEPRECIATION RATE": 5,
+      "ORDER SERIAL": 2
+    },
+    {
+      "SL": 3,
+      "CATEGORY NAME": "VEH - Vehicle/Microbus",
+      "SUB CATEGORY NAME": "Microbus",
+      "SUB CATEGORY SHORT CODE": "MIC",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 3
+    },
+    {
+      "SL": 4,
+      "CATEGORY NAME": "VEH - Vehicle/Microbus",
+      "SUB CATEGORY NAME": "Motorcycle",
+      "SUB CATEGORY SHORT CODE": "MOT",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 4
+    },
+    {
+      "SL": 5,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Almirah",
+      "SUB CATEGORY SHORT CODE": "ALM",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 5
+    },
+    {
+      "SL": 6,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Tool",
+      "SUB CATEGORY SHORT CODE": "TOO",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 6
+    },
+    {
+      "SL": 7,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Khat",
+      "SUB CATEGORY SHORT CODE": "KHA",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 7
+    },
+    {
+      "SL": 8,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Executive Chair",
+      "SUB CATEGORY SHORT CODE": "ECH",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 8
+    },
+    {
+      "SL": 9,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Chair (Plastic )",
+      "SUB CATEGORY SHORT CODE": "PCH",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 9
+    },
+    {
+      "SL": 10,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Sinduk",
+      "SUB CATEGORY SHORT CODE": "SIN",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 10
+    },
+    {
+      "SL": 11,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Armchair",
+      "SUB CATEGORY SHORT CODE": "ACH",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 11
+    },
+    {
+      "SL": 12,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Armless chair",
+      "SUB CATEGORY SHORT CODE": "ARC",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 12
+    },
+    {
+      "SL": 13,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Training chair",
+      "SUB CATEGORY SHORT CODE": "TRC",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 13
+    },
+    {
+      "SL": 14,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Dining table",
+      "SUB CATEGORY SHORT CODE": "DIT",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 14
+    },
+    {
+      "SL": 15,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Officer's table",
+      "SUB CATEGORY SHORT CODE": "OFT",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 15
+    },
+    {
+      "SL": 16,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Computer table",
+      "SUB CATEGORY SHORT CODE": "CTA",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 16
+    },
+    {
+      "SL": 17,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Secretary table",
+      "SUB CATEGORY SHORT CODE": "SET",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 17
+    },
+    {
+      "SL": 18,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Rack",
+      "SUB CATEGORY SHORT CODE": "RAC",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 18
+    },
+    {
+      "SL": 19,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Training stand",
+      "SUB CATEGORY SHORT CODE": "TRS",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 19
+    },
+    {
+      "SL": 20,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "File cabinet",
+      "SUB CATEGORY SHORT CODE": "FIC",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 20
+    },
+    {
+      "SL": 21,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Alana",
+      "SUB CATEGORY SHORT CODE": "ALA",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 21
+    },
+    {
+      "SL": 22,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "White board",
+      "SUB CATEGORY SHORT CODE": "WHB",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 22
+    },
+    {
+      "SL": 23,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Honor Board",
+      "SUB CATEGORY SHORT CODE": "HOB",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 23
+    },
+    {
+      "SL": 24,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Reading stand",
+      "SUB CATEGORY SHORT CODE": "RES",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 24
+    },
+    {
+      "SL": 25,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Subbox",
+      "SUB CATEGORY SHORT CODE": "SUB",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 25
+    },
+    {
+      "SL": 26,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Wall showcase",
+      "SUB CATEGORY SHORT CODE": "WAS",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 26
+    },
+    {
+      "SL": 27,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Tea table",
+      "SUB CATEGORY SHORT CODE": "TET",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 27
+    },
+    {
+      "SL": 28,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Bedside table",
+      "SUB CATEGORY SHORT CODE": "BET",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 28
+    },
+    {
+      "SL": 29,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Mitsafe",
+      "SUB CATEGORY SHORT CODE": "MIT",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 29
+    },
+    {
+      "SL": 30,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Sofa set",
+      "SUB CATEGORY SHORT CODE": "SOS",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 30
+    },
+    {
+      "SL": 31,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Dressing table",
+      "SUB CATEGORY SHORT CODE": "DRT",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 31
+    },
+    {
+      "SL": 32,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "TV stand",
+      "SUB CATEGORY SHORT CODE": "TVS",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 32
+    },
+    {
+      "SL": 33,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Iron door",
+      "SUB CATEGORY SHORT CODE": "IRD",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 33
+    },
+    {
+      "SL": 34,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Book Shelf",
+      "SUB CATEGORY SHORT CODE": "BOS",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 52
+    },
+    {
+      "SL": 35,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Rice Drum",
+      "SUB CATEGORY SHORT CODE": "RID",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 54
+    },
+    {
+      "SL": 36,
+      "CATEGORY NAME": "FUR - Furniture",
+      "SUB CATEGORY NAME": "Waiting Chair",
+      "SUB CATEGORY SHORT CODE": "WTC",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 60
+    },
+    {
+      "SL": 37,
+      "CATEGORY NAME": "ELE - Electric Equipment(Fan)",
+      "SUB CATEGORY NAME": "Fan",
+      "SUB CATEGORY SHORT CODE": "FAN",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 34
+    },
+    {
+      "SL": 38,
+      "CATEGORY NAME": "OFF - Office Equipment",
+      "SUB CATEGORY NAME": "Fire extinguisher",
+      "SUB CATEGORY SHORT CODE": "FIE",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 35
+    },
+    {
+      "SL": 39,
+      "CATEGORY NAME": "COM - Computer & Other Equipment",
+      "SUB CATEGORY NAME": "Computer",
+      "SUB CATEGORY SHORT CODE": "COM",
+      "DEPRECIATION RATE": 30,
+      "ORDER SERIAL": 36
+    },
+    {
+      "SL": 40,
+      "CATEGORY NAME": "COM - Computer & Other Equipment",
+      "SUB CATEGORY NAME": "Printer",
+      "SUB CATEGORY SHORT CODE": "PRI",
+      "DEPRECIATION RATE": 30,
+      "ORDER SERIAL": 37
+    },
+    {
+      "SL": 41,
+      "CATEGORY NAME": "GEM - Generator/Soler Energy",
+      "SUB CATEGORY NAME": "Generator",
+      "SUB CATEGORY SHORT CODE": "GEN",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 38
+    },
+    {
+      "SL": 42,
+      "CATEGORY NAME": "IPS - IPS",
+      "SUB CATEGORY NAME": "IPS",
+      "SUB CATEGORY SHORT CODE": "IPS",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 39
+    },
+    {
+      "SL": 43,
+      "CATEGORY NAME": "TEL - Telephone & Mobile Set",
+      "SUB CATEGORY NAME": "Telephone Set",
+      "SUB CATEGORY SHORT CODE": "TEL",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 40
+    },
+    {
+      "SL": 44,
+      "CATEGORY NAME": "LIB - Liberary Books",
+      "SUB CATEGORY NAME": "Book",
+      "SUB CATEGORY SHORT CODE": "BOO",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 41
+    },
+    {
+      "SL": 45,
+      "CATEGORY NAME": "PHO - Photo Copy Machine",
+      "SUB CATEGORY NAME": "Photo Copy Machine",
+      "SUB CATEGORY SHORT CODE": "PCM",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 42
+    },
+    {
+      "SL": 46,
+      "CATEGORY NAME": "TV - Television",
+      "SUB CATEGORY NAME": "Television",
+      "SUB CATEGORY SHORT CODE": "TEV",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 43
+    },
+    {
+      "SL": 47,
+      "CATEGORY NAME": "MUL - Multi Media Projector",
+      "SUB CATEGORY NAME": "Multi Media Projector",
+      "SUB CATEGORY SHORT CODE": "MMP",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 44
+    },
+    {
+      "SL": 48,
+      "CATEGORY NAME": "REF - Refrigerator",
+      "SUB CATEGORY NAME": "Refrigerator",
+      "SUB CATEGORY SHORT CODE": "REF",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 45
+    },
+    {
+      "SL": 49,
+      "CATEGORY NAME": "AIR - Air-Cooler",
+      "SUB CATEGORY NAME": "Air-Cooler",
+      "SUB CATEGORY SHORT CODE": "AIC",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 46
+    },
+    {
+      "SL": 50,
+      "CATEGORY NAME": "WAT - Water Pump",
+      "SUB CATEGORY NAME": "Water Pump",
+      "SUB CATEGORY SHORT CODE": "WAP",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 47
+    },
+    {
+      "SL": 51,
+      "CATEGORY NAME": "SOU - Sound System & Cordless Microphone",
+      "SUB CATEGORY NAME": "Sound System",
+      "SUB CATEGORY SHORT CODE": "SSY",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 48
+    },
+    {
+      "SL": 52,
+      "CATEGORY NAME": "SOU - Sound System & Cordless Microphone",
+      "SUB CATEGORY NAME": "Cordless Microphone",
+      "SUB CATEGORY SHORT CODE": "CMI",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 49
+    },
+    {
+      "SL": 53,
+      "CATEGORY NAME": "GAS - Gas Stove & Cylinder",
+      "SUB CATEGORY NAME": "Gas Stove & Cylinder",
+      "SUB CATEGORY SHORT CODE": "GSC",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 50
+    },
+    {
+      "SL": 54,
+      "CATEGORY NAME": "INT - Interior Design & Setting",
+      "SUB CATEGORY NAME": "Interior Design",
+      "SUB CATEGORY SHORT CODE": "IND",
+      "DEPRECIATION RATE": 10,
+      "ORDER SERIAL": 51
+    },
+    {
+      "SL": 55,
+      "CATEGORY NAME": "MCM - Money Counting Machine",
+      "SUB CATEGORY NAME": "Money Counting Machine",
+      "SUB CATEGORY SHORT CODE": "MCM",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 53
+    },
+    {
+      "SL": 56,
+      "CATEGORY NAME": "CCT - CCTV",
+      "SUB CATEGORY NAME": "CCTV",
+      "SUB CATEGORY SHORT CODE": "CCT",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 55
+    },
+    {
+      "SL": 57,
+      "CATEGORY NAME": "ATM - Attendance Machine",
+      "SUB CATEGORY NAME": "Attendance Machine",
+      "SUB CATEGORY SHORT CODE": "ATM",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 56
+    },
+    {
+      "SL": 58,
+      "CATEGORY NAME": "CON - Construction",
+      "SUB CATEGORY NAME": "Construction",
+      "SUB CATEGORY SHORT CODE": "CON",
+      "DEPRECIATION RATE": 0,
+      "ORDER SERIAL": 57
+    },
+    {
+      "SL": 59,
+      "CATEGORY NAME": "SBD - Smart Board Display",
+      "SUB CATEGORY NAME": "Smart Board Display",
+      "SUB CATEGORY SHORT CODE": "SBD",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 58
+    },
+    {
+      "SL": 60,
+      "CATEGORY NAME": "WFI - Water Filter",
+      "SUB CATEGORY NAME": "Water Filter",
+      "SUB CATEGORY SHORT CODE": "WFI",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 59
+    },
+    {
+      "SL": 61,
+      "CATEGORY NAME": "MCH - Money Check Machine",
+      "SUB CATEGORY NAME": "Money Check Machine",
+      "SUB CATEGORY SHORT CODE": "MCh",
+      "DEPRECIATION RATE": 20,
+      "ORDER SERIAL": 60
+    }
+  ]

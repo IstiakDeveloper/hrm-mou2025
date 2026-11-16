@@ -1,14 +1,22 @@
+<<<<<<< HEAD
 import { type BreadcrumbItem, type SharedData } from '@/types';
+=======
+import { type SharedData } from '@/types';
+>>>>>>> feature/flutter-mobile-app
 import { Transition } from '@headlessui/react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
+<<<<<<< HEAD
 import DeleteUser from '@/components/delete-user';
+=======
+>>>>>>> feature/flutter-mobile-app
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+<<<<<<< HEAD
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 
@@ -20,6 +28,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: boolean; status?: string }) {
+=======
+import AdminLayout from '@/layouts/AdminLayout';
+import SettingsLayout from '@/layouts/settings/layout';
+import SignatureCard from '@/components/profile/signature-card';
+
+export default function Profile({ 
+    mustVerifyEmail, 
+    status,
+    signature,
+    employee
+}: { 
+    mustVerifyEmail: boolean; 
+    status?: string;
+    signature?: string | null;
+    employee?: any;
+}) {
+>>>>>>> feature/flutter-mobile-app
     const { auth } = usePage<SharedData>().props;
 
     const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
@@ -30,13 +55,21 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
 
+<<<<<<< HEAD
         patch(route('profile.update'), {
+=======
+        patch(route('settings.profile.update'), {
+>>>>>>> feature/flutter-mobile-app
             preserveScroll: true,
         });
     };
 
     return (
+<<<<<<< HEAD
         <AppLayout breadcrumbs={breadcrumbs}>
+=======
+        <AdminLayout>
+>>>>>>> feature/flutter-mobile-app
             <Head title="Profile settings" />
 
             <SettingsLayout>
@@ -113,10 +146,24 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                             </Transition>
                         </div>
                     </form>
+<<<<<<< HEAD
                 </div>
 
                 <DeleteUser />
             </SettingsLayout>
         </AppLayout>
+=======
+
+                    <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                        <SignatureCard 
+                            currentSignature={signature ?? (auth.user?.signature as string | null) ?? (auth.employee?.signature as string | null)} 
+                            actionRoute="settings.profile.signature"
+                            destroyRoute="settings.profile.signature.destroy"
+                        />
+                    </div>
+                </div>
+            </SettingsLayout>
+        </AdminLayout>
+>>>>>>> feature/flutter-mobile-app
     );
 }

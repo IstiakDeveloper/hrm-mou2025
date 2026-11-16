@@ -20,6 +20,10 @@ import {
   Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+<<<<<<< HEAD
+=======
+import { PageSurface } from '@/components/page-surface';
+>>>>>>> feature/flutter-mobile-app
 
 interface ReportType {
   id: string;
@@ -71,7 +75,11 @@ export default function ReportIndex({ reportTypes }: ReportIndexProps) {
     <Layout>
       <Head title="Reports Dashboard" />
 
+<<<<<<< HEAD
       <div className="container mx-auto py-8">
+=======
+      <PageSurface>
+>>>>>>> feature/flutter-mobile-app
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Reports Dashboard</h1>
           <p className="mt-1 text-gray-500">
@@ -163,7 +171,11 @@ export default function ReportIndex({ reportTypes }: ReportIndexProps) {
             </Card>
           </div>
         </div>
+<<<<<<< HEAD
       </div>
+=======
+      </PageSurface>
+>>>>>>> feature/flutter-mobile-app
     </Layout>
   );
 }

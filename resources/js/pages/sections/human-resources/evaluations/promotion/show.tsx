@@ -1,0 +1,526 @@
+import { useState, useEffect } from 'react';
+import { PageSurface } from '@/components/page-surface';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Layout from '@/layouts/AdminLayout';
+import { Head, useForm, Link, router } from '@inertiajs/react';
+import { 
+    Award, 
+    ArrowLeft, 
+    Printer, 
+    CheckCircle2, 
+    Send, 
+    RotateCcw,
+    Edit3,
+    Trash2,
+    Clock,
+    AlertTriangle
+} from 'lucide-react';
+import { AppraisalApprovalDialog } from '@/components/appraisal/AppraisalApprovalDialog';
+import { MissingFieldsAlert, scrollToMissingFields } from '@/components/appraisal/MissingFieldsAlert';
+import { savedInitiatorGaps, type FieldGap } from '@/lib/appraisal-required';
+import { AppraisalDeleteDialog } from '@/components/appraisal/AppraisalDeleteDialog';
+import { AppraisalWorkflowResetDialog } from '@/components/appraisal/AppraisalWorkflowResetDialog';
+import { evalTranslations } from './evaluation-config';
+import OfficialFormDocument from './components/OfficialFormDocument';
+import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
+
+export default function PromotionEvaluationShow({ 
+    evaluation,
+    isSuperAdmin = false,
+    currentUserId = null,
+    userHasSignature = false,
+    canEdit = false,
+    canDelete = false,
+    canSubmit = false,
+    canApprove = false,
+    canSendBack = false,
+    hasUserSigned = false,
+    sentBackReason = null,
+    currentStageLabel = '',
+}: any) {
+    const [lang, setLang] = useState<'bn' | 'en'>(() => {
+        return (localStorage.getItem('eval_lang') as 'bn' | 'en') || 'bn';
+    });
+    const t = evalTranslations[lang];
+    const [approvalOpen, setApprovalOpen] = useState(false);
+    const [draftGaps, setDraftGaps] = useState<FieldGap[]>([]);
+
+    const candidateDesig = evaluation?.employee?.designation?.name || '';
+    const initiatorDesig = evaluation?.initiator?.employee?.designation?.name || '';
+    const isCandidateRm = /regional manager|আঞ্চলিক ব্যবস্থাপক/i.test(candidateDesig);
+    const isInitiatorZm = /zonal manager|জোনাল ম্যানেজার/i.test(initiatorDesig)
+        || evaluation?.initiator?.roles?.some((r: any) => r.name === 'Zonal Manager');
+
+    const getDraftHelpText = () => {
+        if (evaluation.status === 'submitted_to_rm') {
+            return lang === 'bn'
+                ? 'এই মূল্যায়নটি শাখা ব্যবস্থাপকের জন্য তৈরি করা হয়েছে। সবকিছু ঠিক থাকলে পরবর্তী পর্যালোচনার জন্য জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
+                : 'This evaluation is for Branch Manager. When ready, submit it to the Zonal Manager (ZM).';
+        }
+
+        if (isCandidateRm || isInitiatorZm) {
+            return lang === 'bn'
+                ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় রয়েছে। সবকিছু ঠিক থাকলে পরিচালক (মাইক্রোফাইন্যান্স) বরাবর দাখিল করুন।'
+                : 'This evaluation is currently in draft. When ready, submit it to Director (Microfinance).';
+        }
+
+        if (evaluation.form_type === 'bm_and_above') {
+            return lang === 'bn'
+                ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় রয়েছে। সবকিছু ঠিক থাকলে জোনাল ম্যানেজার (ZM) বরাবর দাখিল করুন।'
+                : 'This evaluation is currently in draft. When ready, submit it to the Zonal Manager.';
+        }
+
+        return lang === 'bn'
+            ? 'এই মূল্যায়নটি বর্তমানে খসড়া অবস্থায় সংরক্ষিত আছে। আপনি চাইলে এখনো এটি সম্পাদনা বা মুছে ফেলতে পারেন। সবকিছু ঠিক থাকলে আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করুন।'
+            : 'This evaluation is currently saved as a draft. You can still edit or delete it. When ready, submit it to the Regional Manager.';
+    };
+
+    useEffect(() => {
+        if (evaluation.status === 'draft' || canSubmit) {
+            const gaps = savedInitiatorGaps('promotion', evaluation, lang);
+            if (gaps.length > 0) {
+                setDraftGaps(gaps);
+            }
+        }
+    }, [evaluation, canSubmit, lang]);
+
+    const openApproval = () => {
+        if (!userHasSignature) {
+            alert(lang === 'bn'
+                ? 'অনুমোদন বা স্বাক্ষর করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক।'
+                : 'Digital signature is required before signing/approving.');
+            window.location.href = '/settings/profile';
+            return;
+        }
+        setApprovalOpen(true);
+    };
+
+    interface ShowFormData {
+        [key: string]: any;
+        comments: string;
+        recommendation_status: string;
+        consider_after_months: string | number;
+        hr_financial_irregularity: boolean;
+        hr_disciplinary_action: boolean;
+        hr_audit_objection: boolean;
+        hr_leave_without_pay: boolean;
+        hr_acr_satisfactory: boolean;
+        is_approved: boolean;
+    }
+
+    const { data, setData, post, processing, reset } = useForm<ShowFormData>({
+        comments: '',
+        recommendation_status: evaluation.recommendation_status || 'recommended',
+        consider_after_months: evaluation.consider_after_months || '',
+        hr_financial_irregularity: false,
+        hr_disciplinary_action: false,
+        hr_audit_objection: false,
+        hr_leave_without_pay: false,
+        hr_acr_satisfactory: false,
+        is_approved: false,
+    });
+    const [actionType, setActionType] = useState('');
+
+    const handleAction = (e: any, route: string, type: string) => {
+        e.preventDefault();
+        setActionType(type);
+
+        if (type === 'send_back') {
+            const comment = prompt(
+                lang === 'bn' 
+                    ? 'সংশোধনের জন্য স্রষ্টার কাছে ফেরত পাঠানোর কারণ লিখুন (আবশ্যক):' 
+                    : 'Please enter reason for sending back to creator (Required):'
+            );
+            if (!comment || !comment.trim()) {
+                alert(lang === 'bn' ? 'ফেরত পাঠানোর কারণ লেখা আবশ্যক!' : 'Return reason is required!');
+                return;
+            }
+            router.post(`/promotion-evaluations/${evaluation.id}/send-back`, { comments: comment.trim() }, {
+                preserveScroll: true,
+            });
+            return;
+        }
+        
+        const isSubmitStage = evaluation.status === 'draft' || canSubmit;
+        if (isSubmitStage && route === 'forward') {
+            const gaps = savedInitiatorGaps('promotion', evaluation, lang);
+            setDraftGaps(gaps);
+            if (gaps.length > 0) {
+                scrollToMissingFields();
+                alert(lang === 'bn' 
+                    ? `নিম্নোক্ত আবশ্যক তথ্য পূরণ না থাকায় দাখিল করা যাচ্ছে না:\n\n• ${gaps.map(g => g.message).join('\n• ')}\n\nঅনুগ্রহ করে 'সম্পাদনা' বাটনে ক্লিক করে তথ্যগুলো পূরণ করুন।` 
+                    : `Cannot submit because the following required fields are missing:\n\n• ${gaps.map(g => g.message).join('\n• ')}`);
+                return;
+            }
+        }
+
+        let defaultSubmitComment = 'মূল্যায়নটি আঞ্চলিক ব্যবস্থাপক (RM) বরাবর দাখিল করা হয়েছে।';
+        if (isCandidateRm || isInitiatorZm) {
+            defaultSubmitComment = evaluation.form_type === 'accountant'
+                ? 'মূল্যায়নটি পরিচালক (অর্থ ও হিসাব) বরাবর দাখিল করা হয়েছে।'
+                : 'মূল্যায়নটি পরিচালক (মাইক্রোফাইন্যান্স) বরাবর দাখিল করা হয়েছে।';
+        } else if (evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm') {
+            defaultSubmitComment = 'মূল্যায়নটি জোনাল ম্যানেজার (ZM) বরাবর দাখিল করা হয়েছে।';
+        }
+
+        const payload: any = {
+            ...data,
+            comments: data.comments || (isSubmitStage ? defaultSubmitComment : 'সুপারিশ ও স্বাক্ষরসহ অনুমোদনপূর্বক পরবর্তী স্তরে অগ্রবর্তী করা হলো।'),
+            is_approved: type === 'approve',
+        };
+
+        router.post(`/promotion-evaluations/${evaluation.id}/${route}`, payload, {
+            preserveScroll: true,
+            onSuccess: () => reset('comments'),
+            onError: (errors: Record<string, string | string[]>) => {
+                const serverGaps: FieldGap[] = Object.entries(errors).map(([key, msg]) => ({
+                    key,
+                    message: Array.isArray(msg) ? msg.join(', ') : String(msg),
+                }));
+                if (serverGaps.length > 0) {
+                    setDraftGaps(serverGaps);
+                    scrollToMissingFields();
+                    alert(lang === 'bn' 
+                        ? `দাখিল ব্যর্থ হয়েছে! নিম্নোক্ত তথ্য পূরণ করা প্রয়োজন:\n\n• ${serverGaps.map(g => g.message).join('\n• ')}`
+                        : `Submission failed! Please complete required fields:\n\n• ${serverGaps.map(g => g.message).join('\n• ')}`);
+                }
+            },
+        });
+    };
+
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const [resetOpen, setResetOpen] = useState(false);
+    const handleDelete = () => {
+        setDeleteUrl(`/promotion-evaluations/${evaluation.id}`);
+    };
+
+    const getStatusBadge = (evaluationStatus: string) => {
+        const configs: Record<string, { label: string; bg: string }> = {
+            draft: { label: t.statusDraft, bg: 'bg-slate-100 text-slate-700' },
+            submitted_to_rm: { label: t.statusSubmittedRm, bg: 'bg-amber-100 text-amber-800 border-amber-300' },
+            submitted_to_zm: { label: t.statusSubmittedZm, bg: 'bg-amber-100 text-amber-800 border-amber-300' },
+            submitted_to_director: { label: t.statusSubmittedDmf, bg: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+            submitted_to_director_fa: { label: t.statusSubmittedDfa, bg: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+            submitted_to_hr: { label: t.statusSubmittedHr, bg: 'bg-purple-100 text-purple-800 border-purple-300' },
+            submitted_to_ed: { label: t.statusSubmittedEd, bg: 'bg-blue-100 text-blue-800 border-blue-300' },
+            approved: { label: t.statusApproved, bg: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+            rejected: { label: t.statusRejected, bg: 'bg-rose-100 text-rose-800 border-rose-300' },
+            sent_back: { label: t.statusSentBack, bg: 'bg-orange-100 text-orange-800 border-orange-300' },
+        };
+
+        const config = configs[evaluationStatus] || { 
+            label: evaluationStatus.replace(/_/g, ' ').toUpperCase(), 
+            bg: 'bg-slate-100 text-slate-700' 
+        };
+
+        return (
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${config.bg}`}>
+                {config.label}
+            </span>
+        );
+    };
+
+    const employeeName = lang === 'bn' 
+        ? (evaluation.employee?.name_bn || evaluation.employee?.name_en) 
+        : (evaluation.employee?.name_en || evaluation.employee?.name_bn);
+
+    return (
+        <Layout>
+            <Head title={`${employeeName} - ${t.badgeTitle}`} />
+            
+            <PageSurface className="space-y-6">
+                {/* Header Banner */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <Link 
+                            href="/promotion-evaluations"
+                            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                        >
+                            <ArrowLeft className="h-5 w-5" />
+                        </Link>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <Award className="h-3.5 w-3.5" /> {t.badgeTitle}
+                                </span>
+                                {getStatusBadge(evaluation.status)}
+                            </div>
+                            <h1 className="text-xl md:text-2xl font-bold text-slate-900 mt-1">
+                                {employeeName}
+                            </h1>
+                            <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                                PIN: <span className="font-semibold text-slate-700">{evaluation.employee?.pin}</span> • {evaluation.employee?.designation?.name || 'No Designation'} • {evaluation.employee?.branch?.name}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
+                        {/* Language Switcher */}
+                        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setLang('bn');
+                                    localStorage.setItem('eval_lang', 'bn');
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    lang === 'bn' 
+                                        ? 'bg-emerald-600 text-white shadow-sm' 
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                বাংলা
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setLang('en');
+                                    localStorage.setItem('eval_lang', 'en');
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    lang === 'en' 
+                                        ? 'bg-emerald-600 text-white shadow-sm' 
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                English
+                            </button>
+                        </div>
+
+                        {/* Edit Button */}
+                        {canEdit && (
+                            <Link href={`/promotion-evaluations/${evaluation.id}/edit`} className="flex-1 sm:flex-initial">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="w-full h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center justify-center gap-1.5 shadow-sm"
+                                >
+                                    <Edit3 className="h-4 w-4 text-amber-700" />
+                                    <span>{lang === 'bn' ? 'সম্পাদনা' : 'Edit Draft'}</span>
+                                </Button>
+                            </Link>
+                        )}
+
+                        {isSuperAdmin && evaluation.status !== 'draft' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setResetOpen(true)}
+                                className="flex-1 sm:flex-initial h-10 px-3.5 text-xs font-semibold border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center justify-center gap-1.5 shadow-sm"
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                                <span>{lang === 'bn' ? 'রিসেট' : 'Reset'}</span>
+                            </Button>
+                        )}
+
+                        {/* Delete Button */}
+                        {canDelete && (
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={handleDelete}
+                                className="flex-1 sm:flex-initial h-10 px-3.5 text-xs font-semibold border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center justify-center gap-1.5 shadow-sm"
+                            >
+                                <Trash2 className="h-4 w-4 text-rose-600" />
+                                <span>{lang === 'bn' ? 'মুছুন' : 'Delete'}</span>
+                            </Button>
+                        )}
+
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => window.open(`/promotion-evaluations/${evaluation.id}/print`, '_blank')}
+                            className="flex-1 sm:flex-initial h-10 px-4 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center justify-center gap-2 shadow-sm shrink-0"
+                        >
+                            <Printer className="h-4 w-4 text-slate-500" />
+                            <span>{t.printOfficialForm}</span>
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Visual Workflow Timeline Stepper */}
+                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} canCorrectComment={isSuperAdmin} />
+
+                {/* Sent Back Alert (If Returned to Creator) */}
+                {evaluation.status === 'draft' && sentBackReason && (
+                    <div className="p-4 rounded-xl border border-rose-300 bg-rose-50/90 text-rose-900 shadow-sm flex items-start gap-3.5">
+                        <div className="p-2 rounded-lg bg-rose-200 text-rose-800 shrink-0 mt-0.5">
+                            <RotateCcw className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                            <h4 className="text-sm font-bold text-rose-950">
+                                {lang === 'bn' ? '⚠️ মূল্যায়নটি পর্যালোচকের দ্বারা সংশোধনের জন্য ফেরত পাঠানো হয়েছে' : '⚠️ Evaluation Sent Back for Revision'}
+                            </h4>
+                            <div className="text-xs text-rose-900 bg-white/80 p-2.5 rounded-lg border border-rose-200">
+                                <span className="font-bold">{lang === 'bn' ? 'ফেরত পাঠানোর কারণ / মন্তব্য: ' : 'Reason / Comment: '}</span>
+                                "{sentBackReason}"
+                            </div>
+                            <p className="text-[11px] text-rose-800">
+                                {lang === 'bn' 
+                                    ? 'অনুগ্রহ করে উপরের "সম্পাদনা করুন" বাটনে ক্লিক করে প্রয়োজনীয় সংশোধন সম্পন্ন করুন এবং পুনরায় আঞ্চলিক ব্যবস্থাপক বরাবর দাখিল করুন।' 
+                                    : 'Please click "Edit" above to make necessary revisions and re-submit to Regional Manager.'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Has User Already Signed Notification */}
+                {hasUserSigned && !canApprove && !canSubmit && !['approved', 'rejected'].includes(evaluation.status) && (
+                    <div className="p-4 rounded-xl border border-emerald-300 bg-emerald-50/80 text-emerald-900 shadow-xs flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-emerald-200/80 text-emerald-800 shrink-0">
+                                <CheckCircle2 className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-emerald-950">
+                                    {lang === 'bn' ? '✓ আপনার অনুমোদন ও স্বাক্ষর সম্পন্ন হয়েছে' : '✓ Your Approval Completed'}
+                                </p>
+                                <p className="text-[11px] text-emerald-800 mt-0.5">
+                                    {lang === 'bn'
+                                        ? `আপনি ইতিমধ্যে এই মূল্যায়নটিতে আপনার স্বাক্ষর প্রদান করেছেন। এটি বর্তমানে ${currentStageLabel || 'পরবর্তী স্তর'} এ পর্যালোচনায় রয়েছে।`
+                                        : `You have signed and forwarded this evaluation. It is currently under review at ${currentStageLabel || 'next stage'}.`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Draft Banner if status is draft or canSubmit */}
+                {!userHasSignature && (canSubmit || canApprove) && (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 shadow-xs">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-200/80 text-amber-800 shrink-0">
+                                <AlertTriangle className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold">
+                                    {lang === 'bn' ? 'ডিজিটাল স্বাক্ষর প্রয়োজন (Digital Signature Required)' : 'Digital Signature Required'}
+                                </p>
+                                <p className="text-[11px] text-amber-800 mt-0.5">
+                                    {lang === 'bn' 
+                                        ? 'মূল্যায়ন দাখিল বা অনুমোদন করার জন্য আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর থাকা আবশ্যক।' 
+                                        : 'A digital signature must be uploaded to your profile before submitting or approving an evaluation.'}
+                                </p>
+                            </div>
+                        </div>
+                        <Link href="/settings/profile" className="shrink-0">
+                            <Button size="sm" className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+                                {lang === 'bn' ? 'স্বাক্ষর আপলোড করুন' : 'Upload Signature'}
+                            </Button>
+                        </Link>
+                    </div>
+                )}
+
+                {(evaluation.status === 'draft' || canSubmit) && (
+                    <Card className="border-amber-300 bg-amber-50/50 shadow-sm overflow-hidden">
+                        <div className="px-5 pt-4">
+                            <MissingFieldsAlert gaps={draftGaps} lang={lang} editUrl={canEdit ? `/promotion-evaluations/${evaluation.id}/edit` : undefined} />
+                        </div>
+                        <CardHeader className="bg-amber-100/60 border-b border-amber-200 py-3 px-5">
+                            <CardTitle className="text-xs font-bold text-amber-900 flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-amber-700" />
+                                {evaluation.status === 'submitted_to_rm'
+                                    ? (lang === 'bn' ? 'আঞ্চলিক পর্যায় — জোনাল ম্যানেজার (ZM) সমীপে দাখিলের অপেক্ষায়' : 'Regional Level — Pending Submission to ZM')
+                                    : (lang === 'bn' ? 'খসড়া মূল্যায়ন (Draft) — দাখিলের অপেক্ষায়' : 'Draft Evaluation — Pending Submission')}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <p className="text-xs text-amber-900 font-medium">
+                                    {getDraftHelpText()}
+                                </p>
+                                <p className="text-[11px] text-amber-700 mt-1 italic">
+                                    {lang === 'bn' 
+                                        ? '⚠️ দাখিল করার পর স্রষ্টা (Creator) আর কোনো তথ্য সম্পাদনা বা মুছে ফেলতে পারবেন না।' 
+                                        : '⚠️ Once submitted, the creator will no longer be able to edit or delete.'}
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                {canEdit && (
+                                    <Link href={`/promotion-evaluations/${evaluation.id}/edit`}>
+                                        <Button variant="outline" className="text-xs h-9 bg-white border-amber-300 text-amber-900 hover:bg-amber-100">
+                                            <Edit3 className="h-3.5 w-3.5 mr-1 text-amber-700" />
+                                            {lang === 'bn' ? 'সম্পাদনা করুন' : 'Edit'}
+                                        </Button>
+                                    </Link>
+                                )}
+                                {canSubmit && (
+                                    <Button 
+                                        onClick={e => handleAction(e, 'forward', 'forward')}
+                                        disabled={processing}
+                                        className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+                                    >
+                                        <Send className="h-3.5 w-3.5 mr-1" />
+                                        {evaluation.form_type === 'bm_and_above' || evaluation.status === 'submitted_to_rm'
+                                            ? (lang === 'bn' ? 'জেডএম সমীপে দাখিল করুন' : 'Submit to ZM')
+                                            : (lang === 'bn' ? 'আরএম সমীপে দাখিল করুন' : 'Submit to RM')}
+                                    </Button>
+                                )}
+                                {canDelete && (
+                                    <Button 
+                                        variant="outline"
+                                        onClick={handleDelete}
+                                        className="text-xs h-9 border-rose-300 bg-white text-rose-700 hover:bg-rose-50"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5 mr-1 text-rose-600" />
+                                        {lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
+                                    </Button>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {canApprove && (
+                    <div className="flex justify-end">
+                        <Button
+                            type="button"
+                            onClick={openApproval}
+                            className="h-10 bg-emerald-600 px-5 text-sm font-bold text-white shadow-xs hover:bg-emerald-700"
+                        >
+                            <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                            {lang === 'bn' ? 'অনুমোদন' : 'Approve'}
+                        </Button>
+                    </div>
+                )}
+
+                <AppraisalApprovalDialog
+                    kind="promotion"
+                    lang={lang}
+                    evaluation={approvalOpen ? { ...evaluation, current_stage_label: evaluation.current_stage_label || currentStageLabel } : null}
+                    canSendBack={canSendBack}
+                    onClose={() => setApprovalOpen(false)}
+                />
+
+                {/* The Central Official Document Preview */}
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600 shadow-2xs md:hidden">
+                    <span className="font-semibold text-slate-700">📄 অফিশিয়াল ফরম প্রিভিউ (A4 Format)</span>
+                    <span className="text-[11px] font-medium text-emerald-700">স্ক্রল করুন 👉</span>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-2 sm:p-6">
+                    <div className="text-center mb-3 hidden sm:block">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            {lang === 'bn' ? 'অফিসিয়াল পদোন্নতি মূল্যায়ন ফরম প্রিভিউ' : 'Official Performance Appraisal Form Preview'}
+                        </span>
+                    </div>
+                    <div className="min-w-[760px] sm:min-w-0">
+                        <OfficialFormDocument evaluation={evaluation} lang={lang} />
+                    </div>
+                </div>
+            </PageSurface>
+            <AppraisalDeleteDialog
+                open={deleteUrl !== null}
+                onOpenChange={(open) => { if (!open) setDeleteUrl(null); }}
+                url={deleteUrl}
+                lang={lang}
+            />
+            <AppraisalWorkflowResetDialog
+                open={resetOpen}
+                onOpenChange={setResetOpen}
+                url={`/promotion-evaluations/${evaluation.id}/reset-workflow`}
+                lang={lang}
+            />
+        </Layout>
+    );
+}

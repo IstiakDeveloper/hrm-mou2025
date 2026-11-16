@@ -5,17 +5,29 @@ namespace App\Http\Controllers\Holiday;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Holiday;
+<<<<<<< HEAD
+=======
+use App\Services\HolidayAttendanceSyncService;
+>>>>>>> feature/flutter-mobile-app
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class HolidayController extends Controller
 {
+<<<<<<< HEAD
+=======
+    public function __construct(
+        private readonly HolidayAttendanceSyncService $holidayAttendanceSync,
+    ) {}
+
+>>>>>>> feature/flutter-mobile-app
     /**
      * Display a listing of holidays.
      */
     public function index(Request $request)
     {
+<<<<<<< HEAD
         $year = $request->year ?? Carbon::now()->year;
 
         $holidays = Holiday::when($request->year, function ($query, $year) {
@@ -33,6 +45,74 @@ class HolidayController extends Controller
             'filters' => $request->only(['year', 'search']),
             'year' => $year,
             'years' => range(Carbon::now()->year - 1, Carbon::now()->year + 2),
+=======
+        $year = (int) $request->input('year', Carbon::now()->year);
+        $perPage = (int) $request->input('per_page', 500);
+        $perPage = max(10, min(2000, $perPage));
+
+        // Show selected year's one-time holidays + all recurring holidays (recurring applies every year)
+        $holidays = Holiday::query()
+            ->where(function ($query) use ($year) {
+                $query->whereYear('date', $year)
+                    ->orWhere('is_recurring', true);
+            })
+            ->when($request->search, function ($query, $search) {
+                $query->where('title', 'like', "%{$search}%");
+            })
+            // Sort by month/day so recurring holidays appear in the right order for any year
+            ->orderByRaw('MONTH(`date`), DAY(`date`)')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        // For recurring holidays, present the date as the selected year (keeps UI consistent)
+        $holidays->getCollection()->transform(function ($holiday) use ($year) {
+            if ($holiday->is_recurring) {
+                $base = Carbon::parse($holiday->date);
+                $holiday->date = Carbon::create($year, $base->month, $base->day);
+            }
+
+            return $holiday;
+        });
+
+        // Build a useful year list from existing non-recurring holidays, plus a buffer around current year
+        $storedYears = Holiday::where('is_recurring', false)
+            ->selectRaw('YEAR(date) as y')
+            ->distinct()
+            ->pluck('y')
+            ->map(fn ($y) => (int) $y)
+            ->filter();
+
+        $currentYear = Carbon::now()->year;
+        $minYear = $storedYears->min() ?? ($currentYear - 1);
+        $maxYear = $storedYears->max() ?? ($currentYear + 2);
+        $minYear = min($minYear, $currentYear - 1);
+        $maxYear = max($maxYear, $currentYear + 2);
+        $years = range($minYear, $maxYear);
+
+        return Inertia::render('holiday/index', [
+            'holidays' => [
+                'data' => $holidays->items(),
+                'meta' => [
+                    'current_page' => $holidays->currentPage(),
+                    'from' => $holidays->firstItem(),
+                    'last_page' => $holidays->lastPage(),
+                    'links' => $holidays->linkCollection()->toArray(),
+                    'path' => $holidays->path(),
+                    'per_page' => $holidays->perPage(),
+                    'to' => $holidays->lastItem(),
+                    'total' => $holidays->total(),
+                ],
+                'links' => [
+                    'first' => $holidays->url(1),
+                    'last' => $holidays->url($holidays->lastPage()),
+                    'prev' => $holidays->previousPageUrl(),
+                    'next' => $holidays->nextPageUrl(),
+                ],
+            ],
+            'filters' => $request->only(['year', 'search']),
+            'year' => $year,
+            'years' => $years,
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -62,6 +142,7 @@ class HolidayController extends Controller
             'applicable_branches.*' => 'exists:branches,id',
         ]);
 
+<<<<<<< HEAD
         $data = $request->all();
 
         // Convert applicable branches to JSON
@@ -73,6 +154,25 @@ class HolidayController extends Controller
 
         return redirect()->route('holidays.index')
             ->with('success', 'Holiday created successfully.');
+=======
+        $data = $request->only([
+            'title',
+            'date',
+            'description',
+            'is_recurring',
+            'applicable_branches',
+        ]);
+
+        $holiday = Holiday::create($data);
+
+        $message = 'Holiday created successfully.';
+        if ($this->holidayAttendanceSync->lastSyncCount > 0) {
+            $message .= " {$this->holidayAttendanceSync->lastSyncCount} absent attendance record(s) updated to holiday.";
+        }
+
+        return redirect()->route('holidays.index')
+            ->with('success', $message);
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -103,6 +203,7 @@ class HolidayController extends Controller
             'applicable_branches.*' => 'exists:branches,id',
         ]);
 
+<<<<<<< HEAD
         $data = $request->all();
 
         // Convert applicable branches to JSON
@@ -114,6 +215,25 @@ class HolidayController extends Controller
 
         return redirect()->route('holidays.index')
             ->with('success', 'Holiday updated successfully.');
+=======
+        $data = $request->only([
+            'title',
+            'date',
+            'description',
+            'is_recurring',
+            'applicable_branches',
+        ]);
+
+        $holiday->update($data);
+
+        $message = 'Holiday updated successfully.';
+        if ($this->holidayAttendanceSync->lastSyncCount > 0) {
+            $message .= " {$this->holidayAttendanceSync->lastSyncCount} absent attendance record(s) updated to holiday.";
+        }
+
+        return redirect()->route('holidays.index')
+            ->with('success', $message);
+>>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -132,6 +252,7 @@ class HolidayController extends Controller
      */
     public function calendar(Request $request)
     {
+<<<<<<< HEAD
         $year = $request->year ?? Carbon::now()->year;
         $month = $request->month ?? Carbon::now()->month;
 
@@ -145,10 +266,39 @@ class HolidayController extends Controller
             })
             ->get();
 
+=======
+        // Validate and get year/month
+        $year = $request->input('year', Carbon::now()->year);
+        $month = $request->input('month', Carbon::now()->month);
+
+        // Ensure valid year and month
+        $year = max(2020, min(2030, (int) $year));
+        $month = max(1, min(12, (int) $month));
+
+        // Create date range for the month
+        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        // Get holidays for the month
+        $holidays = Holiday::where(function ($query) use ($startDate, $endDate, $month) {
+            // Get holidays that fall within this month
+            $query->whereBetween('date', [$startDate, $endDate])
+                // OR get recurring holidays for this month (any year)
+                ->orWhere(function ($subQuery) use ($month) {
+                    $subQuery->where('is_recurring', true)
+                        ->whereMonth('date', $month);
+                });
+        })
+            ->orderBy('date')
+            ->get();
+
+        // Build calendar data
+>>>>>>> feature/flutter-mobile-app
         $calendarData = [];
         $currentDate = $startDate->copy();
 
         while ($currentDate <= $endDate) {
+<<<<<<< HEAD
             $day = $currentDate->day;
             $dayHolidays = $holidays->filter(function ($holiday) use ($currentDate) {
                 if ($holiday->is_recurring) {
@@ -156,19 +306,48 @@ class HolidayController extends Controller
                         $holiday->date->day == $currentDate->day;
                 } else {
                     return $holiday->date->format('Y-m-d') == $currentDate->format('Y-m-d');
+=======
+            // Filter holidays for this specific date
+            $dayHolidays = $holidays->filter(function ($holiday) use ($currentDate) {
+                $holidayDate = Carbon::parse($holiday->date);
+
+                if ($holiday->is_recurring) {
+                    // For recurring holidays, match month and day
+                    return $holidayDate->month == $currentDate->month &&
+                        $holidayDate->day == $currentDate->day;
+                } else {
+                    // For one-time holidays, match exact date
+                    return $holidayDate->isSameDay($currentDate);
+>>>>>>> feature/flutter-mobile-app
                 }
             });
 
             $calendarData[] = [
                 'date' => $currentDate->format('Y-m-d'),
+<<<<<<< HEAD
                 'day' => $day,
                 'isWeekend' => in_array($currentDate->dayOfWeek, [0, 6]), // 0 = Sunday, 6 = Saturday
                 'holidays' => $dayHolidays->values()->all(),
+=======
+                'day' => $currentDate->day,
+                'isWeekend' => $currentDate->isWeekend(),
+                'holidays' => $dayHolidays->values()->map(function ($holiday) {
+                    return [
+                        'id' => $holiday->id,
+                        'title' => $holiday->title,
+                        'date' => $holiday->date->format('Y-m-d'),
+                        'description' => $holiday->description,
+                        'is_recurring' => $holiday->is_recurring,
+                        'applicable_branches' => $holiday->applicable_branches,
+                    ];
+                })->toArray(),
+>>>>>>> feature/flutter-mobile-app
             ];
 
             $currentDate->addDay();
         }
 
+<<<<<<< HEAD
         return Inertia::render('holiday/calendar', [
             'calendarData' => $calendarData,
             'year' => $year,
@@ -180,6 +359,28 @@ class HolidayController extends Controller
                     'label' => Carbon::create(null, $m)->format('F'),
                 ];
             }, range(1, 12)),
+=======
+        // Generate year range
+        $currentYear = Carbon::now()->year;
+        $years = range($currentYear - 2, $currentYear + 3);
+
+        // Generate months
+        $months = collect(range(1, 12))->map(function ($monthNum) {
+            return [
+                'value' => $monthNum,
+                'label' => Carbon::create(null, $monthNum)->format('F'),
+            ];
+        })->toArray();
+
+        return Inertia::render('holiday/calendar', [
+            'calendarData' => $calendarData,
+            'year' => (int) $year,
+            'month' => (int) $month,
+            'years' => $years,
+            'months' => $months,
+            'totalHolidays' => $holidays->count(),
+            'currentDate' => Carbon::now()->format('Y-m-d'),
+>>>>>>> feature/flutter-mobile-app
         ]);
     }
 }

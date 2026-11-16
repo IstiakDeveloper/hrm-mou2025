@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
+=======
+import React, { useMemo, useState } from 'react';
+import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
+import { useEmployeeLookup } from '@/lib/employee-lookup';
+>>>>>>> feature/flutter-mobile-app
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -10,6 +16,10 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+<<<<<<< HEAD
+=======
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+>>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -49,6 +59,10 @@ import { format, parseISO, differenceInDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+<<<<<<< HEAD
+=======
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+>>>>>>> feature/flutter-mobile-app
 
 interface Attendance {
     id: number;
@@ -60,11 +74,17 @@ interface Attendance {
     device_id: number | null;
     working_hours: number | null;
     overtime_hours: number | null;
+<<<<<<< HEAD
     employee: {
         id: number;
         employee_id: string;
         first_name: string;
         last_name: string;
+=======
+    employee: EmployeeNameFields & {
+        id: number;
+        employee_id: string;
+>>>>>>> feature/flutter-mobile-app
         department: {
             id: number;
             name: string;
@@ -90,11 +110,17 @@ interface Department {
     name: string;
 }
 
+<<<<<<< HEAD
 interface Employee {
     id: number;
     employee_id: string;
     first_name: string;
     last_name: string;
+=======
+interface Employee extends EmployeeNameFields {
+    id: number;
+    employee_id: string;
+>>>>>>> feature/flutter-mobile-app
 }
 
 interface ChartDataItem {
@@ -146,7 +172,12 @@ interface AttendanceReportProps {
     attendances: AttendanceResponse;
     branches: Branch[];
     departments: Department[];
+<<<<<<< HEAD
     employees: Employee[];
+=======
+    employees?: Employee[];
+    employeeLookupUrl?: string;
+>>>>>>> feature/flutter-mobile-app
     filters: {
         start_date?: string;
         end_date?: string;
@@ -176,7 +207,11 @@ export default function AttendanceReport({
     attendances,
     branches,
     departments,
+<<<<<<< HEAD
     employees,
+=======
+    employees = [],
+>>>>>>> feature/flutter-mobile-app
     filters,
     startDate,
     endDate,
@@ -196,6 +231,28 @@ export default function AttendanceReport({
     const [department, setDepartment] = useState(filters.department_id || 'all');
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
+<<<<<<< HEAD
+=======
+    const employeeLookup = useEmployeeLookup({
+        enabled: employees.length === 0,
+        branchId: branch !== 'all' ? branch : null,
+        limit: 50,
+    });
+    const employeeOptions = employees.length > 0 ? employees : employeeLookup.employees;
+    const employeeItems = useMemo(() => {
+        const items: ComboSelectItem<string>[] = [{ value: 'all', label: 'All Employees' }];
+        for (const employee of employeeOptions) {
+            const pin = employee.employee_id ?? employee.pin ?? '';
+            const name = employeeDisplayName(employee as Employee);
+            items.push({
+                value: String(employee.id),
+                label: pin ? `${pin} - ${name}` : name,
+                keywords: [pin, name, String(employee.id)].filter(Boolean).join(' '),
+            });
+        }
+        return items;
+    }, [employeeOptions]);
+>>>>>>> feature/flutter-mobile-app
 
     // View control state
     const [showDetails, setShowDetails] = useState(false);
@@ -639,9 +696,15 @@ export default function AttendanceReport({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Branches</SelectItem>
+<<<<<<< HEAD
                                         {branches.map((branch) => (
                                             <SelectItem key={branch.id} value={branch.id.toString()}>
                                                 {branch.name}
+=======
+                                        {sortPayrollBranches(branches).map((branch) => (
+                                            <SelectItem key={branch.id} value={branch.id.toString()}>
+                                                {formatBranchSelectLabel(branch)}
+>>>>>>> feature/flutter-mobile-app
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -686,6 +749,7 @@ export default function AttendanceReport({
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Employee</label>
+<<<<<<< HEAD
                                 <Select value={employeeId} onValueChange={setEmployeeId}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="All Employees" />
@@ -699,6 +763,15 @@ export default function AttendanceReport({
                                         ))}
                                     </SelectContent>
                                 </Select>
+=======
+                                <ComboSelect
+                                    value={employeeId}
+                                    onChange={(value) => setEmployeeId(value ?? 'all')}
+                                    items={employeeItems}
+                                    placeholder="All Employees"
+                                    className="h-10 bg-white text-sm"
+                                />
+>>>>>>> feature/flutter-mobile-app
                             </div>
 
                             <div className="flex items-end gap-2">
@@ -754,7 +827,11 @@ export default function AttendanceReport({
                                         <TableRow key={attendance.id}>
                                             <TableCell className="font-medium">
                                                 <div>
+<<<<<<< HEAD
                                                     {attendance.employee.first_name} {attendance.employee.last_name}
+=======
+                                                    {employeeDisplayName(attendance.employee)}
+>>>>>>> feature/flutter-mobile-app
                                                     <div className="text-xs text-gray-500">{attendance.employee.employee_id}</div>
                                                 </div>
                                             </TableCell>
@@ -924,7 +1001,11 @@ export default function AttendanceReport({
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
+<<<<<<< HEAD
                         <div className="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
+=======
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+>>>>>>> feature/flutter-mobile-app
                             <div className="rounded-lg border bg-card p-3">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <p className="text-sm font-medium">Attendance Rate</p>

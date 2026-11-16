@@ -1,0 +1,64 @@
+﻿family,slug,title,filters,source_config,primary_task,verification
+payroll,reports,Grade Step Calculation Report,payscale_id,config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-posted,Salary Sheet,"year,month,branch_id,department_id,designation_id,organogram_level,program_id,project_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-unposted,Salary Sheet (Un-posted),"year,month,branch_id,department_id,designation_id,organogram_level,program_id,project_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-employee-posted,Salary Sheet (Employee Wise Posted),"year,month,employee_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-employee-unposted,Salary Sheet (Employee Wise Unposted),"year,month,employee_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-date-range,Salary Sheet (Date Range),"date_from,date_to,branch_id,department_id,designation_id,organogram_level",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-branch-wise,Salary Sheet Report (Branch Wise),"year,month,branch_id,project_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-month-wise,Salary Sheet Report (Month Wise),"date_from,date_to,branch_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-sheet-designation-wise,Salary Sheet Report (Designation Wise),"year,month,branch_id,designation_id,organogram_level",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,bank-advice,Bank Advice Report,"year,month,branch_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,bank-advice-bonus,Bank Advice Bonus Report,"year,month,branch_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,addition-register,Salary Addition Register,"year,month,branch_id,salary_head_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,deduction-register,Salary Deduction Register,"year,month,branch_id,salary_head_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,advance-salary,Advance Salary Report,"year,month,branch_id,employee_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,bonus-register,Bonus Register,"year,month,branch_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,final-payment,Final Payment Report,,config/payroll_reports.php,P18,mapped; runtime verification pending
+payroll,salary-certificate,Salary Certificate,"year,month,employee_id",config/payroll_reports.php,P18,mapped; runtime verification pending
+pf,reports,PF Ledger,"employee_id,date_to",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-contribution-loan-deduction,PF Contribution and Loan Deduction,"year,month,branch_id,department_id,employee_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-deduction-register,PF Deduction Register,"year,month,branch_id,department_id,employee_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-interest-register,PF Interest Register,"year,branch_id,department_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-refund-register,PF Refund Register,"date_from,date_to,branch_id,department_id,employee_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-balance-register,PF Balance Register,"date_to,branch_id,department_id,employee_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-balance-register-details,PF Balance Register (Details),"date_to,branch_id,department_id,employee_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-balance-by-branch,PF Balance Register (Branch Wise),"date_to,branch_id",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-transaction-register,PF Transaction Register,"date_from,date_to,branch_id,department_id,employee_id,transaction_type",config/pf_reports.php,P18,mapped; runtime verification pending
+pf,pf-balance-by-department,PF Balance by Department,branch_id,config/pf_reports.php,P18,mapped; runtime verification pending
+gratuity,reports,Gratuity Ledger,"branch_id,department_id,employee_id,date_to",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,entitlements-register,Gratuity Entitlements Register,"as_of,branch_id,department_id,employee_id,eligibility,payment_status",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,eligible-employees,Eligible Employees List,"as_of,branch_id,department_id,payment_status",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,projected-liability,Projected Gratuity Liability,"as_of,branch_id",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,liability-by-department,Gratuity Liability by Department,"as_of,branch_id",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,unpaid-liability,Unpaid Gratuity Liability,"as_of,branch_id,department_id",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,settlement-history,Gratuity Settlement History,"date_from,date_to,branch_id,department_id,employee_id",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,payment-summary,Gratuity Payment Summary,"date_from,date_to,branch_id",config/gratuity_reports.php,P18,mapped; runtime verification pending
+gratuity,gratuity-rules,Gratuity Rules & Tiers,,config/gratuity_reports.php,P18,mapped; runtime verification pending
+employee_loan,reports,Loan Ledger,"employee_id,loan_type,loan_cycle",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-disburse-register,Loan Disburse Register (Employee Wise),"date_from,date_to,branch_id,department_id,employee_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-recoverable,Loan Recoverable,"as_of,branch_id,department_id,employee_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-collection-register,Loan Collection Register,"date_from,date_to,branch_id,department_id,employee_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-pf-balance,Loan and PF Balance,"as_of,branch_id,department_id,employee_id",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,full-paid-register,Full Paid Register,"date_from,date_to,branch_id,department_id,employee_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,rebate-register,Rebate Register,"date_from,date_to,branch_id,department_id,employee_id",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-statement-employee,Loan Statement (Employee Wise),"as_of,branch_id,department_id,employee_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-statement-component,Loan Statement (Component Wise),"as_of,branch_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+employee_loan,loan-statement-branch,Loan Statement (Branch Wise),"as_of,branch_id,loan_type",config/employee_loan_reports.php,P18,mapped; runtime verification pending
+fixed_asset,reports,Asset Tracking,"financial_year_id,branch_id,asset_category_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,purchase-list-branch-wise,Asset Purchase List (Branch Wise),"financial_year_id,branch_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,purchase-list-category-wise,Asset Purchase List (Category Wise),"financial_year_id,asset_category_id,branch_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,purchase-list-month-wise,Asset Purchase List (Month Wise),"financial_year_id,year,month,branch_id",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,disposal-asset-list,Disposal Asset List,"financial_year_id,branch_id,asset_category_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,category-wise-schedule,Category Wise Schedule,"financial_year_id,asset_category_id,branch_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,branch-wise-schedule,Branch Wise Schedule,"financial_year_id,branch_id,asset_category_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,category-wise-schedule-2,Category Wise Schedule-2,"financial_year_id,branch_id,asset_category_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,branch-wise-schedule-2,Branch Wise Schedule-2,"financial_year_id,asset_category_id,branch_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,category-wise-schedule-audit,Category Wise Schedule (Audit),"financial_year_id,asset_category_id,branch_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+fixed_asset,branch-wise-schedule-audit,Branch Wise Schedule (Audit),"financial_year_id,branch_id,asset_category_id,date_from,date_to",config/fixed_asset_reports.php,P18,mapped; runtime verification pending
+inventory,(see routes/controllers),inventory reports — config has no keyed reports list or uses controllers,,config/inventory_reports.php,P18,mapped; runtime verification pending
+hr_web,attendance,Attendance report,see ReportController / pages/report,routes/web/holiday-reports.php + ReportController,P18,mapped; runtime verification pending
+hr_web,leave,Leave report,see ReportController / pages/report,routes/web/holiday-reports.php + ReportController,P18,mapped; runtime verification pending
+hr_web,movement,Movement report,see ReportController / pages/report,routes/web/holiday-reports.php + ReportController,P18,mapped; runtime verification pending
+hr_web,transfer,Transfer report,see ReportController / pages/report,routes/web/holiday-reports.php + ReportController,P18,mapped; runtime verification pending
+hr_web,employee,Employee report,see ReportController / pages/report,routes/web/holiday-reports.php + ReportController,P18,mapped; runtime verification pending

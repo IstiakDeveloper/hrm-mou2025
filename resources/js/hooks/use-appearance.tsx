@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useCallback, useEffect, useState } from 'react';
 
 // We still define the type for potential future use, but we'll only use 'light'
@@ -43,4 +44,17 @@ export function useAppearance() {
 
   // We still return both values for API compatibility
   return { appearance, updateAppearance } as const;
+=======
+/**
+ * App-wide theme: light only. Tailwind dark variants use `.dark` on an ancestor;
+ * we never add it and strip it on load so old localStorage values cannot stick.
+ */
+const applyLightTheme = () => {
+    document.documentElement.classList.remove('dark');
+};
+
+export function initializeTheme() {
+    applyLightTheme();
+    localStorage.setItem('appearance', 'light');
+>>>>>>> feature/flutter-mobile-app
 }

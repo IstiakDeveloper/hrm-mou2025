@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
@@ -37,10 +38,61 @@ import {
   Building,
   Users,
   BarChart
+=======
+import React, { useState, useMemo } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { isBranchAccount } from '@/lib/permissions';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+import { Input } from '@/components/ui/input';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow
+} from '@/components/ui/table';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from '@/components/ui/select';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious
+} from '@/components/ui/pagination';
+import {
+    Calendar,
+    CalendarIcon,
+    Search,
+    ArrowLeft,
+    User,
+    Building,
+    Users,
+    BarChart,
+    Clock,
+    AlertCircle,
+    Info,
+    Download,
+    ChevronLeft,
+    ChevronRight
+>>>>>>> feature/flutter-mobile-app
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
+<<<<<<< HEAD
 
 interface Department {
   id: number;
@@ -558,4 +610,1197 @@ export default function AttendanceMonthly({
       </div>
     </Layout>
   );
+=======
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+
+interface Department {
+    id: number;
+    name: string;
+}
+
+interface Branch {
+    id: number;
+    name: string;
+}
+
+interface Designation {
+    id: number;
+    name: string;
+}
+
+interface Project {
+    id: number;
+    name: string;
+    code?: string;
+}
+
+interface Employee extends EmployeeNameFields {
+    id: number;
+    employee_id: string;
+    department: Department;
+    designation: Designation;
+    branch: Branch;
+    project?: Project;
+}
+
+interface Attendance {
+    id: number;
+    employee_id: number;
+    date: string;
+    check_in: string | null;
+    check_out: string | null;
+    status: string;
+    remarks: string | null;
+    auto_remarks: string | null;
+}
+
+interface PaginationLinks {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+interface PaginationMeta {
+    current_page: number;
+    from: number;
+    last_page: number;
+    links: PaginationLinks[];
+    path: string;
+    per_page: number;
+    to: number;
+    total: number;
+}
+
+interface EmployeesResponse {
+    data: Employee[];
+    links?: PaginationLinks[] | {
+        first: string;
+        last: string;
+        prev: string | null;
+        next: string | null;
+    };
+    meta?: PaginationMeta;
+    current_page?: number;
+    from?: number;
+    last_page?: number;
+    per_page?: number;
+    to?: number;
+    total?: number;
+}
+
+interface UserPermissions {
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+    isEmployee: boolean;
+    isBranchManager: boolean;
+    isDepartmentHead: boolean;
+}
+
+interface Holiday {
+    id: number;
+    title: string;
+    date: string;
+    description: string | null;
+    is_recurring: boolean;
+    applicable_branches: number[] | null;
+}
+
+interface AttendanceSetting {
+    branch_id: number;
+    weekend_days: number[];
+}
+
+interface AttendanceMonthlyProps {
+    employees: EmployeesResponse;
+    attendances: Record<string, Attendance[]>;
+    leaveDays: Record<string, Record<string, string>>;
+    dailyStatusByEmployee: Record<string, Record<string, { status: string; missing_checkout?: boolean; leave_type?: string | null }>>;
+    summaryByEmployee: Record<string, Record<string, number>>;
+    branches: Branch[];
+    departments: Department[];
+    projects?: Project[];
+    filters: {
+        month: string;
+        branch_id: string;
+        department_id: string;
+        project_id?: string;
+        search: string;
+        per_page?: number | string;
+    };
+    month: string;
+    daysInMonth: number;
+    userPermissions: UserPermissions;
+    holidays: Holiday[];
+    attendanceSettings: Record<number, AttendanceSetting>;
+}
+
+const MONTH_OPTIONS = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+];
+
+const currentCalendarYear = new Date().getFullYear();
+const BASE_YEAR_OPTIONS = Array.from({ length: 16 }, (_, i) => String(currentCalendarYear - 8 + i));
+
+export default function AttendanceMonthly({
+    employees,
+    attendances,
+    branches,
+    departments,
+    projects = [],
+    filters,
+    month,
+    daysInMonth,
+    userPermissions,
+    holidays = [],
+    attendanceSettings = {},
+    leaveDays = {},
+    dailyStatusByEmployee = {},
+    summaryByEmployee = {}
+}: AttendanceMonthlyProps) {
+    const { auth, officeOpenDates = [] } = usePage().props as any;
+    const branchAccount = isBranchAccount(auth);
+
+    const [search, setSearch] = useState(filters.search || '');
+    const [branchId, setBranchId] = useState(filters.branch_id && filters.branch_id !== 'all' ? filters.branch_id : null);
+    const [departmentId, setDepartmentId] = useState(filters.department_id && filters.department_id !== 'all' ? filters.department_id : null);
+    const [projectId, setProjectId] = useState(filters.project_id && filters.project_id !== 'all' ? filters.project_id : null);
+    const [perPage, setPerPage] = useState<string>(String(filters.per_page || '20'));
+    const [currentMonth, setCurrentMonth] = useState(month);
+
+    // Derived pagination info with fallbacks for raw Laravel paginator or API Resource responses
+    const totalCount = employees.total ?? employees.meta?.total ?? employees.data?.length ?? 0;
+    const fromCount = employees.from ?? employees.meta?.from ?? (totalCount > 0 ? 1 : 0);
+    const toCount = employees.to ?? employees.meta?.to ?? employees.data?.length ?? 0;
+    const lastPage = employees.last_page ?? employees.meta?.last_page ?? 1;
+    const paginationLinks: PaginationLinks[] = Array.isArray(employees.links) ? employees.links : (employees.meta?.links || []);
+
+    // Generate array of days for the month
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    // Parse current selected month
+    const parsedCurrentDate = useMemo(() => {
+        try {
+            return parse(currentMonth, 'yyyy-MM', new Date());
+        } catch {
+            return new Date();
+        }
+    }, [currentMonth]);
+
+    const [selectedYear, selectedMonthNumber] = useMemo(() => {
+        const parts = currentMonth.split('-');
+        if (parts.length === 2) {
+            return [parts[0], parts[1]];
+        }
+        return [format(parsedCurrentDate, 'yyyy'), format(parsedCurrentDate, 'MM')];
+    }, [currentMonth, parsedCurrentDate]);
+
+    const years = useMemo(() => {
+        const list = [...BASE_YEAR_OPTIONS];
+        if (selectedYear && !list.includes(selectedYear)) {
+            list.push(selectedYear);
+            list.sort();
+        }
+        return list;
+    }, [selectedYear]);
+
+    const monthLabel = useMemo(() => format(parsedCurrentDate, 'MMMM yyyy'), [parsedCurrentDate]);
+
+    // Get previous and next month
+    const prevMonth = useMemo(() => new Date(parsedCurrentDate.getFullYear(), parsedCurrentDate.getMonth() - 1), [parsedCurrentDate]);
+    const nextMonth = useMemo(() => new Date(parsedCurrentDate.getFullYear(), parsedCurrentDate.getMonth() + 1), [parsedCurrentDate]);
+
+    const prevMonthString = useMemo(() => format(prevMonth, 'yyyy-MM'), [prevMonth]);
+    const nextMonthString = useMemo(() => format(nextMonth, 'yyyy-MM'), [nextMonth]);
+
+    const handleMonthYearChange = (m: string, y: string) => {
+        const nextTarget = `${y}-${m}`;
+        handleMonthChange(nextTarget);
+    };
+
+    const toYmd = (day: number) => `${month}-${day.toString().padStart(2, '0')}`;
+
+    // Check if a date is a holiday
+    const isHoliday = (day: number): boolean => {
+        if (!holidays || !Array.isArray(holidays)) {
+            return false;
+        }
+
+        const dateToCheck = toYmd(day);
+        return holidays.some((holiday) => holiday.date === dateToCheck);
+    };
+
+    // Get holiday details for a specific day
+    const getHolidayDetails = (day: number) => {
+        const dateToCheck = toYmd(day);
+        return holidays.find((holiday) => holiday.date === dateToCheck);
+    };
+
+    // Check if a date is a weekend for an employee
+    const isWeekend = (day: number, branchId: number): boolean => {
+        const dateToFind = toYmd(day);
+        if (Array.isArray(officeOpenDates) && officeOpenDates.includes(dateToFind)) {
+            return false;
+        }
+
+        if (!attendanceSettings || !attendanceSettings[branchId] || !attendanceSettings[branchId].weekend_days) {
+            return false;
+        }
+
+        // Use date-fns parse to avoid UTC parsing shifts of "YYYY-MM-DD"
+        const date = parse(dateToFind, 'yyyy-MM-dd', new Date());
+        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+
+        return attendanceSettings[branchId].weekend_days.includes(dayOfWeek);
+    };
+
+    const handleSearch = () => {
+        router.get(route('attendance.monthly'), {
+            search,
+            month: currentMonth,
+            branch_id: branchId || '',
+            department_id: departmentId || '',
+            project_id: projectId || '',
+            per_page: perPage,
+        }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handleExportPDF = () => {
+        const url = route('exports.attendance.monthly', {
+            search,
+            month: currentMonth,
+            branch_id: branchId || '',
+            department_id: departmentId || '',
+            project_id: projectId || '',
+        });
+
+        window.open(url, '_blank');
+    };
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleSearch();
+        }
+    };
+
+    const resetFilters = () => {
+        const defaultBranchId = branchAccount && filters.branch_id ? filters.branch_id : null;
+        setSearch('');
+        setBranchId(defaultBranchId);
+        setDepartmentId(null);
+        setProjectId(null);
+        setPerPage('20');
+        router.get(
+            route('attendance.monthly'),
+            {
+                month: currentMonth,
+                per_page: '20',
+                ...(defaultBranchId ? { branch_id: defaultBranchId } : {}),
+            },
+            { preserveState: true, preserveScroll: true }
+        );
+    };
+
+    const handleMonthChange = (month: string) => {
+        setCurrentMonth(month);
+        router.get(route('attendance.monthly'), {
+            month,
+            search,
+            branch_id: branchId || '',
+            department_id: departmentId || '',
+            project_id: projectId || '',
+            per_page: perPage,
+        }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handlePerPageChange = (value: string) => {
+        setPerPage(value);
+        router.get(route('attendance.monthly'), {
+            month: currentMonth,
+            search,
+            branch_id: branchId || '',
+            department_id: departmentId || '',
+            project_id: projectId || '',
+            per_page: value,
+            page: 1,
+        }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handlePaginationClick = (url: string | null, e: React.MouseEvent) => {
+        e.preventDefault();
+        if (!url) return;
+        router.get(url, {}, { preserveState: true, preserveScroll: true });
+    };
+
+    const getStatusColor = (status: string): string => {
+        switch (status) {
+            case 'present':
+                return 'bg-green-100 text-green-800';
+            case 'absent':
+                return 'bg-red-100 text-red-800';
+            case 'late':
+                return 'bg-orange-100 text-orange-800';
+            case 'on_duty':
+                return 'bg-indigo-100 text-indigo-800';
+            case 'half_day':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'weekend':
+                return 'bg-teal-100 text-teal-800';
+            case 'holiday':
+                return 'bg-purple-100 text-purple-800';
+            case 'leave':
+                return 'bg-indigo-100 text-indigo-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    // Get short code for status badge
+    const getStatusCode = (status: string): string => {
+        switch (status) {
+            case 'present':
+                return 'P';
+            case 'absent':
+                return 'A';
+            case 'late':
+                return 'L';
+            case 'on_duty':
+                return 'OD';
+            case 'half_day':
+                return 'H';
+            case 'weekend':
+                return 'W';
+            case 'holiday':
+                return 'H';
+            case 'leave':
+                return 'L';
+            default:
+                return '-';
+        }
+    };
+
+
+    const getAttendanceStatus = (employeeId: number, day: number, branchId: number) => {
+        const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
+        if (typeof serverStatus === 'string') return serverStatus;
+        if (serverStatus === null) return null; // future blank days
+        // First check if it's a holiday - using actual day number
+        if (isHoliday(day)) {
+            return 'holiday';
+        }
+
+        // Then check if it's a weekend - using actual day number
+        if (isWeekend(day, branchId)) {
+            return 'weekend';
+        }
+
+        // Attendance record lookup (exact date match)
+        if (!attendances[employeeId]) {
+            return null;
+        }
+
+        const dateToFind = toYmd(day);
+
+        // Find the attendance record for this date
+        const attendance = attendances[employeeId]?.find(a => {
+            return a.date === dateToFind;
+        });
+
+        if (attendance) return attendance.status;
+        return null;
+    };
+
+    const hasMissingCheckout = (employeeId: number, day: number): boolean => {
+        const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
+        if (serverStatus && !['present', 'late', 'half_day'].includes(serverStatus)) return false;
+        const serverMissing = dailyStatusByEmployee?.[employeeId]?.[day]?.missing_checkout;
+        if (typeof serverMissing === 'boolean') return serverMissing;
+        if (!attendances[employeeId]) return false;
+        const dateToFind = toYmd(day);
+        const attendance = attendances[employeeId]?.find((a) => a.date === dateToFind);
+        return !!attendance && !!attendance.check_in && !attendance.check_out;
+    };
+
+    const getAttendanceRecord = (employeeId: number, day: number) => {
+        if (!attendances[employeeId]) return null;
+        const dateToFind = toYmd(day);
+        return attendances[employeeId]?.find((a) => a.date === dateToFind) || null;
+    };
+
+    // Fix the tooltip function to properly display times
+    const getAttendanceTooltip = (employeeId: number, day: number, branchId: number) => {
+        const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
+        if (serverStatus === null) return null; // future blank days
+        // Holiday tooltip - using actual day number
+        if (isHoliday(day)) {
+            const dateToFind = toYmd(day);
+            const holiday = holidays.find((h) => h.date === dateToFind);
+
+            return holiday ? `Holiday: ${holiday.title}${holiday.description ? '\n' + holiday.description : ''}` : 'Holiday';
+        }
+
+        // Weekend tooltip - using actual day number
+        if (isWeekend(day, branchId)) {
+            return 'Weekend';
+        }
+
+        const leaveType = dailyStatusByEmployee?.[employeeId]?.[day]?.leave_type;
+        if (leaveType) return `Leave: ${leaveType}`;
+
+        // Attendance tooltip lookup
+        if (!attendances[employeeId]) {
+            return null;
+        }
+
+        const dateToFind = toYmd(day);
+        const attendance = attendances[employeeId]?.find((a) => a.date === dateToFind);
+
+        if (!attendance) return null;
+
+        // Format tooltip with status and times
+        let tooltipContent = attendance.status.charAt(0).toUpperCase() +
+            attendance.status.slice(1).replace('_', ' ');
+
+        // Format check-in time safely
+        if (attendance.check_in) {
+            try {
+                const timeParts = attendance.check_in.split(':') || [];
+
+                if (timeParts.length >= 2) {
+                    const hour = parseInt(timeParts[0]);
+                    const minute = timeParts[1];
+                    const formattedHour = hour % 12 || 12;
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    tooltipContent += `\nIn: ${formattedHour}:${minute} ${ampm}`;
+                } else {
+                    tooltipContent += `\nIn: ${attendance.check_in}`;
+                }
+            } catch (e) {
+                tooltipContent += `\nIn: ${attendance.check_in}`;
+            }
+        }
+
+        // Format check-out time safely
+        if (attendance.check_out) {
+            try {
+                const timeParts = attendance.check_out.split(':') || [];
+
+                if (timeParts.length >= 2) {
+                    const hour = parseInt(timeParts[0]);
+                    const minute = timeParts[1];
+                    const formattedHour = hour % 12 || 12;
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    tooltipContent += `\nOut: ${formattedHour}:${minute} ${ampm}`;
+                } else {
+                    tooltipContent += `\nOut: ${attendance.check_out}`;
+                }
+            } catch (e) {
+                tooltipContent += `\nOut: ${attendance.check_out}`;
+            }
+        } else if (attendance.check_in) {
+            tooltipContent += `\nMissing check-out`;
+        }
+
+        // Add remarks if available
+        if (attendance.auto_remarks) {
+            tooltipContent += `\n${attendance.auto_remarks}`;
+        } else if (attendance.remarks) {
+            tooltipContent += `\n${attendance.remarks}`;
+        }
+
+        return tooltipContent;
+    };
+
+    // Calculate summary for each employee
+    const getEmployeeSummary = (employeeId: number, branchId: number) => {
+        const serverSummary = summaryByEmployee?.[employeeId];
+        if (serverSummary) {
+            return {
+                present: serverSummary.present ?? 0,
+                absent: serverSummary.absent ?? 0,
+                late: serverSummary.late ?? 0,
+                half_day: serverSummary.half_day ?? 0,
+                leave: serverSummary.leave ?? 0,
+                on_duty: serverSummary.on_duty ?? 0,
+                weekend: serverSummary.weekend ?? 0,
+                holiday: serverSummary.holiday ?? 0,
+            };
+        }
+        // Initialize summary object with all status types including weekend and holiday
+        const summary = {
+            present: 0,
+            absent: 0,
+            late: 0,
+            half_day: 0,
+            leave: 0,
+            on_duty: 0,
+            weekend: 0,
+            holiday: 0
+        };
+
+        // Build quick lookup by date for this employee
+        const attendanceByDate = new Map<string, Attendance>();
+        if (attendances[employeeId]) {
+            attendances[employeeId]?.forEach((a) => {
+                attendanceByDate.set(a.date, a);
+            });
+        }
+
+        // Count day-by-day with correct precedence:
+        // Holiday > Leave > Weekend > Attendance status > No record
+        for (let day = 1; day <= daysInMonth; day++) {
+            const ymd = toYmd(day);
+            // Check if it's a holiday
+            if (isHoliday(day)) {
+                summary.holiday++;
+                continue; // Skip to next day if it's a holiday
+            }
+
+            // Approved leave overrides attendance display/count
+            if (leaveDays?.[employeeId]?.[ymd]) {
+                summary.leave++;
+                continue;
+            }
+
+            // Check if it's a weekend
+            if (isWeekend(day, branchId)) {
+                summary.weekend++;
+                continue; // Skip to next day if it's a weekend
+            }
+
+            const a = attendanceByDate.get(ymd);
+            if (a && Object.prototype.hasOwnProperty.call(summary, a.status)) {
+                summary[a.status as keyof typeof summary]++;
+            }
+        }
+
+        return summary;
+    };
+
+    // Check if pagination data exists
+    const hasPagination = employees.meta && employees.links;
+
+    // Check if user can see branch/department filters
+    const canFilterByBranch = userPermissions.isBranchManager || !userPermissions.isEmployee;
+    const canFilterByDepartment = userPermissions.isDepartmentHead || userPermissions.isBranchManager || !userPermissions.isEmployee;
+
+    return (
+        <Layout>
+            <Head title="Monthly Attendance" />
+
+            <PageSurface className="max-w-none w-full space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
+                    {branchAccount ? (
+                        <Link
+                            href="/attendance/daily-branch-summary?section=attendance-movement"
+                            className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                            <span>Back to Daily Branch Summary</span>
+                        </Link>
+                    ) : (
+                        <Link
+                            href={route('attendance.index')}
+                            className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                            <span>Back to Daily Attendance</span>
+                        </Link>
+                    )}
+                </div>
+
+                <div className="mb-4 space-y-3">
+                    {/* Top row: Title and primary actions */}
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-lg font-bold text-gray-900 tracking-tight sm:text-2xl">Monthly Attendance</h1>
+                            <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+                                View attendance records for {monthLabel}
+                            </p>
+                        </div>
+
+                        {/* Month navigation & quick actions */}
+                        <div className="flex flex-col gap-2 w-full sm:w-auto">
+                            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                                {/* Month & Year Combo Selector */}
+                                <div className="inline-flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg shrink-0"
+                                        onClick={() => handleMonthChange(prevMonthString)}
+                                        title="Previous Month"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+
+                                    <Select
+                                        value={selectedMonthNumber}
+                                        onValueChange={(val) => handleMonthYearChange(val, selectedYear)}
+                                    >
+                                        <SelectTrigger className="h-8 w-[118px] sm:w-[128px] text-xs font-semibold bg-slate-50/80 border-slate-200 rounded-lg focus:ring-emerald-500">
+                                            <Calendar className="mr-1.5 h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                            <SelectValue placeholder="Month" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[300px]">
+                                            {MONTH_OPTIONS.map((m) => (
+                                                <SelectItem key={m.value} value={m.value} className="text-xs font-medium">
+                                                    {m.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Select
+                                        value={selectedYear}
+                                        onValueChange={(val) => handleMonthYearChange(selectedMonthNumber, val)}
+                                    >
+                                        <SelectTrigger className="h-8 w-[84px] sm:w-[92px] text-xs font-semibold bg-slate-50/80 border-slate-200 rounded-lg focus:ring-emerald-500">
+                                            <SelectValue placeholder="Year" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[300px]">
+                                            {years.map((y) => (
+                                                <SelectItem key={y} value={y} className="text-xs font-medium">
+                                                    {y}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg shrink-0"
+                                        onClick={() => handleMonthChange(nextMonthString)}
+                                        title="Next Month"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                {currentMonth !== format(new Date(), 'yyyy-MM') && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-semibold text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 rounded-xl px-2.5 shadow-2xs"
+                                        onClick={() => handleMonthChange(format(new Date(), 'yyyy-MM'))}
+                                    >
+                                        Current Month
+                                    </Button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5 w-full">
+                                {!branchAccount && (
+                                    <Link href={route('attendance.report')} className="flex-1 sm:flex-none">
+                                        <Button variant="outline" size="sm" className="h-8 text-xs w-full sm:w-auto bg-white border-slate-200 text-slate-700 shadow-xs font-medium">
+                                            <BarChart className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                                            Report
+                                        </Button>
+                                    </Link>
+                                )}
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs flex-1 sm:flex-none bg-white border-slate-200 text-slate-700 shadow-xs font-medium"
+                                    onClick={handleExportPDF}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                                    Export PDF
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Role-based Context Message */}
+                    {branchAccount && (
+                        <Alert className="bg-emerald-50 text-emerald-800 border-emerald-200 py-2">
+                            <Info className="h-4 w-4 text-emerald-600" />
+                            <AlertDescription className="text-xs">
+                                Showing monthly attendance report for your branch.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
+                        <Alert className="bg-blue-50 text-blue-800 border-blue-200 py-2">
+                            <Info className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-xs">
+                                You are viewing your own monthly attendance records.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {/* Compact Filter Bar */}
+                    <div className="flex flex-col gap-2 w-full bg-slate-50/50 p-2.5 rounded-xl border border-slate-200 sm:flex-row sm:items-center">
+                        <div className="relative flex-1 w-full">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                                placeholder="Search by name or ID..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                className="pl-8 h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg w-full"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:w-auto sm:items-center">
+                            {canFilterByBranch && branches.length > 1 && (
+                                <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Branch" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Branches</SelectItem>
+                                        {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            {canFilterByDepartment && departments.length > 1 && (
+                                <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Depts</SelectItem>
+                                        {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            {projects && projects.length > 0 && (
+                                <Select value={projectId || undefined} onValueChange={(value) => setProjectId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[150px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Project" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Projects</SelectItem>
+                                        {projects.map((p) => (
+                                            <SelectItem key={p.id} value={p.id.toString()}>
+                                                {p.name} {p.code ? `(${p.code})` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1 justify-end">
+                                <Button variant="ghost" onClick={resetFilters} size="sm" className="h-8 text-xs text-slate-500 hover:text-slate-700 px-2.5">
+                                    Reset
+                                </Button>
+                                <Button onClick={handleSearch} size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3">
+                                    Apply
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Legend */}
+                <div className="mb-3 flex flex-wrap gap-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-green-100 mr-1 flex items-center justify-center text-[10px] font-bold text-green-800">P</span>
+                        <span className="text-[11px] text-slate-700">Present</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-red-100 mr-1 flex items-center justify-center text-[10px] font-bold text-red-800">A</span>
+                        <span className="text-[11px] text-slate-700">Absent</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-orange-100 mr-1 flex items-center justify-center text-[10px] font-bold text-orange-800">L</span>
+                        <span className="text-[11px] text-slate-700">Late</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-yellow-100 mr-1 flex items-center justify-center text-[10px] font-bold text-yellow-800">H</span>
+                        <span className="text-[11px] text-slate-700">Half Day</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 mr-1 flex items-center justify-center text-[10px] font-bold text-blue-800">LV</span>
+                        <span className="text-[11px] text-slate-700">Leave</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 mr-1 flex items-center justify-center text-[10px] font-bold text-indigo-800">OD</span>
+                        <span className="text-[11px] text-slate-700">On Duty</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-purple-100 mr-1 flex items-center justify-center text-[10px] font-bold text-purple-800">H</span>
+                        <span className="text-[11px] text-slate-700">Holiday</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-5 h-5 rounded-full bg-teal-200 mr-1 flex items-center justify-center text-[10px] font-bold text-gray-800">W</span>
+                        <span className="text-[11px] text-slate-700">Weekend</span>
+                    </div>
+                </div>
+
+                {/* Conditional View: Calendar View for Single Employee Role vs Matrix Table for Admins/Managers */}
+                {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && employees.data && employees.data.length > 0 ? (
+                    (() => {
+                        const singleEmp = employees.data[0];
+                        const summary = getEmployeeSummary(singleEmp.id, singleEmp.branch?.id || 0);
+                        const firstDayOfWeek = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+
+                        return (
+                            <div className="space-y-4">
+                                {/* Monthly Summary Badges */}
+                                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-emerald-800 block">Present</span>
+                                        <span className="text-base font-bold text-emerald-900">{summary.present}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-red-200 bg-red-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-red-800 block">Absent</span>
+                                        <span className="text-base font-bold text-red-900">{summary.absent}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-amber-800 block">Late</span>
+                                        <span className="text-base font-bold text-amber-900">{summary.late}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-yellow-200 bg-yellow-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-yellow-800 block">Half Day</span>
+                                        <span className="text-base font-bold text-yellow-900">{summary.half_day}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-blue-800 block">Leave</span>
+                                        <span className="text-base font-bold text-blue-900">{summary.leave}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-indigo-800 block">On Duty</span>
+                                        <span className="text-base font-bold text-indigo-900">{summary.on_duty}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-teal-800 block">Weekend</span>
+                                        <span className="text-base font-bold text-teal-900">{summary.weekend}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-purple-800 block">Holiday</span>
+                                        <span className="text-base font-bold text-purple-900">{summary.holiday}</span>
+                                    </div>
+                                </div>
+
+                                {/* Calendar Card */}
+                                <Card className="rounded-xl border-slate-200 shadow-sm overflow-hidden bg-white">
+                                    <CardHeader className="p-3.5 border-b border-slate-100 bg-slate-50/60 flex flex-row items-center justify-between">
+                                        <div>
+                                            <CardTitle className="text-sm sm:text-base font-bold text-slate-900">
+                                                {monthLabel} Calendar
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-slate-500">
+                                                {employeeDisplayName(singleEmp)} ({singleEmp.employee_id}) • {singleEmp.department?.name}
+                                            </CardDescription>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-2 sm:p-4">
+                                        {/* Day Headers */}
+                                        <div className="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-600 mb-2">
+                                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                                <div key={d} className="py-1.5 bg-slate-100/80 rounded-md text-[11px] sm:text-xs">
+                                                    {d}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Calendar Grid */}
+                                        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                                            {/* Padding slots */}
+                                            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                                                <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[76px] rounded-lg border border-slate-100 bg-slate-50/20" />
+                                            ))}
+
+                                            {/* Day Cells */}
+                                            {days.map(day => {
+                                                const status = getAttendanceStatus(singleEmp.id, day, singleEmp.branch?.id || 0);
+                                                const tooltip = getAttendanceTooltip(singleEmp.id, day, singleEmp.branch?.id || 0);
+                                                const attRecord = getAttendanceRecord(singleEmp.id, day);
+                                                const missingOut = hasMissingCheckout(singleEmp.id, day);
+
+                                                return (
+                                                    <div
+                                                        key={day}
+                                                        title={tooltip || ''}
+                                                        className={cn(
+                                                            "min-h-[58px] sm:min-h-[78px] rounded-xl border p-1 sm:p-1.5 flex flex-col justify-between transition-all relative group hover:shadow-xs",
+                                                            status ? getStatusColor(status) : 'bg-white border-slate-200 text-slate-800',
+                                                            missingOut && 'ring-2 ring-red-400'
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-bold text-xs sm:text-sm">{day}</span>
+                                                            {status && (
+                                                                <span className={cn(
+                                                                    "w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[9px] sm:text-[11px] font-bold shadow-2xs",
+                                                                    getStatusColor(status)
+                                                                )}>
+                                                                    {getStatusCode(status)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {attRecord?.check_in && (
+                                                            <div className="text-[9px] sm:text-[11px] font-medium leading-tight mt-1">
+                                                                <span className="block text-emerald-800">In: {attRecord.check_in.substring(0, 5)}</span>
+                                                                {attRecord.check_out ? (
+                                                                    <span className="block text-slate-700">Out: {attRecord.check_out.substring(0, 5)}</span>
+                                                                ) : missingOut ? (
+                                                                    <span className="block text-red-700 font-bold">No Out</span>
+                                                                ) : null}
+                                                            </div>
+                                                        )}
+
+                                                        {!attRecord?.check_in && status && status !== 'present' && status !== 'absent' && (
+                                                            <div className="text-[9px] sm:text-[10px] font-semibold capitalize truncate mt-1">
+                                                                {status.replace('_', ' ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        );
+                    })()
+                ) : (
+                    /* Multi-Employee Matrix Table View for Admins & Managers */
+                    <Card className="rounded-xl border-slate-200 shadow-xs overflow-hidden bg-white">
+                        <CardContent className="p-0">
+                            <div className="relative w-full overflow-auto max-h-[calc(100vh-270px)] scrollbar-thin">
+                                <table className="w-full border-separate border-spacing-0 text-xs text-left">
+                                    <thead>
+                                        <tr className="bg-slate-100">
+                                            <th className="sticky top-0 left-0 z-40 bg-slate-100 border-b border-r border-slate-200 p-2 font-bold text-slate-700 min-w-[170px] lg:min-w-[190px]">
+                                                Employee
+                                            </th>
+                                            {days.map(day => (
+                                                <th key={day} className="sticky top-0 z-20 bg-slate-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-slate-700 min-w-[26px] sm:min-w-[30px] text-[11px]">
+                                                    {day}
+                                                </th>
+                                            ))}
+                                            <th className="sticky top-0 z-20 bg-green-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-green-900 min-w-[30px] sm:min-w-[34px] text-[10px]">P</th>
+                                            <th className="sticky top-0 z-20 bg-red-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-red-900 min-w-[30px] sm:min-w-[34px] text-[10px]">A</th>
+                                            <th className="sticky top-0 z-20 bg-amber-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-amber-900 min-w-[30px] sm:min-w-[34px] text-[10px]">L</th>
+                                            <th className="sticky top-0 z-20 bg-yellow-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-yellow-900 min-w-[30px] sm:min-w-[34px] text-[10px]">H</th>
+                                            <th className="sticky top-0 z-20 bg-blue-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-blue-900 min-w-[30px] sm:min-w-[34px] text-[10px]">LV</th>
+                                            <th className="sticky top-0 z-20 bg-indigo-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-indigo-900 min-w-[30px] sm:min-w-[34px] text-[10px]">OD</th>
+                                            <th className="sticky top-0 z-20 bg-teal-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-teal-900 min-w-[30px] sm:min-w-[34px] text-[10px]">W</th>
+                                            <th className="sticky top-0 z-20 bg-purple-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-purple-900 min-w-[30px] sm:min-w-[34px] text-[10px]">HO</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 bg-white">
+                                        {employees.data && employees.data.length > 0 ? (
+                                            employees.data.map((employee) => {
+                                                const summary = getEmployeeSummary(employee.id, employee.branch.id);
+                                                return (
+                                                    <tr key={employee.id} className="hover:bg-slate-50/90 transition-colors">
+                                                        <td className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 py-1.5 px-2 font-medium shadow-[1px_0_0_0_rgba(0,0,0,0.05)]">
+                                                            <div className="flex items-center space-x-1.5">
+                                                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                                                                    <User className="h-3 w-3" />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="font-semibold text-slate-900 text-[11px] truncate max-w-[140px]">
+                                                                        {employeeDisplayName(employee)}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-500 flex items-center flex-wrap gap-0.5">
+                                                                        <span>{employee.employee_id}</span>
+                                                                        {employee.department?.name && (
+                                                                            <>
+                                                                                <span>•</span>
+                                                                                <span className="truncate max-w-[80px]">{employee.department.name}</span>
+                                                                            </>
+                                                                        )}
+                                                                        {employee.project?.name && (
+                                                                            <Badge variant="outline" className="text-[8px] px-0.5 py-0 h-3.5 bg-blue-50 text-blue-700 border-blue-200">
+                                                                                {employee.project.name}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        {days.map(day => {
+                                                            const status = getAttendanceStatus(employee.id, day, employee.branch.id);
+                                                            const tooltip = getAttendanceTooltip(employee.id, day, employee.branch.id);
+                                                            return (
+                                                                <td key={day} className="p-0 border-b border-r border-slate-100 text-center">
+                                                                    {status ? (
+                                                                        <div
+                                                                            className={cn(
+                                                                                `w-6 h-6 sm:w-6.5 sm:h-6.5 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-[10px] sm:text-[11px] font-bold cursor-help relative shadow-2xs transition-transform hover:scale-110`,
+                                                                                hasMissingCheckout(employee.id, day) && 'ring-2 ring-red-400'
+                                                                            )}
+                                                                            title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                                                                        >
+                                                                            {getStatusCode(status)}
+                                                                            {hasMissingCheckout(employee.id, day) && (
+                                                                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 text-white text-[7px] flex items-center justify-center font-bold">
+                                                                                    !
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="w-6 h-6 sm:w-6.5 sm:h-6.5 rounded-full bg-slate-50 flex items-center justify-center mx-auto text-[9px] text-slate-300">
+                                                                            -
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td className="text-center bg-green-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-green-100 text-green-800 border-0 font-bold text-[10px] px-1 py-0">{summary.present}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-red-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-red-100 text-red-800 border-0 font-bold text-[10px] px-1 py-0">{summary.absent}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-amber-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-0 font-bold text-[10px] px-1 py-0">{summary.late}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-yellow-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-0 font-bold text-[10px] px-1 py-0">{summary.half_day}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-blue-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-0 font-bold text-[10px] px-1 py-0">{summary.leave}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-indigo-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-0 font-bold text-[10px] px-1 py-0">{summary.on_duty}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-teal-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-teal-100 text-teal-800 border-0 font-bold text-[10px] px-1 py-0">{summary.weekend}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-purple-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-purple-100 text-purple-800 border-0 font-bold text-[10px] px-1 py-0">{summary.holiday}</Badge>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={days.length + 9} className="h-32 text-center border-b border-slate-100">
+                                                    <div className="flex flex-col items-center justify-center text-slate-500 py-6">
+                                                        <AlertCircle className="h-8 w-8 mb-2 text-slate-400" />
+                                                        <h3 className="font-semibold text-slate-700">No employees found</h3>
+                                                        <p className="text-xs text-slate-500 mt-1">
+                                                            {(search || branchId || departmentId || projectId)
+                                                                ? "Try adjusting your filters to see more results."
+                                                                : "There are no employees to display for this month."}
+                                                        </p>
+                                                        {(search || branchId || departmentId || projectId) && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={resetFilters}
+                                                                className="mt-3 text-xs bg-white"
+                                                            >
+                                                                Reset Filters
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Pagination & Footer Controls */}
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 w-full sm:w-auto justify-between sm:justify-start">
+                        <span>
+                            Showing <strong className="text-slate-900 font-semibold">{fromCount}</strong> to <strong className="text-slate-900 font-semibold">{toCount}</strong> of <strong className="text-slate-900 font-semibold">{totalCount}</strong> employees
+                        </span>
+                        <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                            <span className="text-slate-500 font-medium">Per page:</span>
+                            <Select value={perPage} onValueChange={handlePerPageChange}>
+                                <SelectTrigger className="h-7 w-[75px] text-xs bg-white border-slate-200 rounded-md">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="20">20</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
+                                    <SelectItem value="all">All</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {lastPage > 1 && paginationLinks.length > 0 && (
+                        <Pagination className="justify-end w-auto m-0">
+                            <PaginationContent>
+                                {paginationLinks.map((link, i) => {
+                                    const isPrev = link.label.includes('Previous') || link.label.includes('&laquo;');
+                                    const isNext = link.label.includes('Next') || link.label.includes('&raquo;');
+
+                                    if (isPrev) {
+                                        return (
+                                            <PaginationItem key={i}>
+                                                <PaginationPrevious
+                                                    href={link.url || '#'}
+                                                    onClick={(e) => handlePaginationClick(link.url, e)}
+                                                    className={!link.url ? 'pointer-events-none opacity-50' : ''}
+                                                />
+                                            </PaginationItem>
+                                        );
+                                    }
+
+                                    if (isNext) {
+                                        return (
+                                            <PaginationItem key={i}>
+                                                <PaginationNext
+                                                    href={link.url || '#'}
+                                                    onClick={(e) => handlePaginationClick(link.url, e)}
+                                                    className={!link.url ? 'pointer-events-none opacity-50' : ''}
+                                                />
+                                            </PaginationItem>
+                                        );
+                                    }
+
+                                    if (link.label === '...') {
+                                        return (
+                                            <PaginationItem key={`ellipsis-${i}`}>
+                                                <PaginationEllipsis />
+                                            </PaginationItem>
+                                        );
+                                    }
+
+                                    return (
+                                        <PaginationItem key={i}>
+                                            <PaginationLink
+                                                href={link.url || '#'}
+                                                isActive={link.active}
+                                                onClick={(e) => handlePaginationClick(link.url, e)}
+                                            >
+                                                {link.label}
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    );
+                                })}
+                            </PaginationContent>
+                        </Pagination>
+                    )}
+                </div>
+            </PageSurface>
+        </Layout>
+    );
+>>>>>>> feature/flutter-mobile-app
 }

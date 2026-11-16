@@ -2,6 +2,10 @@
 
 namespace App\Models;
 
+<<<<<<< HEAD
+=======
+use Carbon\Carbon;
+>>>>>>> feature/flutter-mobile-app
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -9,24 +13,65 @@ class Attendance extends Model
 {
     use HasFactory;
 
+<<<<<<< HEAD
+=======
+    /** Statuses set by leave/movement/holiday/weekend workflows — not overwritten by punch rules. */
+    private const PROGRAMMATIC_STATUSES = ['leave', 'on_duty', 'holiday', 'weekend'];
+
+>>>>>>> feature/flutter-mobile-app
     protected $fillable = [
         'employee_id',
         'date',
         'check_in',
         'check_out',
         'status',
+<<<<<<< HEAD
         'device_id',
         'location_coordinates',
         'remarks',
+=======
+        'shift_type',
+        'checkout_next_day',
+        'device_id',
+        'location_coordinates',
+        'remarks',
+        'movement_id',
+
+>>>>>>> feature/flutter-mobile-app
     ];
 
     protected $casts = [
         'date' => 'date',
         'check_in' => 'datetime',
         'check_out' => 'datetime',
+<<<<<<< HEAD
         'location_coordinates' => 'array',
     ];
 
+=======
+        'checkout_next_day' => 'boolean',
+        'location_coordinates' => 'array',
+    ];
+
+    protected $appends = [
+        'work_hours',
+        'auto_remarks',
+    ];
+
+    /**
+     * Non-persisted / runtime auto-generated remarks.
+     */
+    protected ?string $autoRemarksRuntime = null;
+
+    protected static function booted(): void
+    {
+        static::saving(function (Attendance $attendance) {
+            unset($attendance->attributes['auto_remarks']);
+            $attendance->applyPunchStatus();
+        });
+    }
+
+>>>>>>> feature/flutter-mobile-app
     public function employee()
     {
         return $this->belongsTo(Employee::class);
@@ -37,12 +82,316 @@ class Attendance extends Model
         return $this->belongsTo(AttendanceDevice::class, 'device_id');
     }
 
+<<<<<<< HEAD
     public function getWorkHoursAttribute()
     {
         if ($this->check_in && $this->check_out) {
             return $this->check_in->diffInHours($this->check_out);
+=======
+    public function movement()
+    {
+        return $this->belongsTo(Movement::class);
+    }
+
+    public function getWorkHoursAttribute()
+    {
+        if ($this->check_in && $this->check_out) {
+            $in = Carbon::parse($this->check_in);
+            $out = Carbon::parse($this->check_out);
+            if ($this->checkout_next_day || $out->format('His') < $in->format('His')) {
+                $out = $out->copy()->addDay();
+            }
+
+            return $in->diffInHours($out);
+>>>>>>> feature/flutter-mobile-app
         }
 
         return 0;
     }
+<<<<<<< HEAD
+=======
+
+    public function getAutoRemarksAttribute(): ?string
+    {
+        return $this->autoRemarksRuntime ?? ($this->attributes['auto_remarks'] ?? null);
+    }
+
+    public function setAutoRemarksAttribute(?string $value): void
+    {
+        $this->autoRemarksRuntime = $value;
+        unset($this->attributes['auto_remarks']);
+    }
+
+    public function isOnDuty()
+    {
+        return $this->status === 'on_duty';
+    }
+
+    /**
+     * Determine the status of an employee for a specific calendar date.
+     *
+     * Priority (same as EmployeeDashboardController):
+     * 1) Real punch (check_in) -> present
+     * 2) Approved leave (no punch) -> leave
+     * 3) Official movement span -> on_duty
+     * 4) Trust DB row status on_duty/leave/holiday when no punch
+     * 5) Calendar holiday/weekend
+     * 6) Absent
+     */
+    public function determineDateStatus($employeeId, $date)
+    {
+        $carbonDate = Carbon::parse($date)->startOfDay();
+
+        $attendance = self::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('date', $carbonDate->format('Y-m-d'))
+            ->first();
+
+        $hasValidAttendance = (bool) ($attendance && ! empty($attendance->check_in));
+        $attendanceRowStatus = $attendance?->status;
+
+        $isOnLeave = LeaveApplication::query()
+            ->where('employee_id', $employeeId)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $carbonDate->format('Y-m-d'))
+            ->whereDate('end_date', '>=', $carbonDate->format('Y-m-d'))
+            ->exists();
+
+        // Single-day movements only cover the start calendar day (never next day while unclosed)
+        $hasMovement = Movement::query()
+            ->where('employee_id', $employeeId)
+            ->coveringAttendanceDate($carbonDate->format('Y-m-d'))
+            ->exists();
+
+        $employee = Employee::find($employeeId);
+        $branchId = $employee?->current_branch_id ?: null;
+
+        $weekendDays = AttendanceSetting::weekendDaysForBranch($branchId ? (int) $branchId : null);
+
+        $isHoliday = Holiday::query()
+            ->whereDate('date', $carbonDate->format('Y-m-d'))
+            ->when(
+                $branchId,
+                fn ($q) => $q->forBranch((string) $branchId),
+                fn ($q) => $q->where(function ($x) {
+                    $x->orWhereNull('applicable_branches')
+                        ->orWhereJsonLength('applicable_branches', 0);
+                })
+            )
+            ->exists();
+
+        $guardStatus = GuardShiftSetting::punchedShiftStatus(
+            $attendance?->shift_type,
+            $hasValidAttendance,
+            is_string($attendanceRowStatus) ? $attendanceRowStatus : null
+        );
+        if ($guardStatus !== null) {
+            return $guardStatus;
+        }
+
+        // Weekend is total: no movement/attendance marks on configured weekend days.
+        // A date marked office-open is a working day.
+        if (AttendanceSetting::dateFallsOnWeekend($carbonDate, $weekendDays)) {
+            return 'weekend';
+        }
+
+        if ($hasValidAttendance) {
+            return $attendanceRowStatus ?: 'present';
+        }
+        if ($isOnLeave) {
+            return 'leave';
+        }
+        if ($hasMovement) {
+            return 'on_duty';
+        }
+        if ($attendanceRowStatus === 'on_duty') {
+            return 'on_duty';
+        }
+        if ($attendanceRowStatus === 'leave') {
+            return 'leave';
+        }
+        if ($attendanceRowStatus === 'holiday') {
+            return 'holiday';
+        }
+        if ($isHoliday) {
+            return 'holiday';
+        }
+
+        return 'absent';
+    }
+
+    /**
+     * Apply punch-based status using company-wide attendance settings.
+     */
+    public function applyPunchStatus(?AttendanceSetting $settings = null): void
+    {
+        $keepGuardWeekend = in_array($this->shift_type, ['day', 'night'], true)
+            && GuardShiftSetting::current()->is_enabled
+            && GuardShiftSetting::current()->work_on_weekend;
+
+        if (! $keepGuardWeekend && $this->date && AttendanceSetting::isWeekendForEmployee($this->date, $this->employee_id ? (int) $this->employee_id : null)) {
+            $this->status = 'weekend';
+
+            return;
+        }
+
+        if ($this->shouldSkipPunchStatus()) {
+            return;
+        }
+
+        $this->status = $this->computeStatusFromPunch($settings);
+    }
+
+    /**
+     * Calculate status from check-in/check-out using global office rules.
+     *
+     * Rules (9:00 AM – 5:00 PM, 15 min grace):
+     * - No punch → absent
+     * - Check-in after grace → late
+     * - Check-out before office end → half_day (early leave)
+     * - Late + early leave → keep late
+     */
+    public function computeStatusFromPunch(?AttendanceSetting $settings = null): string
+    {
+        if (in_array($this->shift_type, ['day', 'night'], true)) {
+            return $this->computeGuardShiftStatus();
+        }
+
+        $settings ??= AttendanceSetting::forEmployee($this->employee_id);
+
+        if (! $this->check_in && ! $this->check_out) {
+            return 'absent';
+        }
+
+        if (! $this->check_in && $this->check_out) {
+            return 'half_day';
+        }
+
+        $attendanceDate = Carbon::parse($this->date)->startOfDay();
+        $checkInDateTime = $this->parsePunchDateTime($this->check_in, $attendanceDate);
+
+        $workStart = $this->buildWorkDateTime($attendanceDate, $settings->work_start_time);
+        $workEnd = $this->buildWorkDateTime($attendanceDate, $settings->work_end_time ?? '17:00:00');
+        $lateThreshold = $workStart->copy()->addMinutes((int) ($settings->late_threshold_minutes ?? 15));
+
+        $status = $checkInDateTime->gt($lateThreshold) ? 'late' : 'present';
+
+        if ($this->check_out) {
+            $checkOutDateTime = $this->parsePunchDateTime($this->check_out, $attendanceDate);
+
+            if ($checkOutDateTime->lt($checkInDateTime)) {
+                $checkOutDateTime->addDay();
+            }
+
+            // Early leave: left before official office end time
+            if ($checkOutDateTime->lt($workEnd) && $status !== 'late') {
+                $status = 'half_day';
+            }
+
+            $hoursWorked = $checkInDateTime->floatDiffInHours($checkOutDateTime);
+            if ($hoursWorked < ($settings->half_day_hours ?? 4) && $status !== 'late') {
+                $status = 'half_day';
+            }
+        }
+
+        return $status;
+    }
+
+    /**
+     * Day 09:00–19:00 or night 19:00–09:00 next morning, with the configured grace.
+     */
+    private function computeGuardShiftStatus(): string
+    {
+        $settings = GuardShiftSetting::current();
+
+        if (! $this->check_in && ! $this->check_out) {
+            return 'absent';
+        }
+
+        if (! $this->check_in && $this->check_out) {
+            return 'half_day';
+        }
+
+        $attendanceDate = Carbon::parse($this->date)->startOfDay();
+        $isNight = $this->shift_type === 'night';
+        $grace = (int) ($settings->grace_minutes ?? 60);
+
+        $checkInDateTime = $this->parsePunchDateTime($this->check_in, $attendanceDate);
+        $workStart = $this->buildWorkDateTime($attendanceDate, $isNight ? $settings->night_start : $settings->day_start);
+        $workEnd = $this->buildWorkDateTime($attendanceDate, $isNight ? $settings->night_end : $settings->day_end);
+        if ($isNight || $workEnd->lte($workStart)) {
+            $workEnd->addDay();
+        }
+
+        $lateThreshold = $workStart->copy()->addMinutes($grace);
+        $earlyThreshold = $workEnd->copy()->subMinutes($grace);
+        $status = $checkInDateTime->gt($lateThreshold) ? 'late' : 'present';
+
+        if ($this->check_out) {
+            $checkOutDateTime = $this->parsePunchDateTime($this->check_out, $attendanceDate);
+            if ($this->checkout_next_day || $checkOutDateTime->lt($checkInDateTime)) {
+                $checkOutDateTime->addDay();
+            }
+
+            if ($checkOutDateTime->lt($earlyThreshold) && $status !== 'late') {
+                $status = 'half_day';
+            }
+
+            $hoursWorked = abs($checkInDateTime->diffInMinutes($checkOutDateTime)) / 60;
+            $halfDayHours = (float) (AttendanceSetting::global()->half_day_hours ?? 4);
+            if ($hoursWorked < $halfDayHours && $status !== 'late') {
+                $status = 'half_day';
+            }
+        }
+
+        return $status;
+    }
+
+    /**
+     * @deprecated Use computeStatusFromPunch() on the model instance instead.
+     */
+    public function determineAttendanceStatus($attendance): string
+    {
+        if ($attendance instanceof self) {
+            return $attendance->computeStatusFromPunch();
+        }
+
+        $clone = new self((array) $attendance);
+
+        return $clone->computeStatusFromPunch();
+    }
+
+    private function shouldSkipPunchStatus(): bool
+    {
+        if (! $this->check_in && ! $this->check_out) {
+            return in_array($this->status, self::PROGRAMMATIC_STATUSES, true);
+        }
+
+        if (in_array($this->status, self::PROGRAMMATIC_STATUSES, true) && ! $this->check_in) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function parsePunchDateTime(mixed $value, Carbon $attendanceDate): Carbon
+    {
+        $parsed = Carbon::parse($value);
+
+        return $attendanceDate->copy()
+            ->setHour($parsed->hour)
+            ->setMinute($parsed->minute)
+            ->setSecond($parsed->second);
+    }
+
+    private function buildWorkDateTime(Carbon $attendanceDate, mixed $timeValue): Carbon
+    {
+        $parsed = Carbon::parse($timeValue);
+
+        return $attendanceDate->copy()
+            ->setHour($parsed->hour)
+            ->setMinute($parsed->minute)
+            ->setSecond($parsed->second);
+    }
+>>>>>>> feature/flutter-mobile-app
 }

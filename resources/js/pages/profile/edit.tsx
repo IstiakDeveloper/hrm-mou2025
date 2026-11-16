@@ -6,13 +6,21 @@ import ProfileForm from '@/components/profile/profile-form';
 import PasswordForm from '@/components/profile/password-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle } from 'lucide-react';
+<<<<<<< HEAD
 import AppearanceToggleTab from '@/components/appearance-tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+=======
+import AppearanceLightOnly from '@/components/appearance-light-only';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { type EmployeeNameFields } from '@/lib/employee-name';
+import SignatureCard from '@/components/profile/signature-card';
+>>>>>>> feature/flutter-mobile-app
 
 interface User {
   id: number;
   name: string;
   email: string;
+<<<<<<< HEAD
   role?: {
     name: string;
   };
@@ -20,18 +28,35 @@ interface User {
     first_name: string;
     last_name: string;
     employee_id: string;
+=======
+  signature?: string | null;
+  role?: {
+    name: string;
+  };
+  employee?: EmployeeNameFields & {
+    employee_id: string;
+    signature?: string | null;
+>>>>>>> feature/flutter-mobile-app
   };
 }
 
 interface ProfileEditProps {
   user: User;
+<<<<<<< HEAD
+=======
+  signature?: string | null;
+>>>>>>> feature/flutter-mobile-app
   success?: string;
   errors: {
     [key: string]: string;
   };
 }
 
+<<<<<<< HEAD
 export default function ProfileEdit({ user, success, errors }: ProfileEditProps) {
+=======
+export default function ProfileEdit({ user, signature, success, errors }: ProfileEditProps) {
+>>>>>>> feature/flutter-mobile-app
   return (
     <Layout>
       <Head title="Profile" />
@@ -58,11 +83,23 @@ export default function ProfileEdit({ user, success, errors }: ProfileEditProps)
             <TabsTrigger value="appearance" className="w-1/3">Appearance</TabsTrigger>
           </TabsList>
 
+<<<<<<< HEAD
           <TabsContent value="profile" className="w-full max-w-3xl">
+=======
+          <TabsContent value="profile" className="w-full max-w-3xl space-y-6">
+>>>>>>> feature/flutter-mobile-app
             <ProfileForm
               user={user}
               errors={errors}
             />
+<<<<<<< HEAD
+=======
+            <SignatureCard
+              currentSignature={signature ?? user.signature ?? user.employee?.signature}
+              actionRoute="profile.signature"
+              destroyRoute="profile.signature.destroy"
+            />
+>>>>>>> feature/flutter-mobile-app
           </TabsContent>
 
           <TabsContent value="password" className="w-full max-w-3xl">
@@ -75,6 +112,7 @@ export default function ProfileEdit({ user, success, errors }: ProfileEditProps)
             <Card>
               <CardHeader>
                 <CardTitle>Appearance</CardTitle>
+<<<<<<< HEAD
                 <CardDescription>
                   Customize how the application looks for you
                 </CardDescription>
@@ -89,6 +127,12 @@ export default function ProfileEdit({ user, success, errors }: ProfileEditProps)
                     <AppearanceToggleTab />
                   </div>
                 </div>
+=======
+                <CardDescription>The application uses one light theme for all users.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AppearanceLightOnly />
+>>>>>>> feature/flutter-mobile-app
               </CardContent>
             </Card>
           </TabsContent>
