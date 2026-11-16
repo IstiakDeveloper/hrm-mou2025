@@ -10,11 +10,6 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-<<<<<<< HEAD
-        "inertiajs/inertia-laravel": "^2.0",
-        "laravel/framework": "^12.0",
-        "laravel/tinker": "^2.10.1",
-=======
         "barryvdh/laravel-dompdf": "^3.1",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.0",
@@ -26,7 +21,6 @@
         "shuchkin/simplexlsxgen": "^1.5",
         "spatie/browsershot": "^5.4",
         "spatie/laravel-activitylog": "^4.12",
->>>>>>> feature/flutter-mobile-app
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {
@@ -44,14 +38,10 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
-<<<<<<< HEAD
-        }
-=======
         },
         "files": [
             "app/helpers.php"
         ]
->>>>>>> feature/flutter-mobile-app
     },
     "autoload-dev": {
         "psr-4": {
@@ -91,20 +81,13 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
-<<<<<<< HEAD
-=======
         },
         "platform": {
             "php": "8.3.0",
             "ext-pcntl": "8.3.0",
             "ext-posix": "8.3.0"
->>>>>>> feature/flutter-mobile-app
         }
     },
     "minimum-stability": "stable",
     "prefer-stable": true
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> feature/flutter-mobile-app

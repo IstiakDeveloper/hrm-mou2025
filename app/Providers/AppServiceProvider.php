@@ -2,15 +2,12 @@
 
 namespace App\Providers;
 
-<<<<<<< HEAD
-=======
 use App\Models\Employee;
 use App\Models\Holiday;
 use App\Observers\EmployeeAssignmentObserver;
 use App\Observers\HolidayObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Validator;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,11 +17,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-<<<<<<< HEAD
-        //
-=======
         $this->app->singleton(\App\Services\HolidayAttendanceSyncService::class);
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -32,9 +25,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-<<<<<<< HEAD
-        //
-=======
         Holiday::observe(HolidayObserver::class);
         Employee::observe(EmployeeAssignmentObserver::class);
 
@@ -79,6 +69,5 @@ class AppServiceProvider extends ServiceProvider
                 \App\Services\SystemActivityTracker::log('deleted', $data[0]);
             }
         });
->>>>>>> feature/flutter-mobile-app
     }
 }

@@ -9,10 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-<<<<<<< HEAD
-=======
 use Illuminate\Support\Str;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -40,11 +37,6 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-<<<<<<< HEAD
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-=======
         $email = Str::lower($request->email);
         $base = preg_replace('/[^a-z0-9_]/', '', Str::before($email, '@')) ?: 'user';
         $username = $base;
@@ -58,7 +50,6 @@ class RegisteredUserController extends Controller
             'name' => $request->name,
             'username' => $username,
             'email' => $email,
->>>>>>> feature/flutter-mobile-app
             'password' => Hash::make($request->password),
         ]);
 
@@ -66,10 +57,6 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-<<<<<<< HEAD
-        return to_route('dashboard');
-=======
         return to_route('sections.index');
->>>>>>> feature/flutter-mobile-app
     }
 }

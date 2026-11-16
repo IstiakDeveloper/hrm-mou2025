@@ -6,15 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Department;
-<<<<<<< HEAD
-use App\Models\Employee;
-use App\Models\LeaveApplication;
-use App\Models\Movement;
-use App\Models\Transfer;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-=======
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\LeaveApplication;
@@ -29,17 +20,12 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Support\ProjectPdf;
->>>>>>> feature/flutter-mobile-app
 
 class ReportController extends Controller
 {
     /**
      * Display report dashboard.
      */
-<<<<<<< HEAD
-    public function index()
-    {
-=======
     public function index(Request $request)
     {
         $section = $request->query('section');
@@ -48,7 +34,6 @@ class ReportController extends Controller
             return redirect()->route('reports.administration', ['section' => 'administration']);
         }
 
->>>>>>> feature/flutter-mobile-app
         $reportTypes = [
             ['id' => 'attendance', 'name' => 'Attendance Report'],
             ['id' => 'leave', 'name' => 'Leave Report'],
@@ -63,8 +48,6 @@ class ReportController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Administration section — users, roles & active sessions summary (printable).
      */
     public function administration(Request $request)
@@ -285,7 +268,6 @@ class ReportController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Generate attendance report.
      */
     public function attendance(Request $request)
@@ -294,10 +276,7 @@ class ReportController extends Controller
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
         $query = Attendance::with(['employee.department', 'employee.designation', 'employee.branch'])
-<<<<<<< HEAD
-=======
             ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
->>>>>>> feature/flutter-mobile-app
             ->whereBetween('date', [$startDate, $endDate])
             ->when($request->branch_id, function ($query, $branchId) {
                 $query->whereHas('employee', function ($q) use ($branchId) {
@@ -316,33 +295,12 @@ class ReportController extends Controller
                 $query->where('employee_id', $employeeId);
             });
 
-<<<<<<< HEAD
-=======
         $summaryQuery = clone $query;
 
->>>>>>> feature/flutter-mobile-app
         $attendances = $query->orderBy('date', 'desc')
             ->paginate(20)
             ->withQueryString();
 
-<<<<<<< HEAD
-        $branches = Branch::all();
-        $departments = Department::all();
-        $employees = Employee::where('status', 'active')->get();
-
-        // Summary statistics
-        $summary = [
-            'totalDays' => $startDate->diffInDays($endDate) + 1,
-            'present' => $query->where('status', 'present')->count(),
-            'absent' => $query->where('status', 'absent')->count(),
-            'late' => $query->where('status', 'late')->count(),
-            'halfDay' => $query->where('status', 'half_day')->count(),
-            'onLeave' => $query->where('status', 'leave')->count(),
-        ];
-
-        // Chart data
-        $chartData = [];
-=======
         $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name']);
         $departments = Department::query()->orderBy('name')->get(['id', 'name']);
 
@@ -360,7 +318,6 @@ class ReportController extends Controller
             'onLeave' => (int) ($statusCounts['leave'] ?? 0),
         ];
 
->>>>>>> feature/flutter-mobile-app
         $statusColors = [
             'present' => '#22c55e', // green
             'absent' => '#ef4444',  // red
@@ -369,17 +326,6 @@ class ReportController extends Controller
             'leave' => '#3b82f6',   // blue
         ];
 
-<<<<<<< HEAD
-        $dateRange = [];
-        $current = $startDate->copy();
-        while ($current <= $endDate) {
-            $dateRange[] = $current->format('Y-m-d');
-            $current->addDay();
-        }
-
-        foreach ($dateRange as $date) {
-            $dayData = [
-=======
         $chartRows = (clone $summaryQuery)
             ->selectRaw('date, status, COUNT(*) as total')
             ->groupBy('date', 'status')
@@ -390,7 +336,6 @@ class ReportController extends Controller
         foreach ($chartRows as $row) {
             $date = Carbon::parse($row->date)->format('Y-m-d');
             $chartByDate[$date] ??= [
->>>>>>> feature/flutter-mobile-app
                 'date' => $date,
                 'present' => 0,
                 'absent' => 0,
@@ -398,37 +343,17 @@ class ReportController extends Controller
                 'half_day' => 0,
                 'leave' => 0,
             ];
-<<<<<<< HEAD
-
-            foreach (array_keys($dayData) as $status) {
-                if ($status !== 'date') {
-                    $count = Attendance::where('date', $date)
-                        ->where('status', $status)
-                        ->count();
-                    $dayData[$status] = $count;
-                }
-            }
-
-            $chartData[] = $dayData;
-        }
-
-=======
             $chartByDate[$date][$row->status] = (int) $row->total;
         }
 
         $chartData = array_values($chartByDate);
 
->>>>>>> feature/flutter-mobile-app
         return Inertia::render('report/attendance', [
             'attendances' => $attendances,
             'branches' => $branches,
             'departments' => $departments,
-<<<<<<< HEAD
-            'employees' => $employees,
-=======
             'employees' => [],
             'employeeLookupUrl' => route('employees.lookup'),
->>>>>>> feature/flutter-mobile-app
             'filters' => $request->only(['start_date', 'end_date', 'branch_id', 'department_id', 'status', 'employee_id']),
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
@@ -438,48 +363,6 @@ class ReportController extends Controller
         ]);
     }
 
-<<<<<<< HEAD
-    /**
-     * Generate leave report.
-     */
-    public function leave(Request $request)
-    {
-        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
-
-        $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType'])
-            ->whereBetween('start_date', [$startDate, $endDate])
-            ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
-            })
-            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
-                $query->where('leave_type_id', $leaveTypeId);
-            })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
-            });
-
-        $applications = $query->orderBy('start_date', 'desc')
-            ->paginate(15)
-            ->withQueryString();
-
-        // Summary statistics
-        $summary = [
-            'total' => $query->count(),
-            'approved' => $query->where('status', 'approved')->count(),
-            'rejected' => $query->where('status', 'rejected')->count(),
-            'pending' => $query->where('status', 'pending')->count(),
-            'totalDays' => $query->where('status', 'approved')->sum('days'),
-        ];
-
-        $departments = Department::all();
-        $employees = Employee::where('status', 'active')->get();
-=======
     public function leave(Request $request)
     {
         $user = $request->user();
@@ -508,27 +391,20 @@ class ReportController extends Controller
         $employees = $this->accessibleEmployeesForLeaveReport($user);
         $leaveTypes = LeaveType::select('id', 'name', 'days_allowed', 'is_paid')->orderBy('name')->get();
         $branches = $this->accessibleBranchesForLeaveReport($user);
->>>>>>> feature/flutter-mobile-app
 
         return Inertia::render('report/leave', [
             'applications' => $applications,
             'departments' => $departments,
             'employees' => $employees,
-<<<<<<< HEAD
-            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'leave_type_id', 'employee_id']),
-=======
             'leaveTypes' => $leaveTypes,
             'branches' => $branches,
             'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'leave_type_id', 'employee_id', 'branch_id']),
->>>>>>> feature/flutter-mobile-app
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
         ]);
     }
 
-<<<<<<< HEAD
-=======
     public function downloadLeaveReportPdf(Request $request)
     {
         $user = $request->user();
@@ -597,7 +473,6 @@ class ReportController extends Controller
         return $pdf->download($filename);
     }
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Generate movement report.
      */
@@ -668,45 +543,6 @@ class ReportController extends Controller
             'toBranch',
             'fromDepartment',
             'toDepartment',
-<<<<<<< HEAD
-            'approver'
-        ])
-            ->whereBetween('effective_date', [$startDate, $endDate])
-            ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
-            })
-            ->when($request->from_branch_id, function ($query, $branchId) {
-                $query->where('from_branch_id', $branchId);
-            })
-            ->when($request->to_branch_id, function ($query, $branchId) {
-                $query->where('to_branch_id', $branchId);
-            })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
-            });
-
-        $transfers = $query->orderBy('effective_date', 'desc')
-            ->paginate(15)
-            ->withQueryString();
-
-        // Summary statistics
-        $summary = [
-            'total' => $query->count(),
-            'approved' => $query->where('status', 'approved')->count(),
-            'rejected' => $query->where('status', 'rejected')->count(),
-            'pending' => $query->where('status', 'pending')->count(),
-            'completed' => $query->where('status', 'completed')->count(),
-        ];
-
-        $departments = Department::all();
-        $branches = Branch::all();
-        $employees = Employee::where('status', 'active')->get();
-=======
             'approver',
         ])
             ->whereHas('fromBranch', fn ($q) => $q->where('is_active', true))
@@ -760,16 +596,12 @@ class ReportController extends Controller
         $employees = Employee::where('status', 'active')->orderBy('name_en')->get(['id', 'employee_id', 'name_en']);
 
         $branchFlow = $this->transferBranchFlowStats(clone $query, $branches);
->>>>>>> feature/flutter-mobile-app
 
         return Inertia::render('report/transfer', [
             'transfers' => $transfers,
             'departments' => $departments,
             'branches' => $branches,
             'employees' => $employees,
-<<<<<<< HEAD
-            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'from_branch_id', 'to_branch_id', 'employee_id']),
-=======
             'branchFlow' => $branchFlow,
             'filters' => $request->only([
                 'start_date',
@@ -781,7 +613,6 @@ class ReportController extends Controller
                 'employee_id',
                 'search',
             ]),
->>>>>>> feature/flutter-mobile-app
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
@@ -789,8 +620,6 @@ class ReportController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-=======
      * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Transfer>  $query
      * @param  \Illuminate\Support\Collection<int, \App\Models\Branch>  $branches
      * @return array<int, array{id: int, name: string, outgoing: int, incoming: int, total: int}>
@@ -833,16 +662,12 @@ class ReportController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Generate employee report.
      */
     public function employee(Request $request)
     {
         $query = Employee::with(['department', 'designation', 'branch', 'manager'])
-<<<<<<< HEAD
-=======
             ->whereHas('branch', fn ($q) => $q->where('is_active', true))
->>>>>>> feature/flutter-mobile-app
             ->when($request->branch_id, function ($query, $branchId) {
                 $query->where('current_branch_id', $branchId);
             })
@@ -866,37 +691,6 @@ class ReportController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
-<<<<<<< HEAD
-                    $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('employee_id', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
-                });
-            });
-
-        $employees = $query->orderBy('id')
-            ->paginate(15)
-            ->withQueryString();
-
-        // Summary statistics
-        $summary = [
-            'total' => $query->count(),
-            'active' => $query->where('status', 'active')->count(),
-            'inactive' => $query->where('status', 'inactive')->count(),
-            'onLeave' => $query->where('status', 'on_leave')->count(),
-            'terminated' => $query->where('status', 'terminated')->count(),
-            'male' => $query->where('gender', 'male')->count(),
-            'female' => $query->where('gender', 'female')->count(),
-        ];
-
-        $branches = Branch::all();
-        $departments = Department::all();
-        $designations = Department::with('designations')->get()->map(function ($department) {
-            return [
-                'id' => $department->id,
-                'name' => $department->name,
-                'designations' => $department->designations,
-=======
                     $q->where('name_en', 'like', "%{$search}%")
                         ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%")
@@ -934,7 +728,6 @@ class ReportController extends Controller
                     'name' => $d->name,
                     'department_id' => $department->id,
                 ])->values()->all(),
->>>>>>> feature/flutter-mobile-app
             ];
         });
 
@@ -944,12 +737,6 @@ class ReportController extends Controller
             'departments' => $departments,
             'designations' => $designations,
             'filters' => $request->only([
-<<<<<<< HEAD
-                'branch_id', 'department_id', 'designation_id', 'status',
-                'gender', 'join_start_date', 'join_end_date', 'search'
-            ]),
-            'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
-=======
                 'branch_id',
                 'department_id',
                 'designation_id',
@@ -960,15 +747,12 @@ class ReportController extends Controller
                 'search',
             ]),
             'statuses' => ['active', 'inactive'],
->>>>>>> feature/flutter-mobile-app
             'genders' => ['male', 'female', 'other'],
             'summary' => $summary,
         ]);
     }
 
     /**
-<<<<<<< HEAD
-=======
      * @return array{0: \Illuminate\Database\Eloquent\Builder, 1: Carbon, 2: Carbon}
      */
     private function leaveReportBaseQuery(Request $request, User $user): array
@@ -1059,7 +843,6 @@ class ReportController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Export report to PDF.
      */
     public function exportPdf(Request $request)

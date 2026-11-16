@@ -21,18 +21,10 @@ import {
 } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-<<<<<<< HEAD
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -75,11 +67,7 @@ export default function EmployeeDocumentCreate({ employee, documentTypes }: Empl
 
   return (
     <Layout>
-<<<<<<< HEAD
-      <Head title={`Upload Document - ${employee.first_name} ${employee.last_name}`} />
-=======
       <Head title={`Upload Document - ${employeeDisplayName(employee)}`} />
->>>>>>> feature/flutter-mobile-app
 
       <div className="container mx-auto py-8">
         <div className="mb-6">
@@ -95,11 +83,7 @@ export default function EmployeeDocumentCreate({ employee, documentTypes }: Empl
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Upload Document</h1>
           <p className="mt-1 text-gray-500">
-<<<<<<< HEAD
-            Add a new document for {employee.first_name} {employee.last_name} ({employee.employee_id})
-=======
             Add a new document for {employeeDisplayName(employee)} ({employee.employee_id})
->>>>>>> feature/flutter-mobile-app
           </p>
         </div>
 

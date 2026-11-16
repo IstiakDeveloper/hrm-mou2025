@@ -8,18 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-<<<<<<< HEAD
-import { ArrowLeft, Building, MapPin, Phone, Hash, User } from 'lucide-react';
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-  employee_id: string;
-}
-=======
 import { ArrowLeft, Building, MapPin, Phone, Hash } from 'lucide-react';
->>>>>>> feature/flutter-mobile-app
 
 interface Branch {
   id: number;
@@ -27,10 +16,6 @@ interface Branch {
   address: string | null;
   contact_number: string | null;
   branch_code: string;
-<<<<<<< HEAD
-  head_employee_id: number | null;
-  is_head_office: boolean;
-=======
   is_head_office: boolean;
   has_login_pin?: boolean;
   geofence_enabled?: boolean;
@@ -38,26 +23,10 @@ interface Branch {
   geofence_longitude?: number | null;
   geofence_radius_meters?: number | null;
   geofence_max_accuracy_meters?: number | null;
->>>>>>> feature/flutter-mobile-app
 }
 
 interface BranchEditProps {
   branch: Branch;
-<<<<<<< HEAD
-  employees: Employee[];
-}
-
-export default function BranchEdit({ branch, employees }: BranchEditProps) {
-  const { data, setData, put, processing, errors } = useForm({
-    name: branch.name || '',
-    address: branch.address || '',
-    contact_number: branch.contact_number || '',
-    branch_code: branch.branch_code || '',
-    head_employee_id: branch.head_employee_id ? branch.head_employee_id.toString() : null,
-    is_head_office: Boolean(branch.is_head_office),
-  });
-
-=======
   zones: { id: number; name: string; code: string }[];
   regionalOffices: { id: number; zone_id: number; name: string; code: string }[];
   designations: { id: number; name: string }[];
@@ -93,7 +62,6 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
     }
   }, [data.zone_id, data.regional_office_id, regionalOffices]);
 
->>>>>>> feature/flutter-mobile-app
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     put(route('branches.update', branch.id));
@@ -135,8 +103,6 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
               </div>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
-<<<<<<< HEAD
-=======
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="zone_id">Zone</Label>
@@ -189,7 +155,6 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
                 </div>
               </div>
 
->>>>>>> feature/flutter-mobile-app
               <div className="space-y-2">
                 <Label htmlFor="name">
                   Branch Name <span className="text-red-500">*</span>
@@ -261,23 +226,6 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
               </div>
 
               <div className="space-y-2">
-<<<<<<< HEAD
-                <Label htmlFor="head_employee_id">
-                  Branch Head
-                </Label>
-                <Select
-                  value={data.head_employee_id || undefined}
-                  onValueChange={(value) => setData('head_employee_id', value === "null" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch head (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="null">None</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name} ({employee.employee_id})
-=======
                 <Label htmlFor="email">
                   Branch Email
                 </Label>
@@ -307,22 +255,15 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
                     {designations.map((d) => (
                       <SelectItem key={d.id} value={d.id.toString()}>
                         {d.name}
->>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-<<<<<<< HEAD
-                {errors.head_employee_id && <p className="mt-1 text-sm text-red-500">{errors.head_employee_id}</p>}
-                <p className="text-xs text-gray-500">
-                  The employee who manages this branch
-=======
                 {(errors as any).branch_head_designation_id && (
                   <p className="mt-1 text-sm text-red-500">{(errors as any).branch_head_designation_id}</p>
                 )}
                 <p className="text-xs text-gray-500">
                   Branch Head is determined by designation (transfer safe)
->>>>>>> feature/flutter-mobile-app
                 </p>
               </div>
 
@@ -343,8 +284,6 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
               <p className="text-xs text-gray-500 ml-6">
                 Designate this location as the organization's head office
               </p>
-<<<<<<< HEAD
-=======
 
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -452,7 +391,6 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
                   </div>
                 </div>
               </div>
->>>>>>> feature/flutter-mobile-app
             </CardContent>
             <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-end">
               <div className="flex space-x-2">

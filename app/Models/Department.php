@@ -13,10 +13,6 @@ class Department extends Model
         'name',
         'description',
         'head_employee_id',
-<<<<<<< HEAD
-        'branch_id',
-=======
->>>>>>> feature/flutter-mobile-app
         'parent_department_id',
     ];
 
@@ -25,14 +21,6 @@ class Department extends Model
         return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 
-<<<<<<< HEAD
-    public function branch()
-    {
-        return $this->belongsTo(Branch::class);
-    }
-
-=======
->>>>>>> feature/flutter-mobile-app
     public function parentDepartment()
     {
         return $this->belongsTo(Department::class, 'parent_department_id');
@@ -47,12 +35,4 @@ class Department extends Model
     {
         return $this->hasMany(Employee::class);
     }
-<<<<<<< HEAD
-
-    public function designations()
-    {
-        return $this->hasMany(Designation::class);
-    }
-=======
->>>>>>> feature/flutter-mobile-app
 }

@@ -2,30 +2,15 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-=======
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
->>>>>>> feature/flutter-mobile-app
 
 class Branch extends Model
 {
     use HasFactory;
-<<<<<<< HEAD
-
-    protected $fillable = [
-        'name',
-        'address',
-        'contact_number',
-        'branch_code',
-        'head_employee_id',
-        'is_head_office',
-=======
     use SoftDeletes;
 
     protected $fillable = [
@@ -51,16 +36,10 @@ class Branch extends Model
 
     protected $hidden = [
         'login_pin',
->>>>>>> feature/flutter-mobile-app
     ];
 
     protected $casts = [
         'is_head_office' => 'boolean',
-<<<<<<< HEAD
-    ];
-
-    public function headEmployee()
-=======
         'allow_multi_day_movement' => 'boolean',
         'is_active' => 'boolean',
         'geofence_latitude' => 'float',
@@ -76,13 +55,10 @@ class Branch extends Model
     }
 
     public function headEmployee(): BelongsTo
->>>>>>> feature/flutter-mobile-app
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 
-<<<<<<< HEAD
-=======
     public function branchHeadDesignation(): BelongsTo
     {
         return $this->belongsTo(Designation::class, 'branch_head_designation_id');
@@ -115,14 +91,11 @@ class Branch extends Model
         return $this->head_employee_id && (int) $employee->id === (int) $this->head_employee_id;
     }
 
->>>>>>> feature/flutter-mobile-app
     public function employees()
     {
         return $this->hasMany(Employee::class, 'current_branch_id');
     }
 
-<<<<<<< HEAD
-=======
     public function scopeActive(Builder $query): Builder
     {
         return $query->where($query->getModel()->getTable().'.is_active', true);
@@ -138,7 +111,6 @@ class Branch extends Model
         return (int) $this->employees()->where('status', 'active')->count();
     }
 
->>>>>>> feature/flutter-mobile-app
     public function departments()
     {
         return $this->hasMany(Department::class);
@@ -158,8 +130,6 @@ class Branch extends Model
     {
         return $this->hasMany(User::class);
     }
-<<<<<<< HEAD
-=======
 
     public function projectAttendance()
     {
@@ -189,5 +159,4 @@ class Branch extends Model
 
         return \Illuminate\Support\Facades\Hash::check($pin, $this->login_pin);
     }
->>>>>>> feature/flutter-mobile-app
 }

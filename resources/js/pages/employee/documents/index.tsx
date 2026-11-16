@@ -31,19 +31,11 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-<<<<<<< HEAD
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { PageSurface } from '@/components/page-surface';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -102,15 +94,9 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
 
   return (
     <Layout>
-<<<<<<< HEAD
-      <Head title={`${employee.first_name} ${employee.last_name} - Documents`} />
-
-      <div className="container mx-auto py-8">
-=======
       <Head title={`${employeeDisplayName(employee)} - Documents`} />
 
       <PageSurface>
->>>>>>> feature/flutter-mobile-app
         <div className="mb-6">
           <Link
             href={route('employees.show', employee.id)}
@@ -125,11 +111,7 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Employee Documents</h1>
             <p className="mt-1 text-gray-500">
-<<<<<<< HEAD
-              Manage documents for {employee.first_name} {employee.last_name} ({employee.employee_id})
-=======
               Manage documents for {employeeDisplayName(employee)} ({employee.employee_id})
->>>>>>> feature/flutter-mobile-app
             </p>
           </div>
 
@@ -145,9 +127,6 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
 
         <Card>
           <CardContent className="p-0">
-<<<<<<< HEAD
-            <Table>
-=======
             {/* Mobile Card List View (sm:hidden) */}
             <div className="p-2 space-y-2 sm:hidden">
               {documents.length > 0 ? (
@@ -213,7 +192,6 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
             {/* Desktop Table View (hidden sm:block) */}
             <div className="hidden sm:block overflow-x-auto">
               <Table>
->>>>>>> feature/flutter-mobile-app
               <TableHeader>
                 <TableRow>
                   <TableHead>Document</TableHead>
@@ -297,16 +275,10 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
                 )}
               </TableBody>
             </Table>
-<<<<<<< HEAD
-          </CardContent>
-        </Card>
-      </div>
-=======
             </div>
           </CardContent>
         </Card>
       </PageSurface>
->>>>>>> feature/flutter-mobile-app
     </Layout>
   );
 }

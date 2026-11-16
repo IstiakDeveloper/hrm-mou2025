@@ -2,10 +2,7 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-=======
 use Carbon\Carbon;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -53,9 +50,6 @@ class LeaveApplication extends Model
     {
         return $this->hasMany(LeaveApproval::class);
     }
-<<<<<<< HEAD
-}
-=======
 
     public function approvedBy()
     {
@@ -90,4 +84,3 @@ class LeaveApplication extends Model
 }
 
 
->>>>>>> feature/flutter-mobile-app

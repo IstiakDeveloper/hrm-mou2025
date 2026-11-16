@@ -13,18 +13,10 @@ import {
   MapPin,
   User
 } from 'lucide-react';
-<<<<<<< HEAD
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -39,12 +31,9 @@ interface Attendance {
   date: string;
   check_in: string | null;
   check_out: string | null;
-<<<<<<< HEAD
-=======
   check_in_formatted: string | null;  // Added formatted values
   check_out_formatted: string | null; // Added formatted values
   auto_remarks: string | null;        // Added auto-generated remarks
->>>>>>> feature/flutter-mobile-app
   status: string;
   device_id: number | null;
   location_coordinates: string | null;
@@ -69,12 +58,6 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
     }
   }
 
-<<<<<<< HEAD
-  const { data, setData, post, processing, errors } = useForm({
-    _method: 'PUT',
-    check_in: attendance.check_in || '',
-    check_out: attendance.check_out || '',
-=======
   // Convert the time format for the form inputs
   const convertTimeFormat = (timeString: string | null): string => {
     if (!timeString) return '';
@@ -128,7 +111,6 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
     check_out: attendance.check_out_formatted
       ? extractTimeFromFormatted(attendance.check_out_formatted)
       : convertTimeFormat(attendance.check_out),
->>>>>>> feature/flutter-mobile-app
     status: attendance.status || '',
     device_id: attendance.device_id ? attendance.device_id.toString() : null,
     location_coordinates: locationCoordinates,
@@ -170,11 +152,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
 
   return (
     <Layout>
-<<<<<<< HEAD
-      <Head title={`Edit Attendance - ${attendance.employee.first_name} ${attendance.employee.last_name}`} />
-=======
       <Head title={`Edit Attendance - ${employeeDisplayName(attendance.employee)}`} />
->>>>>>> feature/flutter-mobile-app
 
       <div className="container mx-auto py-8">
         <div className="mb-6">
@@ -190,11 +168,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Edit Attendance Record</h1>
           <p className="mt-1 text-gray-500">
-<<<<<<< HEAD
-            Update attendance record for {attendance.employee.first_name} {attendance.employee.last_name} on {new Date(attendance.date).toLocaleDateString()}
-=======
             Update attendance record for {employeeDisplayName(attendance.employee)} on {new Date(attendance.date).toLocaleDateString()}
->>>>>>> feature/flutter-mobile-app
           </p>
         </div>
 
@@ -217,11 +191,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
                   <User className="h-5 w-5 text-blue-500 mr-2" />
                   <span className="font-medium">Employee:</span>
                   <span className="ml-2 text-gray-700">
-<<<<<<< HEAD
-                    {attendance.employee.first_name} {attendance.employee.last_name} ({attendance.employee.employee_id})
-=======
                     {employeeDisplayName(attendance.employee)} ({attendance.employee.employee_id})
->>>>>>> feature/flutter-mobile-app
                   </span>
                 </div>
                 <div className="mt-2 flex items-center">
@@ -231,8 +201,6 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
                     {new Date(attendance.date).toLocaleDateString()}
                   </span>
                 </div>
-<<<<<<< HEAD
-=======
                 {attendance.auto_remarks && (
                   <div className="mt-2 flex items-center">
                     <Clock className="h-5 w-5 text-blue-500 mr-2" />
@@ -242,7 +210,6 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
                     </span>
                   </div>
                 )}
->>>>>>> feature/flutter-mobile-app
               </div>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -259,14 +226,11 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
                       onChange={e => setData('check_in', e.target.value)}
                       className="pl-10"
                     />
-<<<<<<< HEAD
-=======
                     {attendance.check_in_formatted && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
                         {attendance.check_in_formatted}
                       </div>
                     )}
->>>>>>> feature/flutter-mobile-app
                   </div>
                   {errors.check_in && <p className="mt-1 text-sm text-red-500">{errors.check_in}</p>}
                 </div>
@@ -284,10 +248,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
                       onChange={e => setData('check_out', e.target.value)}
                       className="pl-10"
                     />
-<<<<<<< HEAD
-=======
 
->>>>>>> feature/flutter-mobile-app
                   </div>
                   {errors.check_out && <p className="mt-1 text-sm text-red-500">{errors.check_out}</p>}
                 </div>

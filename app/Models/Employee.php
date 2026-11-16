@@ -2,43 +2,16 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-=======
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
->>>>>>> feature/flutter-mobile-app
 
 class Employee extends Model
 {
     use HasFactory;
 
-<<<<<<< HEAD
-    protected $fillable = [
-        'employee_id',
-        'first_name',
-        'last_name',
-        'email',
-        'phone',
-        'gender',
-        'date_of_birth',
-        'joining_date',
-        'address',
-        'photo',
-        'nid',
-        'emergency_contact',
-        'department_id',
-        'designation_id',
-        'current_branch_id',
-        'reporting_to',
-        'status',
-        'basic_salary',
-        'bank_account_details',
-=======
     /**
      * Transient metadata for EmployeeAssignmentObserver (not persisted).
      *
@@ -118,21 +91,11 @@ class Employee extends Model
         'probation_salary',
         'fixed_salary',
         'signature',
->>>>>>> feature/flutter-mobile-app
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
         'joining_date' => 'date',
-<<<<<<< HEAD
-        'basic_salary' => 'decimal:2',
-        'bank_account_details' => 'array',
-    ];
-
-    public function getFullNameAttribute()
-    {
-        return $this->first_name . ' ' . $this->last_name;
-=======
         'confirmation_date' => 'date',
         'resignation_date' => 'date',
         'dropout_date' => 'date',
@@ -349,7 +312,6 @@ class Employee extends Model
     public function headOfBranch(): HasOne
     {
         return $this->hasOne(Branch::class, 'head_employee_id');
->>>>>>> feature/flutter-mobile-app
     }
 
     public function user()
@@ -362,21 +324,16 @@ class Employee extends Model
         return $this->belongsTo(Department::class);
     }
 
-<<<<<<< HEAD
-=======
     public function employeeType()
     {
         return $this->belongsTo(EmployeeType::class);
     }
 
->>>>>>> feature/flutter-mobile-app
     public function designation()
     {
         return $this->belongsTo(Designation::class);
     }
 
-<<<<<<< HEAD
-=======
     public function joiningDesignation()
     {
         return $this->belongsTo(Designation::class, 'joining_designation_id');
@@ -412,14 +369,11 @@ class Employee extends Model
         return $this->belongsTo(Project::class);
     }
 
->>>>>>> feature/flutter-mobile-app
     public function branch()
     {
         return $this->belongsTo(Branch::class, 'current_branch_id');
     }
 
-<<<<<<< HEAD
-=======
     public function lastBranch()
     {
         return $this->belongsTo(Branch::class, 'last_branch_id');
@@ -440,7 +394,6 @@ class Employee extends Model
         return $this->lastDesignation?->name;
     }
 
->>>>>>> feature/flutter-mobile-app
     public function manager()
     {
         return $this->belongsTo(Employee::class, 'reporting_to');
@@ -466,8 +419,6 @@ class Employee extends Model
         return $this->hasMany(Attendance::class);
     }
 
-<<<<<<< HEAD
-=======
     public function attendanceBranches()
     {
         return $this->belongsToMany(Branch::class, 'employee_attendance_branches');
@@ -483,7 +434,6 @@ class Employee extends Model
         return (bool) $this->attendanceTime?->isConfigured();
     }
 
->>>>>>> feature/flutter-mobile-app
     public function leaveBalances()
     {
         return $this->hasMany(LeaveBalance::class);
@@ -494,8 +444,6 @@ class Employee extends Model
         return $this->hasMany(LeaveApplication::class);
     }
 
-<<<<<<< HEAD
-=======
     public function educations()
     {
         return $this->hasMany(EmployeeEducation::class);
@@ -516,7 +464,6 @@ class Employee extends Model
         return null;
     }
 
->>>>>>> feature/flutter-mobile-app
     public function transfers()
     {
         return $this->hasMany(Transfer::class);
@@ -531,8 +478,6 @@ class Employee extends Model
     {
         return $this->hasMany(EmployeeDocument::class);
     }
-<<<<<<< HEAD
-=======
 
     public function pfTransactions()
     {
@@ -691,5 +636,4 @@ class Employee extends Model
             })
             ->update(['active_status' => $isActive]);
     }
->>>>>>> feature/flutter-mobile-app
 }

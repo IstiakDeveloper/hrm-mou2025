@@ -35,8 +35,6 @@ return [
         ],
     ],
 
-<<<<<<< HEAD
-=======
     'misloan' => [
         'url' => env('MISLOAN_API_URL'),
         'app_url' => env('MISLOAN_APP_URL'),
@@ -51,5 +49,4 @@ return [
         'auto_approve_max_seconds' => (int) env('PENALTY_AUTO_APPROVE_MAX_SECONDS', 28),
     ],
 
->>>>>>> feature/flutter-mobile-app
 ];

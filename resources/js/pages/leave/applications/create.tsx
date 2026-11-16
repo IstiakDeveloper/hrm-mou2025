@@ -1,13 +1,7 @@
-<<<<<<< HEAD
-import React, { useState, FormEvent, useRef, ChangeEvent, useEffect } from 'react';
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import Layout from '@/layouts/AdminLayout';
-=======
 import React, { useState, useRef, useEffect } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
->>>>>>> feature/flutter-mobile-app
 import {
     Card,
     CardContent,
@@ -31,25 +25,6 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-<<<<<<< HEAD
-import { format, differenceInDays, addDays, parseISO } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { ArrowLeft, CalendarIcon, Trash2, Upload, InfoIcon } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Checkbox } from '@/components/ui/checkbox';
-
-// Rest of the imports and interfaces remain the same
-
-export default function Create({ employee, leaveTypes, balances, userPermissions }) {
-    const { auth } = usePage().props as any;
-    const [leaveTypeId, setLeaveTypeId] = useState('');
-    const [startDate, setStartDate] = useState(null);
-    const [endDate, setEndDate] = useState(null);
-    const [reason, setReason] = useState('');
-    const [documents, setDocuments] = useState([]);
-    const [errors, setErrors] = useState({});
-=======
 import { format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, CalendarIcon, Trash2, Upload, InfoIcon, Paperclip, AlertCircle, FileText } from 'lucide-react';
@@ -128,63 +103,26 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
     const [reason, setReason] = useState('');
     const [documents, setDocuments] = useState<File[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
->>>>>>> feature/flutter-mobile-app
     const [submitting, setSubmitting] = useState(false);
     const [startDateOpen, setStartDateOpen] = useState(false);
     const [endDateOpen, setEndDateOpen] = useState(false);
     const [autoApprove, setAutoApprove] = useState(false);
-<<<<<<< HEAD
-    const fileInputRef = useRef(null);
-
-    // Calculate leave days - FIXED DATE CALCULATION
-    const calculateLeaveDays = () => {
-        if (!startDate || !endDate) return 0;
-
-        // Add 1 to include both the start and end day
-=======
     const [autoApproveEligible, setAutoApproveEligible] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Calculate leave days
     const calculateLeaveDays = () => {
         if (!startDate || !endDate) return 0;
->>>>>>> feature/flutter-mobile-app
         return differenceInDays(endDate, startDate) + 1;
     };
 
     const leaveDays = calculateLeaveDays();
 
-<<<<<<< HEAD
-    // Update calculation whenever dates change
-    useEffect(() => {
-        // Add debugging to see dates and calculation
-        if (startDate && endDate) {
-            console.log("Start date:", format(startDate, 'yyyy-MM-dd'));
-            console.log("End date:", format(endDate, 'yyyy-MM-dd'));
-            console.log("Days calculated:", leaveDays);
-        }
-    }, [startDate, endDate, leaveDays]);
-
-    // Find selected leave type balance
-    const selectedLeaveBalance = leaveTypeId
-        ? balances.find(b => b.leave_type_id.toString() === leaveTypeId)
-        : null;
-
-    // Find selected leave type
-=======
     // Selected leave type
->>>>>>> feature/flutter-mobile-app
     const selectedLeaveType = leaveTypeId
         ? leaveTypes.find(lt => lt.id.toString() === leaveTypeId)
         : null;
 
-<<<<<<< HEAD
-    // Handle various events (file upload, drag/drop, form submission)
-    // These functions remain mostly the same, with validation adjusted
-
-    const validateForm = () => {
-        const newErrors = {};
-=======
     const isUnpaidLeave = selectedLeaveType && !selectedLeaveType.is_paid;
     const isMedicalLeave = selectedLeaveType && (
         selectedLeaveType.name?.toLowerCase().includes('medical') ||
@@ -273,34 +211,17 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
 
     const validateForm = () => {
         const newErrors: Record<string, string> = {};
->>>>>>> feature/flutter-mobile-app
 
         if (!leaveTypeId) newErrors.leaveTypeId = 'Leave type is required';
         if (!startDate) newErrors.startDate = 'Start date is required';
         if (!endDate) newErrors.endDate = 'End date is required';
         if (!reason.trim()) newErrors.reason = 'Reason is required';
 
-<<<<<<< HEAD
-        // Check dates - only for non-admins
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (startDate && !userPermissions.canEdit && startDate < today) {
-            newErrors.startDate = 'Start date must be in the future';
-        }
-
-=======
         // Check date order
->>>>>>> feature/flutter-mobile-app
         if (endDate && startDate && endDate < startDate) {
             newErrors.endDate = 'End date cannot be before start date';
         }
 
-<<<<<<< HEAD
-        // Check leave balance - skip for admins with edit permission
-        if (!userPermissions.canEdit && selectedLeaveBalance && leaveDays > selectedLeaveBalance.remaining_days) {
-            newErrors.leaveTypeId = `Not enough leave balance. Available: ${selectedLeaveBalance.remaining_days} days, Requested: ${leaveDays} days`;
-=======
         // Prevent duplicate/overlapping leaves
         if (overlappingLeave) {
             const conflictType = overlappingLeave.leave_type?.name || overlappingLeave.leaveType?.name || 'Leave';
@@ -320,18 +241,13 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
             } else if (leaveDays > selectedLeaveBalance.remaining_days) {
                 newErrors.leaveTypeId = `Not enough leave balance. Available: ${selectedLeaveBalance.remaining_days} days, Requested: ${leaveDays} days`;
             }
->>>>>>> feature/flutter-mobile-app
         }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-<<<<<<< HEAD
-    const handleSubmit = (e) => {
-=======
     const handleSubmit = (e: React.FormEvent) => {
->>>>>>> feature/flutter-mobile-app
         e.preventDefault();
 
         if (!validateForm()) return;
@@ -339,18 +255,6 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
         setSubmitting(true);
 
         const formData = new FormData();
-<<<<<<< HEAD
-        formData.append('leave_type_id', leaveTypeId);
-        formData.append('start_date', format(startDate, 'yyyy-MM-dd'));
-        formData.append('end_date', format(endDate, 'yyyy-MM-dd'));
-        formData.append('reason', reason);
-
-        // Add debugging help - send calculated days to compare with server
-        formData.append('client_calculated_days', leaveDays.toString());
-
-        // Add auto-approve flag if admin is creating
-        if (userPermissions.canApprove) {
-=======
         formData.append('employee_id', employee.id.toString());
         formData.append('leave_type_id', leaveTypeId);
         formData.append('start_date', startDate ? format(startDate, 'yyyy-MM-dd') : '');
@@ -359,7 +263,6 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
         formData.append('client_calculated_days', leaveDays.toString());
 
         if (isCreatingForOther && userPermissions.canApprove) {
->>>>>>> feature/flutter-mobile-app
             formData.append('auto_approve', autoApprove ? '1' : '0');
         }
 
@@ -368,77 +271,18 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
         });
 
         router.post(route('leave.applications.store'), formData, {
-<<<<<<< HEAD
-            onError: (errors) => {
-                setErrors(errors);
-=======
             onError: (errs) => {
                 setErrors(errs as Record<string, string>);
->>>>>>> feature/flutter-mobile-app
                 setSubmitting(false);
             },
             onFinish: () => setSubmitting(false)
         });
     };
 
-<<<<<<< HEAD
-    // Rest of the component remains the same
-
-=======
->>>>>>> feature/flutter-mobile-app
     return (
         <Layout>
             <Head title="Apply for Leave" />
 
-<<<<<<< HEAD
-            <div className="container mx-auto py-8">
-                {/* Header and navigation */}
-                <div className="mb-6">
-                    <Link href={route('leave.applications.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to Leave Applications
-                    </Link>
-                </div>
-
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Apply for Leave</h1>
-                </div>
-
-                {/* Help information based on user role */}
-                {userPermissions.canApprove && (
-                    <Alert className="mb-6">
-                        <InfoIcon className="h-4 w-4" />
-                        <AlertDescription>
-                            You are creating a leave application as an administrator. You can optionally auto-approve this application.
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Main form layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Leave Application</CardTitle>
-                                <CardDescription>Submit your leave request for approval</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleSubmit} className="space-y-6">
-                                    {/* Leave type selector */}
-                                    <div className="space-y-2">
-                                        <Label htmlFor="leaveType">Leave Type</Label>
-                                        <Select
-                                            value={leaveTypeId}
-                                            onValueChange={setLeaveTypeId}
-                                        >
-                                            <SelectTrigger id="leaveType">
-                                                <SelectValue placeholder="Select Leave Type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {leaveTypes.map((leaveType) => (
-                                                    <SelectItem key={leaveType.id} value={leaveType.id.toString()}>
-                                                        {leaveType.name} {leaveType.is_paid ? '(Paid)' : '(Unpaid)'}
-=======
             <PageSurface className="max-w-4xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
                 <div className="mb-2">
                     <Link
@@ -501,18 +345,11 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                                         <span className="ml-1.5 text-slate-500">
                                                             {lt.is_paid ? `(Paid · ${lt.days_allowed}d)` : '(Unpaid / বিনা বেতন)'}
                                                         </span>
->>>>>>> feature/flutter-mobile-app
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                         {errors.leaveTypeId && (
-<<<<<<< HEAD
-                                            <p className="text-sm font-medium text-red-500">{errors.leaveTypeId}</p>
-                                        )}
-                                        {errors.leave_type_id && (
-                                            <p className="text-sm font-medium text-red-500">{errors.leave_type_id}</p>
-=======
                                             <p className="text-xs font-medium text-red-500">{errors.leaveTypeId}</p>
                                         )}
                                         {errors.leave_type_id && (
@@ -522,43 +359,19 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                             <p className="text-[11px] text-amber-700 bg-amber-50/70 p-2 rounded border border-amber-200 mt-1">
                                                 Unpaid Leave allows you to apply for any required duration without balance deduction. Upon supervisor approval, this leave will be marked as without pay.
                                             </p>
->>>>>>> feature/flutter-mobile-app
                                         )}
                                     </div>
 
                                     {/* Date selection fields */}
-<<<<<<< HEAD
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Start date picker */}
-                                        <div className="space-y-2">
-                                            <Label>Start Date</Label>
-=======
                                     <div className="grid grid-cols-2 gap-2 sm:gap-4">
                                         {/* Start date picker */}
                                         <div className="space-y-1">
                                             <Label className="text-xs font-medium text-gray-700">Start Date *</Label>
->>>>>>> feature/flutter-mobile-app
                                             <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"
                                                         className={cn(
-<<<<<<< HEAD
-                                                            "w-full justify-start text-left font-normal",
-                                                            !startDate && "text-muted-foreground"
-                                                        )}
-                                                    >
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={startDate}
-                                                        onSelect={(date) => {
-                                                            setStartDate(date);
-=======
                                                             "w-full justify-start text-left font-normal text-xs h-9",
                                                             !startDate && "text-muted-foreground"
                                                         )}
@@ -573,84 +386,31 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                                         selected={startDate || undefined}
                                                         onSelect={(date) => {
                                                             setStartDate(date || null);
->>>>>>> feature/flutter-mobile-app
                                                             if (date && (!endDate || endDate < date)) {
                                                                 setEndDate(date);
                                                             }
                                                             setStartDateOpen(false);
                                                         }}
                                                         initialFocus
-<<<<<<< HEAD
-                                                        disabled={(date) => {
-                                                            // Admin users with edit permission can select past dates
-                                                            if (userPermissions.canEdit) return false;
-
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return date < today;
-                                                        }}
-=======
->>>>>>> feature/flutter-mobile-app
                                                     />
                                                 </PopoverContent>
                                             </Popover>
                                             {errors.startDate && (
-<<<<<<< HEAD
-                                                <p className="text-sm font-medium text-red-500">{errors.startDate}</p>
-                                            )}
-                                            {errors.start_date && (
-                                                <p className="text-sm font-medium text-red-500">{errors.start_date}</p>
-=======
                                                 <p className="text-xs font-medium text-red-500">{errors.startDate}</p>
                                             )}
                                             {errors.start_date && (
                                                 <p className="text-xs font-medium text-red-500">{errors.start_date}</p>
->>>>>>> feature/flutter-mobile-app
                                             )}
                                         </div>
 
                                         {/* End date picker */}
-<<<<<<< HEAD
-                                        <div className="space-y-2">
-                                            <Label>End Date</Label>
-=======
                                         <div className="space-y-1">
                                             <Label className="text-xs font-medium text-gray-700">End Date *</Label>
->>>>>>> feature/flutter-mobile-app
                                             <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"
                                                         className={cn(
-<<<<<<< HEAD
-                                                            "w-full justify-start text-left font-normal",
-                                                            !endDate && "text-muted-foreground"
-                                                        )}
-                                                    >
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {endDate ? format(endDate, 'PPP') : <span>Pick a date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={endDate}
-                                                        onSelect={(date) => {
-                                                            setEndDate(date);
-                                                            setEndDateOpen(false);
-                                                        }}
-                                                        initialFocus
-                                                        disabled={(date) => {
-                                                            // Admin users with edit permission have more flexibility
-                                                            if (userPermissions.canEdit) {
-                                                                return startDate ? date < startDate : false;
-                                                            }
-
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return startDate ? date < startDate : date < today;
-                                                        }}
-=======
                                                             "w-full justify-start text-left font-normal text-xs h-9",
                                                             !endDate && "text-muted-foreground"
                                                         )}
@@ -669,55 +429,18 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                                         }}
                                                         disabled={(date) => (startDate ? date < startDate : false)}
                                                         initialFocus
->>>>>>> feature/flutter-mobile-app
                                                     />
                                                 </PopoverContent>
                                             </Popover>
                                             {errors.endDate && (
-<<<<<<< HEAD
-                                                <p className="text-sm font-medium text-red-500">{errors.endDate}</p>
-                                            )}
-                                            {errors.end_date && (
-                                                <p className="text-sm font-medium text-red-500">{errors.end_date}</p>
-=======
                                                 <p className="text-xs font-medium text-red-500">{errors.endDate}</p>
                                             )}
                                             {errors.end_date && (
                                                 <p className="text-xs font-medium text-red-500">{errors.end_date}</p>
->>>>>>> feature/flutter-mobile-app
                                             )}
                                         </div>
                                     </div>
 
-<<<<<<< HEAD
-                                    {/* Leave days calculation - with debug info */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <Label>Leave Days</Label>
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                {leaveDays} {leaveDays === 1 ? 'day' : 'days'}
-                                            </Badge>
-                                        </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            {startDate && endDate ? (
-                                                <span>
-                                                    From {format(startDate, 'MMM d, yyyy')} to {format(endDate, 'MMM d, yyyy')}
-                                                    {" "}- {leaveDays} {leaveDays === 1 ? 'day' : 'days'} (inclusive)
-                                                </span>
-                                            ) : (
-                                                "Total number of leave days requested"
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Rest of the form remains the same */}
-                                    <div className="space-y-2">
-                                        <Label htmlFor="reason">Reason for Leave</Label>
-                                        <Textarea
-                                            id="reason"
-                                            placeholder="Provide a detailed reason for your leave request"
-                                            rows={4}
-=======
                                     {/* Leave days summary */}
                                     <div className="p-2.5 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                                         <span className="text-slate-600">Total Requested Duration:</span>
@@ -745,36 +468,10 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                             placeholder="Please describe the reason for your leave request in detail..."
                                             rows={3}
                                             className="text-xs"
->>>>>>> feature/flutter-mobile-app
                                             value={reason}
                                             onChange={(e) => setReason(e.target.value)}
                                         />
                                         {errors.reason && (
-<<<<<<< HEAD
-                                            <p className="text-sm font-medium text-red-500">{errors.reason}</p>
-                                        )}
-                                    </div>
-
-                                    {/* File upload section */}
-                                    {/* Rest of the form remains the same */}
-
-                                    {/* Auto-approve option for admins */}
-                                    {userPermissions.canApprove && (
-                                        <div className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id="auto-approve"
-                                                checked={autoApprove}
-                                                onCheckedChange={(checked) => {
-                                                    setAutoApprove(checked);
-                                                }}
-                                            />
-                                            <label
-                                                htmlFor="auto-approve"
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                            >
-                                                Auto-approve this leave application
-                                            </label>
-=======
                                             <p className="text-xs font-medium text-red-500">{errors.reason}</p>
                                         )}
                                     </div>
@@ -870,20 +567,10 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                                     Auto-approve this leave application (as authorized administrator)
                                                 </label>
                                             </div>
->>>>>>> feature/flutter-mobile-app
                                         </div>
                                     )}
 
                                     {/* Submit buttons */}
-<<<<<<< HEAD
-                                    <div className="flex justify-end space-x-2">
-                                        <Link href={route('leave.applications.index')}>
-                                            <Button variant="outline" type="button">
-                                                Cancel
-                                            </Button>
-                                        </Link>
-                                        <Button type="submit" disabled={submitting}>
-=======
                                     <div className="flex justify-end space-x-2 pt-3 border-t">
                                         <Link href={route('leave.applications.index')}>
                                             <Button variant="outline" type="button" size="sm" className="text-xs">
@@ -891,7 +578,6 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                             </Button>
                                         </Link>
                                         <Button type="submit" disabled={submitting} size="sm" className="text-xs">
->>>>>>> feature/flutter-mobile-app
                                             {submitting ? 'Submitting...' : 'Submit Application'}
                                         </Button>
                                     </div>
@@ -900,71 +586,6 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                         </Card>
                     </div>
 
-<<<<<<< HEAD
-                    <div className="lg:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Employee Information</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Name</p>
-                                        <p className="font-medium">{employee.first_name} {employee.last_name}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Employee ID</p>
-                                        <p>{employee.employee_id}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Department</p>
-                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                            {employee.department?.name || 'No Department'}
-                                        </Badge>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Designation</p>
-                                        <p>{employee.designation?.name}</p>
-                                    </div>
-                                </div>
-
-                                <div className="mt-6">
-                                    <h3 className="font-medium">Leave Balances</h3>
-                                    <div className="mt-2 space-y-2">
-                                        {balances.length > 0 ? (
-                                            balances.map(balance => (
-                                                <div
-                                                    key={balance.id}
-                                                    className={cn(
-                                                        "p-3 rounded-md border",
-                                                        selectedLeaveBalance?.id === balance.id ? "border-blue-500 bg-blue-50" : ""
-                                                    )}
-                                                >
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="font-medium">{balance.leaveType?.name}</span>
-                                                        <Badge variant={balance.remaining_days > 0 ? "outline" : "destructive"} className={balance.remaining_days > 0 ? "bg-green-50 text-green-700 border-green-200" : ""}>
-                                                            {balance.remaining_days} left
-                                                        </Badge>
-                                                    </div>
-                                                    <div className="mt-1 text-sm text-gray-500">
-                                                        {balance.used_days} used of {balance.allocated_days} days
-                                                    </div>
-                                                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                                                        <div
-                                                            className="bg-blue-600 h-2 rounded-full"
-                                                            style={{ width: `${Math.min(100, (balance.used_days / balance.allocated_days) * 100)}%` }}
-                                                        ></div>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="p-3 rounded-md border border-yellow-200 bg-yellow-50 text-yellow-800">
-                                                No leave balances found for the current year.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-=======
                     {/* Right Panel: Employee & Leave Balance Information */}
                     <div className="lg:col-span-1 space-y-3">
                         <Card className="shadow-xs border-slate-200">
@@ -1036,16 +657,11 @@ export default function Create({ employee, leaveTypes, balances, existingLeaves 
                                         No paid leave balances assigned for current year.
                                     </div>
                                 )}
->>>>>>> feature/flutter-mobile-app
                             </CardContent>
                         </Card>
                     </div>
                 </div>
-<<<<<<< HEAD
-            </div>
-=======
             </PageSurface>
->>>>>>> feature/flutter-mobile-app
         </Layout>
     );
 }
@@ -1057,18 +673,10 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
     const [employeeBalances, setEmployeeBalances] = useState<LeaveBalance[]>([]);
     const [loading, setLoading] = useState(false);
 
-<<<<<<< HEAD
-    // Load employee data when selected
-=======
->>>>>>> feature/flutter-mobile-app
     useEffect(() => {
         if (employeeId) {
             setLoading(true);
 
-<<<<<<< HEAD
-            // Fetch employee details and leave balances
-=======
->>>>>>> feature/flutter-mobile-app
             fetch(`/api/employees/${employeeId}/leave-balances`)
                 .then(response => response.json())
                 .then(data => {
@@ -1087,10 +695,6 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
         }
     }, [employeeId]);
 
-<<<<<<< HEAD
-    // If an employee is selected, render the regular create form with their data
-=======
->>>>>>> feature/flutter-mobile-app
     if (selectedEmployee) {
         return (
             <Create
@@ -1107,44 +711,10 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
         );
     }
 
-<<<<<<< HEAD
-    // Otherwise show the employee selection form
-=======
->>>>>>> feature/flutter-mobile-app
     return (
         <Layout>
             <Head title="Create Leave Application" />
 
-<<<<<<< HEAD
-            <div className="container mx-auto py-8">
-                <div className="mb-6">
-                    <Link href={route('leave.applications.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to Leave Applications
-                    </Link>
-                </div>
-
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Create Leave Application</h1>
-                </div>
-
-                <Alert className="mb-6">
-                    <InfoIcon className="h-4 w-4" />
-                    <AlertDescription>
-                        As an administrator, you can create leave applications for any employee.
-                    </AlertDescription>
-                </Alert>
-
-                <Card className="max-w-xl mx-auto">
-                    <CardHeader>
-                        <CardTitle>Select Employee</CardTitle>
-                        <CardDescription>Choose an employee to create a leave application for</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="employee">Employee</Label>
-=======
             <PageSurface className="max-w-xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
                 <div className="mb-2">
                     <Link href={route('leave.applications.index')} className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700">
@@ -1173,20 +743,10 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
                         <div className="space-y-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="employee" className="text-xs font-medium text-gray-700">Employee</Label>
->>>>>>> feature/flutter-mobile-app
                                 <Select
                                     value={employeeId}
                                     onValueChange={setEmployeeId}
                                 >
-<<<<<<< HEAD
-                                    <SelectTrigger id="employee">
-                                        <SelectValue placeholder="Select an employee" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {employees.map((employee) => (
-                                            <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                {employee.first_name} {employee.last_name} ({employee.employee_id})
-=======
                                     <SelectTrigger id="employee" className="h-9 text-xs">
                                         <SelectValue placeholder="Select an employee" />
                                     </SelectTrigger>
@@ -1194,7 +754,6 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
                                         {employees.map((emp) => (
                                             <SelectItem key={emp.id} value={emp.id.toString()}>
                                                 {employeeDisplayName(emp)} ({emp.employee_id})
->>>>>>> feature/flutter-mobile-app
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1203,14 +762,9 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
 
                             <div className="flex justify-end">
                                 <Button
-<<<<<<< HEAD
-                                    disabled={!employeeId || loading}
-                                    onClick={() => {/* Selection happens automatically via the useEffect */ }}
-=======
                                     size="sm"
                                     className="text-xs"
                                     disabled={!employeeId || loading}
->>>>>>> feature/flutter-mobile-app
                                 >
                                     {loading ? 'Loading...' : 'Continue'}
                                 </Button>
@@ -1218,11 +772,7 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
                         </div>
                     </CardContent>
                 </Card>
-<<<<<<< HEAD
-            </div>
-=======
             </PageSurface>
->>>>>>> feature/flutter-mobile-app
         </Layout>
     );
 }

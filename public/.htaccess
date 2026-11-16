@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 # PWA: allow service worker under /build/ to use scope "/" (Apache + mod_setenvif + mod_headers).
 <IfModule mod_setenvif.c>
     SetEnvIf Request_URI "^/build/sw\.js$" HRM_PWA_SW=1
@@ -16,7 +14,6 @@
     </FilesMatch>
 </IfModule>
 
->>>>>>> feature/flutter-mobile-app
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

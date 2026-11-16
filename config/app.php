@@ -13,11 +13,7 @@ return [
     |
     */
 
-<<<<<<< HEAD
-    'name' => env('APP_NAME', 'Laravel'),
-=======
     'name' => env('APP_NAME', 'Mousumi'),
->>>>>>> feature/flutter-mobile-app
 
     /*
     |--------------------------------------------------------------------------
@@ -32,8 +28,6 @@ return [
 
     'env' => env('APP_ENV', 'production'),
 
-<<<<<<< HEAD
-=======
 
     /*
     |--------------------------------------------------------------------------
@@ -58,7 +52,6 @@ return [
 
 
 
->>>>>>> feature/flutter-mobile-app
     /*
     |--------------------------------------------------------------------------
     | Application Debug Mode
@@ -83,11 +76,7 @@ return [
     |
     */
 
-<<<<<<< HEAD
-    'url' => env('APP_URL', 'http://localhost'),
-=======
     'url' => env('APP_URL', 'http://hrm.mousumibd.org'),
->>>>>>> feature/flutter-mobile-app
 
     /*
     |--------------------------------------------------------------------------
@@ -100,11 +89,7 @@ return [
     |
     */
 
-<<<<<<< HEAD
-    'timezone' => 'UTC',
-=======
     'timezone' => 'Asia/Dhaka',
->>>>>>> feature/flutter-mobile-app
 
     /*
     |--------------------------------------------------------------------------

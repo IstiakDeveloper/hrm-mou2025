@@ -9,11 +9,6 @@ use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
-<<<<<<< HEAD
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-=======
 use App\Models\GuardShiftSetting;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
@@ -30,14 +25,11 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class AttendanceController extends Controller
 {
     /**
-<<<<<<< HEAD
-=======
      * Normalize a JSON array field that may already be cast to array.
      *
      * Some models (e.g., AttendanceSetting::$casts) cast JSON columns to arrays.
@@ -143,47 +135,12 @@ class AttendanceController extends Controller
      * Display a listing of attendances.
      */
     /**
->>>>>>> feature/flutter-mobile-app
      * Display a listing of attendances.
      */
     public function index(Request $request)
     {
         $user = Auth::user();
         $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
-<<<<<<< HEAD
-
-        // Base query with appropriate relationships
-        $query = Attendance::with(['employee.department', 'employee.designation', 'device'])
-            ->whereDate('date', $date);
-
-        // Apply filters based on user permissions and role
-        $this->applyUserFilters($query, $user, $request);
-
-        // Apply search and other filters
-        $query->when($request->status, function ($query, $status) {
-            $query->where('status', $status);
-        })
-        ->when($request->search, function ($query, $search) {
-            $query->whereHas('employee', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('employee_id', 'like', "%{$search}%");
-            });
-        });
-
-        $attendances = $query->paginate(20)->withQueryString();
-
-        // Get branches and departments that user has access to
-        $branches = $this->getAccessibleBranches($user);
-        $departments = $this->getAccessibleDepartments($user);
-
-        return Inertia::render('attendance/index', [
-            'attendances' => $attendances,
-            'branches' => $branches,
-            'departments' => $departments,
-            'filters' => $request->only(['date', 'branch_id', 'department_id', 'status', 'search']),
-            'date' => $date->format('Y-m-d'),
-=======
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
         $ymd = $date->format('Y-m-d');
@@ -401,7 +358,6 @@ class AttendanceController extends Controller
             'filters' => $request->only(['date', 'branch_id', 'department_id', 'project_id', 'status', 'search', 'movement_filter', 'per_page']),
             'date' => $date->format('Y-m-d'),
             'readableDate' => $date->format('l, F j, Y'),
->>>>>>> feature/flutter-mobile-app
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('attendance.create'),
                 'canEdit' => $user->hasPermission('attendance.edit'),
@@ -410,18 +366,13 @@ class AttendanceController extends Controller
                 'isEmployee' => $user->employee_id ? true : false,
                 'isBranchManager' => $user->hasPermission('branch_manager'),
                 'isDepartmentHead' => $user->hasPermission('department_head'),
-<<<<<<< HEAD
-=======
                 'isSuperAdmin' => (bool) $user->isSuperAdmin(),
                 'isBulkAttendanceEnabled' => AttendanceSetting::isBulkAttendanceEnabled(),
->>>>>>> feature/flutter-mobile-app
             ],
         ]);
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Generate remarks for the attendance record based on settings
      */
     private function generateRemarks($attendance)
@@ -632,27 +583,11 @@ class AttendanceController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Display monthly attendance view.
      */
     public function monthly(Request $request)
     {
         $user = Auth::user();
-<<<<<<< HEAD
-        $month = $request->month ? Carbon::parse($request->month . '-01') : Carbon::today()->startOfMonth();
-        $startDate = $month->copy()->startOfMonth();
-        $endDate = $month->copy()->endOfMonth();
-        $daysInMonth = $month->daysInMonth;
-
-        // Base query for employees
-        $employeesQuery = Employee::with(['department', 'designation', 'branch']);
-
-        // Apply filters based on user permissions and role
-        $this->applyEmployeeFilters($employeesQuery, $user, $request);
-
-        $employees = $employeesQuery->paginate(15)->withQueryString();
-
-=======
         $month = $request->month ? Carbon::parse($request->month.'-01') : Carbon::today()->startOfMonth();
         $startDate = $month->copy()->startOfMonth();
         $endDate = $month->copy()->endOfMonth();
@@ -688,14 +623,11 @@ class AttendanceController extends Controller
             }
         }
         $employees = $employeesQuery->paginate($perPage)->withQueryString();
->>>>>>> feature/flutter-mobile-app
         $employeeIds = $employees->pluck('id')->toArray();
 
         $attendances = Attendance::whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$startDate, $endDate])
             ->get()
-<<<<<<< HEAD
-=======
             ->groupBy('employee_id')
             ->map(function ($items) {
                 // Normalize to frontend-friendly primitives to avoid timezone shifting (date-only fields)
@@ -742,23 +674,12 @@ class AttendanceController extends Controller
             ->where('movement_type', 'official')
             ->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get()
->>>>>>> feature/flutter-mobile-app
             ->groupBy('employee_id');
 
         // Get branches and departments that user has access to
         $branches = $this->getAccessibleBranches($user);
         $departments = $this->getAccessibleDepartments($user);
 
-<<<<<<< HEAD
-        return Inertia::render('attendance/monthly', [
-            'employees' => $employees,
-            'attendances' => $attendances,
-            'branches' => $branches,
-            'departments' => $departments,
-            'filters' => $request->only(['month', 'branch_id', 'department_id', 'search']),
-            'month' => $month->format('Y-m'),
-            'daysInMonth' => $daysInMonth,
-=======
         // Fetch attendance settings for all relevant branches (for weekend logic)
         // Align with EmployeeDashboardController: use employee current_branch_id as primary branch id.
         $branchIds = $employees
@@ -887,7 +808,6 @@ class AttendanceController extends Controller
             'holidays' => $holidays,
             'attendanceSettings' => $attendanceSettings,
             'calendarDates' => $calendarDates,
->>>>>>> feature/flutter-mobile-app
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('attendance.create'),
                 'canEdit' => $user->hasPermission('attendance.edit'),
@@ -933,8 +853,6 @@ class AttendanceController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Preview bulk attendance with 1-month average present times (Super Admin Only).
      */
     public function bulkPreview(Request $request)
@@ -1250,7 +1168,6 @@ class AttendanceController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Store a newly created attendance record.
      */
     public function store(Request $request)
@@ -1272,25 +1189,18 @@ class AttendanceController extends Controller
         $employee = Employee::findOrFail($request->employee_id);
 
         // Verify user has permission to manage this employee's attendance
-<<<<<<< HEAD
-        if (!$this->canManageEmployeeAttendance($user, $employee)) {
-=======
         if (! $this->canManageEmployeeAttendance($user, $employee)) {
->>>>>>> feature/flutter-mobile-app
             return redirect()->back()->withErrors([
                 'employee_id' => 'You do not have permission to create attendance records for this employee.',
             ]);
         }
 
-<<<<<<< HEAD
-=======
         if (\App\Models\AttendanceSetting::isWeekendForEmployee($request->date, (int) $employee->id)) {
             return redirect()->back()->withErrors([
                 'date' => 'Weekend-এ attendance দেওয়া যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।',
             ]);
         }
 
->>>>>>> feature/flutter-mobile-app
         // Check for existing attendance record
         $existing = Attendance::where('employee_id', $request->employee_id)
             ->where('date', $request->date)
@@ -1327,13 +1237,6 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check permission to edit this attendance record
-<<<<<<< HEAD
-        if (!$this->canManageEmployeeAttendance($user, $attendance->employee)) {
-            abort(403, 'You do not have permission to edit this attendance record.');
-        }
-
-        $attendance->load('employee');
-=======
         if (! $this->canManageEmployeeAttendance($user, $attendance->employee)) {
             abort(403, 'You do not have permission to edit this attendance record.');
         }
@@ -1353,7 +1256,6 @@ class AttendanceController extends Controller
         // Generate automatic remarks just like in the index method
         $this->generateRemarks($attendance);
 
->>>>>>> feature/flutter-mobile-app
         $devices = AttendanceDevice::all();
 
         return Inertia::render('attendance/edit', [
@@ -1375,22 +1277,13 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check permission to update this attendance record
-<<<<<<< HEAD
-        if (!$this->canManageEmployeeAttendance($user, $attendance->employee)) {
-=======
         if (! $this->canManageEmployeeAttendance($user, $attendance->employee)) {
->>>>>>> feature/flutter-mobile-app
             abort(403, 'You do not have permission to update this attendance record.');
         }
 
         $request->validate([
-<<<<<<< HEAD
-            'check_in' => 'nullable|date_format:H:i',
-            'check_out' => 'nullable|date_format:H:i',
-=======
             'check_in' => 'nullable',
             'check_out' => 'nullable',
->>>>>>> feature/flutter-mobile-app
             'status' => 'required|in:present,absent,late,half_day,leave',
             'device_id' => 'nullable|exists:attendance_devices,id',
             'location_coordinates' => 'nullable|array',
@@ -1414,8 +1307,6 @@ class AttendanceController extends Controller
             ->with('success', 'Attendance record updated successfully.');
     }
 
-<<<<<<< HEAD
-=======
     public function sheetReport(Request $request)
     {
         $user = Auth::user();
@@ -2163,7 +2054,6 @@ class AttendanceController extends Controller
         return $pdf->download($fileName);
     }
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Delete the specified attendance record.
      */
@@ -2172,11 +2062,7 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check permission to delete this attendance record
-<<<<<<< HEAD
-        if (!$this->canManageEmployeeAttendance($user, $attendance->employee)) {
-=======
         if (! $this->canManageEmployeeAttendance($user, $attendance->employee)) {
->>>>>>> feature/flutter-mobile-app
             abort(403, 'You do not have permission to delete this attendance record.');
         }
 
@@ -2198,43 +2084,25 @@ class AttendanceController extends Controller
 
         // Base query with appropriate relationships
         $query = Attendance::with(['employee.department', 'employee.designation', 'employee.branch'])
-<<<<<<< HEAD
-            ->whereBetween('date', [$startDate, $endDate]);
-=======
             ->whereBetween('attendances.date', [$startDate, $endDate]);
->>>>>>> feature/flutter-mobile-app
 
         // Apply filters based on user permissions and role
         $this->applyUserFilters($query, $user, $request);
 
         // Apply additional report filters
         $query->when($request->status, function ($query, $status) {
-<<<<<<< HEAD
-            $query->where('status', $status);
-        })
-        ->when($request->employee_id, function ($query, $employeeId) {
-            $query->where('employee_id', $employeeId);
-        });
-=======
             $query->where('attendances.status', $status);
         })
             ->when($request->employee_id, function ($query, $employeeId) {
                 $query->where('attendances.employee_id', $employeeId);
             });
->>>>>>> feature/flutter-mobile-app
 
         // For summary statistics, we clone the query to avoid issues
         $queryForStats = clone $query;
 
-<<<<<<< HEAD
-        $attendances = $query->orderBy('date', 'desc')
-            ->paginate(20)
-            ->withQueryString();
-=======
         $query->orderBy('attendances.date', 'desc');
         HeadOfficeOrganogram::applyToAttendanceQuery($query);
         $attendances = $query->paginate(20)->withQueryString();
->>>>>>> feature/flutter-mobile-app
 
         // Get accessible branches, departments, and employees
         $branches = $this->getAccessibleBranches($user);
@@ -2278,11 +2146,7 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check if user has permission to sync devices
-<<<<<<< HEAD
-        if (!$user->hasPermission('attendance.sync')) {
-=======
         if (! $user->hasPermission('attendance.sync')) {
->>>>>>> feature/flutter-mobile-app
             abort(403, 'You do not have permission to sync attendance devices.');
         }
 
@@ -2291,11 +2155,7 @@ class AttendanceController extends Controller
         // and pulling attendance logs
 
         // For now, just logging the request
-<<<<<<< HEAD
-        \Log::info('Attendance sync requested by user: ' . $user->id);
-=======
         \Log::info('Attendance sync requested by user: '.$user->id);
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('attendance.index')
             ->with('success', 'Attendance data synchronized successfully from devices.');
@@ -2306,23 +2166,12 @@ class AttendanceController extends Controller
      */
     private function applyUserFilters($query, $user, $request)
     {
-<<<<<<< HEAD
-        // If user is an admin or has full permissions, apply only requested filters
-        if ($user->hasPermission('attendance.admin')) {
-            // Apply branch filter if requested
-=======
         if (OrganogramAccessService::hasUnrestrictedAttendanceScope($user)) {
->>>>>>> feature/flutter-mobile-app
             if ($request->branch_id) {
                 $query->whereHas('employee', function ($q) use ($request) {
                     $q->where('current_branch_id', $request->branch_id);
                 });
             }
-<<<<<<< HEAD
-
-            // Apply department filter if requested
-=======
->>>>>>> feature/flutter-mobile-app
             if ($request->department_id) {
                 $query->whereHas('employee', function ($q) use ($request) {
                     $q->where('department_id', $request->department_id);
@@ -2332,43 +2181,6 @@ class AttendanceController extends Controller
             return;
         }
 
-<<<<<<< HEAD
-        // If user is a branch manager, restrict to their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('current_branch_id', $user->branch_id);
-            });
-
-            // Apply department filter if requested and user is a branch manager
-            if ($request->department_id) {
-                $query->whereHas('employee', function ($q) use ($request) {
-                    $q->where('department_id', $request->department_id);
-                });
-            }
-
-            return;
-        }
-
-        // If user is a department head, restrict to their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('department_id', $user->employee->department_id);
-            });
-
-            return;
-        }
-
-        // If user is a regular employee, only show their own attendance
-        if ($user->employee_id) {
-            $query->where('employee_id', $user->employee_id);
-
-            return;
-        }
-
-        // If no specific role or permission, default to showing nothing or a limited view
-        // This is a fallback and should be adjusted based on your business rules
-        $query->where('id', -1); // This ensures no records are returned
-=======
         $query->whereHas('employee', function ($q) use ($user) {
             OrganogramAccessService::constrainVisibleEmployees($q, $user);
         });
@@ -2388,7 +2200,6 @@ class AttendanceController extends Controller
     private function applyOrganogramEmployeeOrder($query): void
     {
         HeadOfficeOrganogram::applyToEmployeeQuery($query, 'organogram', 'asc');
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -2397,26 +2208,6 @@ class AttendanceController extends Controller
     private function applyEmployeeFilters($query, $user, $request)
     {
         // Apply search filter (applies to all user types)
-<<<<<<< HEAD
-        $query->when($request->search, function ($query, $search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('employee_id', 'like', "%{$search}%");
-            });
-        });
-
-        // If user is an admin or has full permissions, apply only requested filters
-        if ($user->hasPermission('attendance.admin')) {
-            // Apply branch filter if requested
-            if ($request->branch_id) {
-                $query->where('current_branch_id', $request->branch_id);
-            }
-
-            // Apply department filter if requested
-            if ($request->department_id) {
-                $query->where('department_id', $request->department_id);
-=======
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -2437,42 +2228,11 @@ class AttendanceController extends Controller
             }
             if ($request->filled('department_id') && $request->department_id !== 'all') {
                 $query->where('employees.department_id', $request->department_id);
->>>>>>> feature/flutter-mobile-app
             }
 
             return;
         }
 
-<<<<<<< HEAD
-        // If user is a branch manager, restrict to their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            $query->where('current_branch_id', $user->branch_id);
-
-            // Apply department filter if requested and user is a branch manager
-            if ($request->department_id) {
-                $query->where('department_id', $request->department_id);
-            }
-
-            return;
-        }
-
-        // If user is a department head, restrict to their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            $query->where('department_id', $user->employee->department_id);
-
-            return;
-        }
-
-        // If user is a regular employee, only show themselves
-        if ($user->employee_id) {
-            $query->where('id', $user->employee_id);
-
-            return;
-        }
-
-        // If no specific role or permission, default to showing nothing or a limited view
-        $query->where('id', -1);
-=======
         OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
         if (! $user->isBranchAccount() && $request->filled('branch_id') && $request->branch_id !== 'all') {
@@ -2503,7 +2263,6 @@ class AttendanceController extends Controller
                 abort(403, 'You do not have access to this department.');
             }
         }
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -2511,25 +2270,6 @@ class AttendanceController extends Controller
      */
     private function getAccessibleBranches($user)
     {
-<<<<<<< HEAD
-        // If admin, return all branches
-        if ($user->hasPermission('attendance.admin')) {
-            return Branch::all();
-        }
-
-        // If branch manager, return only their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Branch::where('id', $user->branch_id)->get();
-        }
-
-        // If department head or employee, return their branch
-        if ($user->employee && $user->employee->current_branch_id) {
-            return Branch::where('id', $user->employee->current_branch_id)->get();
-        }
-
-        // Default to empty collection if no access
-        return collect([]);
-=======
         $ids = OrganogramAccessService::accessibleBranchIdList($user);
         if ($ids === null) {
             return Branch::query()->active()->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))->get();
@@ -2544,7 +2284,6 @@ class AttendanceController extends Controller
             ->whereIn('branches.id', $ids)
             ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
             ->get();
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -2552,32 +2291,6 @@ class AttendanceController extends Controller
      */
     private function getAccessibleDepartments($user)
     {
-<<<<<<< HEAD
-        // If admin, return all departments
-        if ($user->hasPermission('attendance.admin')) {
-            return Department::all();
-        }
-
-        // If branch manager, return departments in their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Department::whereHas('employees', function($q) use ($user) {
-                $q->where('current_branch_id', $user->branch_id);
-            })->distinct()->get();
-        }
-
-        // If department head, return only their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            return Department::where('id', $user->employee->department_id)->get();
-        }
-
-        // If employee, return their department
-        if ($user->employee && $user->employee->department_id) {
-            return Department::where('id', $user->employee->department_id)->get();
-        }
-
-        // Default to empty collection if no access
-        return collect([]);
-=======
         $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
         if ($ids === null) {
             return Department::query()->orderBy('name')->get();
@@ -2587,7 +2300,6 @@ class AttendanceController extends Controller
         }
 
         return Department::query()->whereIn('id', $ids)->orderBy('name')->get();
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -2595,40 +2307,11 @@ class AttendanceController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-<<<<<<< HEAD
-        // If admin, return all active employees
-        if ($user->hasPermission('attendance.admin')) {
-            return Employee::where('status', 'active')->get();
-        }
-
-        // If branch manager, return employees in their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Employee::where('status', 'active')
-                ->where('current_branch_id', $user->branch_id)
-                ->get();
-        }
-
-        // If department head, return employees in their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            return Employee::where('status', 'active')
-                ->where('department_id', $user->employee->department_id)
-                ->get();
-        }
-
-        // If employee, return only themselves
-        if ($user->employee_id) {
-            return Employee::where('id', $user->employee_id)->get();
-        }
-
-        // Default to empty collection if no access
-        return collect([]);
-=======
         $q = Employee::query()->where('employees.status', 'active');
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
         $this->applyOrganogramEmployeeOrder($q);
 
         return $q->get();
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -2643,14 +2326,6 @@ class AttendanceController extends Controller
 
         // If branch manager, can manage employees in their branch
         if ($user->hasPermission('branch_manager') && $user->branch_id) {
-<<<<<<< HEAD
-            return $employee->current_branch_id == $user->branch_id;
-        }
-
-        // If department head, can manage employees in their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            return $employee->department_id == $user->employee->department_id;
-=======
             if ($employee->current_branch_id == $user->branch_id) {
                 return true;
             }
@@ -2663,7 +2338,6 @@ class AttendanceController extends Controller
         $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
         if ($deptIds !== [] && in_array((int) $employee->department_id, $deptIds, true)) {
             return true;
->>>>>>> feature/flutter-mobile-app
         }
 
         // If employee, can only manage their own attendance if they have permission

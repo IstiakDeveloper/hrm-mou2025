@@ -3,12 +3,6 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-=======
 use App\Models\Branch;
 use App\Models\User;
 use App\Services\BranchAccountService;
@@ -16,48 +10,20 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AuthController extends Controller
 {
-<<<<<<< HEAD
-=======
     public function __construct(
         private readonly BranchAccountService $branchAccounts,
     ) {}
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Display login page.
      */
     public function showLogin()
     {
-<<<<<<< HEAD
-        return Inertia::render('auth/login');
-    }
-
-    /**
-     * Attempt login.
-     */
-    public function login(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
-
-        if (Auth::attempt($request->only('email', 'password'))) {
-            $request->session()->regenerate();
-
-            return redirect()->intended(route('dashboard'));
-        }
-
-        throw ValidationException::withMessages([
-            'email' => __('auth.failed'),
-        ]);
-=======
         $branches = Branch::query()
             ->where('is_active', true)
             ->whereNotNull('login_pin')
@@ -81,7 +47,6 @@ class AuthController extends Controller
         }
 
         return $this->attemptStaffLogin($request);
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -112,24 +77,11 @@ class AuthController extends Controller
      */
     public function updateProfile(Request $request)
     {
-<<<<<<< HEAD
-=======
         /** @var \App\Models\User $user */
->>>>>>> feature/flutter-mobile-app
         $user = Auth::user();
 
         $request->validate([
             'name' => 'required|string|max:255',
-<<<<<<< HEAD
-            'email' => 'required|email|max:255|unique:users,email,' . $user->id,
-            'current_password' => 'nullable|required_with:password',
-            'password' => 'nullable|min:8|confirmed',
-        ]);
-
-        // Check current password if attempting to change password
-        if ($request->filled('current_password')) {
-            if (!Hash::check($request->current_password, $user->password)) {
-=======
             'email' => 'required|email|max:255|unique:users,email,'.$user->id,
             'current_password' => 'nullable|required_with:password',
             'password' => 'nullable|min:4|confirmed',
@@ -137,7 +89,6 @@ class AuthController extends Controller
 
         if ($request->filled('current_password')) {
             if (! Hash::check($request->current_password, $user->password)) {
->>>>>>> feature/flutter-mobile-app
                 return back()->withErrors([
                     'current_password' => 'The current password is incorrect.',
                 ]);
@@ -155,8 +106,6 @@ class AuthController extends Controller
 
         return back()->with('success', 'Profile updated successfully.');
     }
-<<<<<<< HEAD
-=======
 
     private function attemptStaffLogin(Request $request)
     {
@@ -239,5 +188,4 @@ class AuthController extends Controller
 
         return redirect()->intended(route('sections.index'));
     }
->>>>>>> feature/flutter-mobile-app
 }

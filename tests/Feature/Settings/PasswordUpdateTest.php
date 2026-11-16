@@ -1,19 +1,11 @@
 <?php
 
-<<<<<<< HEAD
-use App\Models\User;
-=======
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Support\Facades\Hash;
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
 test('password can be updated', function () {
-<<<<<<< HEAD
-    $user = User::factory()->create();
-=======
     $user = userWithProfileAccess();
->>>>>>> feature/flutter-mobile-app
 
     $response = $this
         ->actingAs($user)
@@ -31,10 +23,6 @@ test('password can be updated', function () {
     expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
 
-<<<<<<< HEAD
-test('correct password must be provided to update password', function () {
-    $user = User::factory()->create();
-=======
 test('password page can be rendered', function () {
     $user = userWithProfileAccess();
 
@@ -66,7 +54,6 @@ test('password can be updated to a short employee password', function () {
 
 test('correct password must be provided to update password', function () {
     $user = userWithProfileAccess();
->>>>>>> feature/flutter-mobile-app
 
     $response = $this
         ->actingAs($user)

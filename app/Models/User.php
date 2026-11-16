@@ -2,18 +2,6 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-
-class User extends Authenticatable
-{
-    use HasFactory, Notifiable;
-
-    protected $fillable = [
-        'name',
-=======
 use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
 use App\Support\SectionRegistry;
@@ -30,18 +18,14 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'username',
->>>>>>> feature/flutter-mobile-app
         'email',
         'password',
         'role_id',
         'employee_id',
         'branch_id',
         'active_status',
-<<<<<<< HEAD
-=======
         'account_type',
         'signature',
->>>>>>> feature/flutter-mobile-app
     ];
 
     protected $hidden = [
@@ -65,8 +49,6 @@ class User extends Authenticatable
         return $this->belongsTo(Employee::class);
     }
 
-<<<<<<< HEAD
-=======
     public function hasSignature(): bool
     {
         return !empty($this->signature) || !empty($this->employee?->signature);
@@ -77,20 +59,11 @@ class User extends Authenticatable
         return $this->signature ?: $this->employee?->signature;
     }
 
->>>>>>> feature/flutter-mobile-app
     public function branch()
     {
         return $this->belongsTo(Branch::class);
     }
 
-<<<<<<< HEAD
-    public function hasPermission($permission)
-    {
-        return $this->role && in_array($permission, json_decode($this->role->permissions, true) ?? []);
-    }
-
-
-=======
     public function pushSubscriptions()
     {
         return $this->hasMany(PushSubscription::class);
@@ -484,5 +457,4 @@ class User extends Authenticatable
     {
         app(WebPushService::class)->sendToUser($this, $title, $body, $url);
     }
->>>>>>> feature/flutter-mobile-app
 }

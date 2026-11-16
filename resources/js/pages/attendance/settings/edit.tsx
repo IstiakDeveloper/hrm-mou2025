@@ -9,10 +9,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-<<<<<<< HEAD
-=======
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
->>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -23,9 +20,6 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-<<<<<<< HEAD
-import { ArrowLeft, Clock, Building } from 'lucide-react';
-=======
 import { ArrowLeft, Clock } from 'lucide-react';
 
 function mapServerErrorsToFormErrors(
@@ -61,7 +55,6 @@ function coerceWeekendDays(raw: unknown): number[] {
   }
   return [];
 }
->>>>>>> feature/flutter-mobile-app
 
 interface Branch {
   id: number;
@@ -99,11 +92,7 @@ export default function Edit({ setting, branches }: EditProps) {
   const [workEndTime, setWorkEndTime] = useState(setting.work_end_time);
   const [lateThresholdMinutes, setLateThresholdMinutes] = useState(setting.late_threshold_minutes.toString());
   const [halfDayHours, setHalfDayHours] = useState(setting.half_day_hours.toString());
-<<<<<<< HEAD
-  const [weekendDays, setWeekendDays] = useState<number[]>(setting.weekend_days);
-=======
   const [weekendDays, setWeekendDays] = useState<number[]>(() => coerceWeekendDays(setting.weekend_days));
->>>>>>> feature/flutter-mobile-app
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -137,17 +126,6 @@ export default function Edit({ setting, branches }: EditProps) {
     setSubmitting(true);
 
     router.put(route('attendance.settings.update', setting.id), {
-<<<<<<< HEAD
-      branch_id: parseInt(branchId),
-      work_start_time: workStartTime,
-      work_end_time: workEndTime,
-      late_threshold_minutes: parseInt(lateThresholdMinutes),
-      half_day_hours: parseInt(halfDayHours),
-      weekend_days: weekendDays
-    }, {
-      onError: (errors) => {
-        setErrors(errors);
-=======
       branch_id: parseInt(branchId, 10),
       work_start_time: workStartTime,
       work_end_time: workEndTime,
@@ -157,7 +135,6 @@ export default function Edit({ setting, branches }: EditProps) {
     }, {
       onError: (errs) => {
         setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
->>>>>>> feature/flutter-mobile-app
         setSubmitting(false);
       },
       onFinish: () => setSubmitting(false)
@@ -165,20 +142,12 @@ export default function Edit({ setting, branches }: EditProps) {
   };
 
   const handleWeekendDayChange = (id: number, checked: boolean) => {
-<<<<<<< HEAD
-    if (checked) {
-      setWeekendDays([...weekendDays, id]);
-    } else {
-      setWeekendDays(weekendDays.filter(day => day !== id));
-    }
-=======
     setWeekendDays((prev) => {
       if (checked) {
         return [...new Set([...prev, id])].sort((a, b) => a - b);
       }
       return prev.filter((day) => day !== id);
     });
->>>>>>> feature/flutter-mobile-app
   };
 
   return (
@@ -214,15 +183,9 @@ export default function Edit({ setting, branches }: EditProps) {
                     <SelectValue placeholder="Select Branch" />
                   </SelectTrigger>
                   <SelectContent>
-<<<<<<< HEAD
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-=======
                     {sortPayrollBranches(branches).map((branch) => (
                       <SelectItem key={branch.id} value={branch.id.toString()}>
                         {formatBranchSelectLabel(branch)}
->>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -309,11 +272,7 @@ export default function Edit({ setting, branches }: EditProps) {
                 <div>
                   <Label>Weekend Days</Label>
                   <p className="text-sm text-muted-foreground mt-1 mb-2">
-<<<<<<< HEAD
-                    Select days to mark as weekend (non-working days)
-=======
                     Friday and Saturday stay weekends. To open the office on one date only, use Office open dates on Attendance Settings. Do not remove Saturday here.
->>>>>>> feature/flutter-mobile-app
                   </p>
                   {errors.weekendDays && (
                     <p className="text-sm font-medium text-red-500">{errors.weekendDays}</p>

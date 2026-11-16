@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-import React, { useState, FormEvent } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
-=======
 import React, { useState, FormEvent, useEffect, useMemo } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
->>>>>>> feature/flutter-mobile-app
 import Layout from '@/layouts/AdminLayout';
 import {
   Card,
@@ -29,18 +24,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-<<<<<<< HEAD
-import { format, addHours, addDays, isAfter, parseISO } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { ArrowLeft, Calendar, CalendarClock, Clock, MapPin } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { Calendar } from '@/components/ui/calendar';
 import { format, formatISO, isAfter } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -51,7 +34,6 @@ import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-nam
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
   department?: {
     id: number;
@@ -69,18 +51,11 @@ interface Movement {
   movement_type: 'official' | 'personal';
   from_datetime: string;
   to_datetime: string;
-<<<<<<< HEAD
-  purpose: string;
-  destination: string;
-  remarks: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
-=======
   actual_return_datetime?: string | null;
   purpose: string;
   destination: string;
   remarks: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed' | 'active';
->>>>>>> feature/flutter-mobile-app
 }
 
 interface EditMovementProps {
@@ -88,11 +63,6 @@ interface EditMovementProps {
   employees: Employee[];
   isAdmin: boolean;
   movementTypes: string[];
-<<<<<<< HEAD
-}
-
-export default function EditMovement({ movement, employees, isAdmin, movementTypes }: EditMovementProps) {
-=======
   returnFilters?: Record<string, string>;
   weekendDays?: number[];
   weekendDaysByEmployee?: Record<number, number[]>;
@@ -114,7 +84,6 @@ export default function EditMovement({
   weekendDaysByEmployee = {},
 }: EditMovementProps) {
   const { officeOpenDates = [] } = usePage<{ officeOpenDates?: string[] }>().props;
->>>>>>> feature/flutter-mobile-app
   const fromDateTime = new Date(movement.from_datetime);
   const toDateTime = new Date(movement.to_datetime);
 
@@ -122,8 +91,6 @@ export default function EditMovement({
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
-<<<<<<< HEAD
-=======
   const initialActualReturnLocal = () => {
     const src = movement.actual_return_datetime
       ? new Date(movement.actual_return_datetime)
@@ -131,7 +98,6 @@ export default function EditMovement({
     return format(src, "yyyy-MM-dd'T'HH:mm");
   };
 
->>>>>>> feature/flutter-mobile-app
   const [employeeId, setEmployeeId] = useState(movement.employee_id.toString());
   const [movementType, setMovementType] = useState(movement.movement_type);
   const [fromDate, setFromDate] = useState<Date>(fromDateTime);
@@ -145,8 +111,6 @@ export default function EditMovement({
   const [submitting, setSubmitting] = useState(false);
   const [fromDateOpen, setFromDateOpen] = useState(false);
   const [toDateOpen, setToDateOpen] = useState(false);
-<<<<<<< HEAD
-=======
   const [actualReturnLocal, setActualReturnLocal] = useState(initialActualReturnLocal);
   const showReturnEditor = movement.status === 'completed' && isAdmin;
 
@@ -169,7 +133,6 @@ export default function EditMovement({
       setMovementType('personal');
     }
   }, [isWeekendMovement, movementType]);
->>>>>>> feature/flutter-mobile-app
 
   // Get combined datetime objects
   const getFromDateTime = () => {
@@ -215,8 +178,6 @@ export default function EditMovement({
       newErrors.to_datetime = 'To datetime must be after From datetime';
     }
 
-<<<<<<< HEAD
-=======
     if (fromDateTime && toDateTime) {
       const sameDay =
         fromDateTime.getFullYear() === toDateTime.getFullYear() &&
@@ -239,7 +200,6 @@ export default function EditMovement({
       }
     }
 
->>>>>>> feature/flutter-mobile-app
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -254,17 +214,6 @@ export default function EditMovement({
     const fromDateTime = getFromDateTime();
     const toDateTime = getToDateTime();
 
-<<<<<<< HEAD
-    router.put(route('movements.update', movement.id), {
-      employee_id: isAdmin ? employeeId : undefined,
-      movement_type: movementType,
-      from_datetime: fromDateTime ? format(fromDateTime, 'yyyy-MM-dd HH:mm:ss') : '',
-      to_datetime: toDateTime ? format(toDateTime, 'yyyy-MM-dd HH:mm:ss') : '',
-      purpose,
-      destination,
-      remarks,
-    }, {
-=======
     const payload: Record<string, string | undefined> = {
       employee_id: isAdmin ? employeeId : undefined,
       movement_type: isWeekendMovement ? 'personal' : movementType,
@@ -281,7 +230,6 @@ export default function EditMovement({
     }
 
     router.put(route('movements.update', movement.id), { ...payload, ...returnFilters }, {
->>>>>>> feature/flutter-mobile-app
       onError: (errors) => {
         setErrors(errors);
         setSubmitting(false);
@@ -299,11 +247,7 @@ export default function EditMovement({
 
       <div className="container mx-auto py-8">
         <div className="mb-6">
-<<<<<<< HEAD
-          <Link href={route('movements.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-=======
           <Link href={route('movements.index', returnFilters)} className="text-blue-600 hover:text-blue-800 flex items-center">
->>>>>>> feature/flutter-mobile-app
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Movement Requests
           </Link>
@@ -335,11 +279,7 @@ export default function EditMovement({
                         <SelectContent>
                           {employees.map((employee) => (
                             <SelectItem key={employee.id} value={employee.id.toString()}>
-<<<<<<< HEAD
-                              {employee.first_name} {employee.last_name} ({employee.employee_id})
-=======
                               {employeeDisplayName(employee)} ({employee.employee_id})
->>>>>>> feature/flutter-mobile-app
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -355,10 +295,7 @@ export default function EditMovement({
                     <Select
                       value={movementType}
                       onValueChange={setMovementType}
-<<<<<<< HEAD
-=======
                       disabled={isWeekendMovement}
->>>>>>> feature/flutter-mobile-app
                     >
                       <SelectTrigger id="movementType">
                         <SelectValue placeholder="Select Movement Type" />
@@ -371,14 +308,11 @@ export default function EditMovement({
                         ))}
                       </SelectContent>
                     </Select>
-<<<<<<< HEAD
-=======
                     {isWeekendMovement && (
                       <p className="text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-md px-3 py-2">
                         Weekend day: type is locked to Personal for log book only. Attendance is not affected.
                       </p>
                     )}
->>>>>>> feature/flutter-mobile-app
                     {errors.movement_type && (
                       <p className="text-sm font-medium text-red-500">{errors.movement_type}</p>
                     )}
@@ -396,11 +330,7 @@ export default function EditMovement({
                               !fromDate && "text-muted-foreground"
                             )}
                           >
-<<<<<<< HEAD
-                            <Calendar className="mr-2 h-4 w-4" />
-=======
                             <CalendarIcon className="mr-2 h-4 w-4" />
->>>>>>> feature/flutter-mobile-app
                             {fromDate ? format(fromDate, 'PPP') : <span>Select date</span>}
                           </Button>
                         </PopoverTrigger>
@@ -457,11 +387,7 @@ export default function EditMovement({
                               !toDate && "text-muted-foreground"
                             )}
                           >
-<<<<<<< HEAD
-                            <Calendar className="mr-2 h-4 w-4" />
-=======
                             <CalendarIcon className="mr-2 h-4 w-4" />
->>>>>>> feature/flutter-mobile-app
                             {toDate ? format(toDate, 'PPP') : <span>Select date</span>}
                           </Button>
                         </PopoverTrigger>
@@ -514,8 +440,6 @@ export default function EditMovement({
                     </Alert>
                   )}
 
-<<<<<<< HEAD
-=======
                   {showReturnEditor && (
                     <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
                       <Label htmlFor="actual_return_datetime">Actual return (when they came back)</Label>
@@ -535,7 +459,6 @@ export default function EditMovement({
                     </div>
                   )}
 
->>>>>>> feature/flutter-mobile-app
                   <div className="space-y-2">
                     <Label htmlFor="destination">Destination</Label>
                     <div className="relative">
@@ -606,11 +529,7 @@ export default function EditMovement({
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Name</p>
-<<<<<<< HEAD
-                      <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
-=======
                       <p className="font-medium">{employeeDisplayName(selectedEmployee)}</p>
->>>>>>> feature/flutter-mobile-app
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Employee ID</p>

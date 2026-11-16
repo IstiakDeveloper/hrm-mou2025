@@ -18,31 +18,6 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-<<<<<<< HEAD
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious
-} from '@/components/ui/pagination';
-import {
-  Check,
-  Edit,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Trash2,
-  X
-=======
 import { PageSurface } from '@/components/page-surface';
 import {
   Select,
@@ -60,7 +35,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight
->>>>>>> feature/flutter-mobile-app
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -105,21 +79,12 @@ interface LeaveTypesIndexProps {
   leaveTypes: LeaveTypesResponse;
   filters: {
     search: string;
-<<<<<<< HEAD
-=======
     per_page?: string;
->>>>>>> feature/flutter-mobile-app
   };
 }
 
 export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
-<<<<<<< HEAD
-
-  const handleSearch = () => {
-    router.get(route('leave.types.index'), {
-      search
-=======
   const [perPage, setPerPage] = useState(filters.per_page || '10');
 
   const handleSearch = () => {
@@ -134,7 +99,6 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
     router.get(route('leave.types.index'), {
       search,
       per_page: value
->>>>>>> feature/flutter-mobile-app
     }, { preserveState: true });
   };
 
@@ -146,12 +110,8 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
 
   const resetFilters = () => {
     setSearch('');
-<<<<<<< HEAD
-    router.get(route('leave.types.index'));
-=======
     setPerPage('10');
     router.get(route('leave.types.index'), { per_page: '10' }, { preserveState: true });
->>>>>>> feature/flutter-mobile-app
   };
 
   const handleDelete = (id: number) => {
@@ -164,11 +124,7 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
     <Layout>
       <Head title="Leave Types" />
 
-<<<<<<< HEAD
-      <div className="container mx-auto py-8">
-=======
             <PageSurface>
->>>>>>> feature/flutter-mobile-app
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Leave Types</h1>
@@ -188,21 +144,12 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
         </div>
 
         {/* Search Filter */}
-<<<<<<< HEAD
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle>Filters</CardTitle>
-            <CardDescription>Search for leave types by name</CardDescription>
-          </CardHeader>
-          <CardContent>
-=======
         <Card className="mb-6 shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardHeader className="pb-5 pt-6 px-6 border-b border-slate-100">
             <CardTitle className="text-lg font-bold text-slate-800 tracking-wide">Filters</CardTitle>
             <CardDescription>Search for leave types by name</CardDescription>
           </CardHeader>
           <CardContent className="p-6">
->>>>>>> feature/flutter-mobile-app
             <div className="flex space-x-4">
               <div className="flex-1">
                 <div className="relative">
@@ -218,17 +165,10 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
               </div>
 
               <div className="flex space-x-2">
-<<<<<<< HEAD
-                <Button variant="outline" onClick={resetFilters}>
-                  Reset
-                </Button>
-                <Button onClick={handleSearch}>
-=======
                 <Button variant="outline" onClick={resetFilters} className="h-10 rounded-lg">
                   Reset
                 </Button>
                 <Button onClick={handleSearch} className="h-10 rounded-lg bg-emerald-600 hover:bg-emerald-700">
->>>>>>> feature/flutter-mobile-app
                   Search
                 </Button>
               </div>
@@ -237,28 +177,6 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
         </Card>
 
         {/* Leave Types Table */}
-<<<<<<< HEAD
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Days Allowed</TableHead>
-                  <TableHead>Paid Leave</TableHead>
-                  <TableHead>Carry Forward</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leaveTypes.data && leaveTypes.data.length > 0 ? (
-                  leaveTypes.data.map((leaveType) => (
-                    <TableRow key={leaveType.id}>
-                      <TableCell>
-                        <div className="font-medium">{leaveType.name}</div>
-                      </TableCell>
-=======
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -283,7 +201,6 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
                         <TableCell className="pl-6">
                           <div className="font-semibold text-[13px] text-slate-800">{leaveType.name}</div>
                         </TableCell>
->>>>>>> feature/flutter-mobile-app
                       <TableCell>
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                           {leaveType.days_allowed} days
@@ -320,33 +237,6 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
                           {leaveType.description || '-'}
                         </div>
                       </TableCell>
-<<<<<<< HEAD
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => router.get(route('leave.types.edit', leaveType.id))}
-                              className="cursor-pointer"
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              <span>Edit</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(leaveType.id)}
-                              className="cursor-pointer text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-=======
                       <TableCell className="text-right pr-6">
                         <div className="flex items-center justify-end gap-2">
                           <Button 
@@ -368,7 +258,6 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
->>>>>>> feature/flutter-mobile-app
                       </TableCell>
                     </TableRow>
                   ))
@@ -390,77 +279,12 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
                 )}
               </TableBody>
             </Table>
-<<<<<<< HEAD
-=======
             </div>
->>>>>>> feature/flutter-mobile-app
           </CardContent>
         </Card>
 
         {/* Pagination */}
         {leaveTypes.meta && leaveTypes.meta.last_page > 1 && (
-<<<<<<< HEAD
-          <div className="mt-6">
-            <Pagination>
-              <PaginationContent>
-                {leaveTypes.meta.current_page > 1 && leaveTypes.links.prev && (
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href={leaveTypes.links.prev || '#'}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        router.get(leaveTypes.links.prev || '', { search }, { preserveState: true });
-                      }}
-                    />
-                  </PaginationItem>
-                )}
-
-                {leaveTypes.meta.links.filter(link => !link.label.includes('&laquo;') && !link.label.includes('&raquo;')).map((link, i) => {
-                  const isPageNumber = !isNaN(Number(link.label));
-
-                  if (!isPageNumber && link.label === '...') {
-                    return (
-                      <PaginationItem key={i}>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    );
-                  }
-
-                  return (
-                    <PaginationItem key={i}>
-                      <PaginationLink
-                        href={link.url || '#'}
-                        isActive={link.active}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (link.url) {
-                            router.get(link.url, { search }, { preserveState: true });
-                          }
-                        }}
-                      >
-                        {link.label}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
-
-                {leaveTypes.meta.current_page < leaveTypes.meta.last_page && leaveTypes.links.next && (
-                  <PaginationItem>
-                    <PaginationNext
-                      href={leaveTypes.links.next || '#'}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        router.get(leaveTypes.links.next || '', { search }, { preserveState: true });
-                      }}
-                    />
-                  </PaginationItem>
-                )}
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
-      </div>
-=======
           <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl mt-4">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-[13px] text-slate-500">
@@ -549,7 +373,6 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
           </div>
         )}
             </PageSurface>
->>>>>>> feature/flutter-mobile-app
     </Layout>
   );
 }

@@ -4,10 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-<<<<<<< HEAD
-=======
 use Illuminate\Support\Facades\Schema;
->>>>>>> feature/flutter-mobile-app
 
 class AttendanceDevice extends Model
 {
@@ -18,10 +15,6 @@ class AttendanceDevice extends Model
         'name',
         'ip_address',
         'port',
-<<<<<<< HEAD
-        'branch_id',
-        'status',
-=======
         'serial_number',
         'branch_id',
         'status',
@@ -51,7 +44,6 @@ class AttendanceDevice extends Model
 
     protected $appends = [
         'adms_link',
->>>>>>> feature/flutter-mobile-app
     ];
 
     public function branch()
@@ -59,8 +51,6 @@ class AttendanceDevice extends Model
         return $this->belongsTo(Branch::class);
     }
 
-<<<<<<< HEAD
-=======
     /**
      * connected = machine called /iclock within 3 minutes
      * stale = called before, but not recently
@@ -79,13 +69,10 @@ class AttendanceDevice extends Model
         return 'stale';
     }
 
->>>>>>> feature/flutter-mobile-app
     public function attendances()
     {
         return $this->hasMany(Attendance::class, 'device_id');
     }
-<<<<<<< HEAD
-=======
 
     public function acceptsAgentSync(): bool
     {
@@ -182,5 +169,4 @@ class AttendanceDevice extends Model
             $this->save();
         }
     }
->>>>>>> feature/flutter-mobile-app
 }

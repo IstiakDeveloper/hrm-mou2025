@@ -5,16 +5,12 @@ namespace App\Http\Controllers\Attendance;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceDevice;
 use App\Models\Branch;
-<<<<<<< HEAD
-use Illuminate\Http\Request;
-=======
 use App\Models\Employee;
 use App\Models\ZktecoSyncSetting;
 use App\Support\HeadOfficeOrganogram;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class AttendanceDeviceController extends Controller
@@ -28,17 +24,12 @@ class AttendanceDeviceController extends Controller
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-<<<<<<< HEAD
-                      ->orWhere('device_id', 'like', "%{$search}%")
-                      ->orWhere('ip_address', 'like', "%{$search}%");
-=======
                         ->orWhere('device_id', 'like', "%{$search}%")
                         ->orWhere('ip_address', 'like', "%{$search}%");
 
                     if (Schema::hasColumn('attendance_devices', 'serial_number')) {
                         $q->orWhere('serial_number', 'like', "%{$search}%");
                     }
->>>>>>> feature/flutter-mobile-app
                 });
             })
             ->when($request->branch_id, function ($query, $branchId) {
@@ -58,12 +49,9 @@ class AttendanceDeviceController extends Controller
             'branches' => $branches,
             'filters' => $request->only(['search', 'branch_id', 'status']),
             'statuses' => ['active', 'inactive', 'maintenance'],
-<<<<<<< HEAD
-=======
             'syncSettings' => Schema::hasTable('zkteco_sync_settings')
                 ? ZktecoSyncSetting::current()->only(['agent_sync_enabled'])
                 : ['agent_sync_enabled' => true],
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -85,18 +73,6 @@ class AttendanceDeviceController extends Controller
      */
     public function store(Request $request)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'device_id' => 'required|string|max:50|unique:attendance_devices',
-            'name' => 'required|string|max:255',
-            'ip_address' => 'required|ip',
-            'port' => 'required|integer|min:1|max:65535',
-            'branch_id' => 'required|exists:branches,id',
-            'status' => 'required|in:active,inactive,maintenance',
-        ]);
-
-        AttendanceDevice::create($request->all());
-=======
         $request->merge([
             'serial_number' => filled($request->input('serial_number'))
                 ? strtoupper(trim((string) $request->input('serial_number')))
@@ -122,7 +98,6 @@ class AttendanceDeviceController extends Controller
             : true;
 
         AttendanceDevice::create($data);
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('attendance.devices.index')
             ->with('success', 'Attendance device created successfully.');
@@ -147,18 +122,6 @@ class AttendanceDeviceController extends Controller
      */
     public function update(Request $request, AttendanceDevice $device)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'device_id' => 'required|string|max:50|unique:attendance_devices,device_id,' . $device->id,
-            'name' => 'required|string|max:255',
-            'ip_address' => 'required|ip',
-            'port' => 'required|integer|min:1|max:65535',
-            'branch_id' => 'required|exists:branches,id',
-            'status' => 'required|in:active,inactive,maintenance',
-        ]);
-
-        $device->update($request->all());
-=======
         $request->merge([
             'serial_number' => filled($request->input('serial_number'))
                 ? strtoupper(trim((string) $request->input('serial_number')))
@@ -187,15 +150,12 @@ class AttendanceDeviceController extends Controller
         $data['agent_sync_enabled'] = $request->boolean('agent_sync_enabled');
 
         $device->update($data);
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('attendance.devices.index')
             ->with('success', 'Attendance device updated successfully.');
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Global: allow or block the local PC agent attendance API.
      */
     public function updateSyncSettings(Request $request)
@@ -238,7 +198,6 @@ class AttendanceDeviceController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Delete the specified attendance device.
      */
     public function destroy(AttendanceDevice $device)
@@ -257,18 +216,6 @@ class AttendanceDeviceController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-     * Test connection to the specified device.
-     */
-    public function testConnection(AttendanceDevice $device)
-    {
-        // Implementation for testing ZKTeco device connection would go here
-        // This would typically involve connecting to the device via SDK/API
-
-        dd('test clicked');
-        return redirect()->route('attendance.devices.index')
-            ->with('success', 'Connection to device successful.');
-=======
      * Check ADMS: did this machine reach the VPS? (never curl the office LAN IP)
      */
     public function testConnection(AttendanceDevice $device)
@@ -339,6 +286,5 @@ class AttendanceDeviceController extends Controller
         return Inertia::render('attendance/devices/sync-report', [
             'devices' => $devices,
         ]);
->>>>>>> feature/flutter-mobile-app
     }
 }

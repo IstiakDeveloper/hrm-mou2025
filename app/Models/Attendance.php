@@ -2,10 +2,7 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-=======
 use Carbon\Carbon;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -13,23 +10,15 @@ class Attendance extends Model
 {
     use HasFactory;
 
-<<<<<<< HEAD
-=======
     /** Statuses set by leave/movement/holiday/weekend workflows — not overwritten by punch rules. */
     private const PROGRAMMATIC_STATUSES = ['leave', 'on_duty', 'holiday', 'weekend'];
 
->>>>>>> feature/flutter-mobile-app
     protected $fillable = [
         'employee_id',
         'date',
         'check_in',
         'check_out',
         'status',
-<<<<<<< HEAD
-        'device_id',
-        'location_coordinates',
-        'remarks',
-=======
         'shift_type',
         'checkout_next_day',
         'device_id',
@@ -37,18 +26,12 @@ class Attendance extends Model
         'remarks',
         'movement_id',
 
->>>>>>> feature/flutter-mobile-app
     ];
 
     protected $casts = [
         'date' => 'date',
         'check_in' => 'datetime',
         'check_out' => 'datetime',
-<<<<<<< HEAD
-        'location_coordinates' => 'array',
-    ];
-
-=======
         'checkout_next_day' => 'boolean',
         'location_coordinates' => 'array',
     ];
@@ -71,7 +54,6 @@ class Attendance extends Model
         });
     }
 
->>>>>>> feature/flutter-mobile-app
     public function employee()
     {
         return $this->belongsTo(Employee::class);
@@ -82,12 +64,6 @@ class Attendance extends Model
         return $this->belongsTo(AttendanceDevice::class, 'device_id');
     }
 
-<<<<<<< HEAD
-    public function getWorkHoursAttribute()
-    {
-        if ($this->check_in && $this->check_out) {
-            return $this->check_in->diffInHours($this->check_out);
-=======
     public function movement()
     {
         return $this->belongsTo(Movement::class);
@@ -103,13 +79,10 @@ class Attendance extends Model
             }
 
             return $in->diffInHours($out);
->>>>>>> feature/flutter-mobile-app
         }
 
         return 0;
     }
-<<<<<<< HEAD
-=======
 
     public function getAutoRemarksAttribute(): ?string
     {
@@ -393,5 +366,4 @@ class Attendance extends Model
             ->setMinute($parsed->minute)
             ->setSecond($parsed->second);
     }
->>>>>>> feature/flutter-mobile-app
 }

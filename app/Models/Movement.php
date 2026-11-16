@@ -2,11 +2,8 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-=======
 use App\Support\InertiaShellCache;
 use Carbon\Carbon;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -17,26 +14,12 @@ class Movement extends Model
     protected $fillable = [
         'employee_id',
         'movement_type',
-<<<<<<< HEAD
-=======
         'is_multi_day',
->>>>>>> feature/flutter-mobile-app
         'from_datetime',
         'to_datetime',
         'purpose',
         'destination',
         'remarks',
-<<<<<<< HEAD
-        'approved_by',
-        'status',
-    ];
-
-    protected $casts = [
-        'from_datetime' => 'datetime',
-        'to_datetime' => 'datetime',
-    ];
-
-=======
         'work_result',
         'start_meter_reading',
         'start_place',
@@ -64,14 +47,11 @@ class Movement extends Model
         static::deleted($forget);
     }
 
->>>>>>> feature/flutter-mobile-app
     public function employee()
     {
         return $this->belongsTo(Employee::class);
     }
 
-<<<<<<< HEAD
-=======
     public function logBook()
     {
         return $this->hasOne(MovementLogBook::class);
@@ -219,13 +199,10 @@ class Movement extends Model
     // পূর্বের অনুমোদন সম্পর্কিত মেথড গুলি সাপোর্ট হিসেবে রাখা হয়েছে
     // (যদি আপনার ডাটাবেসে পুরনো মুভমেন্ট থাকে)
 
->>>>>>> feature/flutter-mobile-app
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
-<<<<<<< HEAD
-=======
 
     public function isApproved()
     {
@@ -236,5 +213,4 @@ class Movement extends Model
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
->>>>>>> feature/flutter-mobile-app
 }

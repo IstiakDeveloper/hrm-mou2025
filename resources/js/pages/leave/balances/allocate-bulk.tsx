@@ -23,18 +23,10 @@ import {
 } from '@/components/ui/checkbox';
 import { ArrowLeft, CalendarDays, Search, Users, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-<<<<<<< HEAD
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
   department: {
     id: number;
@@ -81,36 +73,22 @@ export default function AllocateBulk({
   const [search, setSearch] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-<<<<<<< HEAD
-=======
   const [applyDefaultsUpdating, setApplyDefaultsUpdating] = useState(false);
   const [updateExistingDefaults, setUpdateExistingDefaults] = useState(false);
->>>>>>> feature/flutter-mobile-app
 
   // Safely filter employees based on department and search with null checks
   const filteredEmployees = employees?.filter(employee => {
     // Skip employees with missing properties
-<<<<<<< HEAD
-    if (!employee || !employee.department || !employee.first_name ||
-        !employee.last_name || !employee.employee_id) {
-=======
     if (!employee || !employee.department || !employee.employee_id) {
->>>>>>> feature/flutter-mobile-app
       return false;
     }
 
     const matchesDepartment = departmentFilter === 'all' ||
       (employee.department?.id?.toString() === departmentFilter);
 
-<<<<<<< HEAD
-    const matchesSearch = search === '' ||
-      employee.first_name.toLowerCase().includes(search.toLowerCase()) ||
-      employee.last_name.toLowerCase().includes(search.toLowerCase()) ||
-=======
     const displayName = employeeDisplayName(employee, '').toLowerCase();
     const matchesSearch = search === '' ||
       displayName.includes(search.toLowerCase()) ||
->>>>>>> feature/flutter-mobile-app
       employee.employee_id.toLowerCase().includes(search.toLowerCase());
 
     return matchesDepartment && matchesSearch;
@@ -178,8 +156,6 @@ export default function AllocateBulk({
     });
   };
 
-<<<<<<< HEAD
-=======
   const handleApplyDefaults = () => {
     if (!year) return;
     setApplyDefaultsUpdating(true);
@@ -199,7 +175,6 @@ export default function AllocateBulk({
     );
   };
 
->>>>>>> feature/flutter-mobile-app
   // Check if we have the required data
   if (!employees || !departments || !leaveTypes) {
     return (
@@ -295,8 +270,6 @@ export default function AllocateBulk({
                     )}
                   </div>
 
-<<<<<<< HEAD
-=======
                   <div className="rounded-md border p-3 bg-slate-50">
                     <div className="flex items-start gap-3">
                       <Checkbox
@@ -330,7 +303,6 @@ export default function AllocateBulk({
                     </div>
                   </div>
 
->>>>>>> feature/flutter-mobile-app
                   <div className="space-y-2">
                     <Label htmlFor="allocatedDays">Allocated Days</Label>
                     <Input
@@ -447,11 +419,7 @@ export default function AllocateBulk({
                               className="cursor-pointer"
                             >
                               <div className="font-medium">
-<<<<<<< HEAD
-                                {employee.first_name} {employee.last_name}
-=======
                                 {employeeDisplayName(employee)}
->>>>>>> feature/flutter-mobile-app
                               </div>
                               <div className="text-sm text-gray-500 flex items-center space-x-2">
                                 <span>{employee.employee_id}</span>

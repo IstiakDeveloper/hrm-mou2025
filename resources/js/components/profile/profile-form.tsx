@@ -13,10 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-<<<<<<< HEAD
-=======
 import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
->>>>>>> feature/flutter-mobile-app
 import {
   User,
   UserIcon,
@@ -25,10 +22,7 @@ import {
   Building,
   Shield
 } from 'lucide-react';
-<<<<<<< HEAD
-=======
 import SignatureCard from '@/components/profile/signature-card';
->>>>>>> feature/flutter-mobile-app
 
 interface ProfileFormProps {
   user: {
@@ -38,13 +32,7 @@ interface ProfileFormProps {
     role?: {
       name: string;
     };
-<<<<<<< HEAD
-    employee?: {
-      first_name: string;
-      last_name: string;
-=======
     employee?: EmployeeNameFields & {
->>>>>>> feature/flutter-mobile-app
       employee_id: string;
     };
   };
@@ -67,11 +55,7 @@ export default function ProfileForm({ user, errors }: ProfileFormProps) {
   // Get user's initials for avatar
   const getInitials = () => {
     if (user.employee) {
-<<<<<<< HEAD
-      return `${user.employee.first_name.charAt(0)}${user.employee.last_name.charAt(0)}`;
-=======
       return employeeInitials(user.employee);
->>>>>>> feature/flutter-mobile-app
     }
     return user.name.charAt(0);
   };
@@ -186,11 +170,7 @@ export default function ProfileForm({ user, errors }: ProfileFormProps) {
                   </Label>
                   <Input
                     id="full_name"
-<<<<<<< HEAD
-                    value={`${user.employee.first_name} ${user.employee.last_name}`}
-=======
                     value={employeeDisplayName(user.employee)}
->>>>>>> feature/flutter-mobile-app
                     disabled
                     className="mt-1.5 bg-gray-50 text-gray-600"
                   />

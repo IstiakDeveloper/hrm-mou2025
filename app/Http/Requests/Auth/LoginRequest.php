@@ -41,13 +41,9 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-<<<<<<< HEAD
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
-=======
         $credentials = array_merge($this->only('email', 'password'), ['active_status' => true]);
 
         if (! Auth::attempt($credentials, $this->boolean('remember'))) {
->>>>>>> feature/flutter-mobile-app
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

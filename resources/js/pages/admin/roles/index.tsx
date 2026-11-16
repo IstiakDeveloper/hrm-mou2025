@@ -29,17 +29,11 @@ import {
   Trash,
   Check,
   Shield,
-<<<<<<< HEAD
-  Users
-} from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-=======
   Users,
   UserPlus
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PageSurface } from '@/components/page-surface';
->>>>>>> feature/flutter-mobile-app
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,14 +50,10 @@ interface Role {
   name: string;
   description: string;
   permissions: string[] | null;
-<<<<<<< HEAD
-  users_count?: number;
-=======
   permissions_array?: string[];
   permission_count?: number;
   users_count?: number;
   is_default?: boolean;
->>>>>>> feature/flutter-mobile-app
 }
 
 interface PaginationData {
@@ -86,29 +76,19 @@ interface RolesIndexProps {
     search?: string;
   };
   success?: string;
-<<<<<<< HEAD
-}
-
-export default function RolesIndex({ roles, filters, success }: RolesIndexProps) {
-=======
   can_sync_defaults?: boolean;
 }
 
 export default function RolesIndex({ roles, filters, success, can_sync_defaults = true }: RolesIndexProps) {
->>>>>>> feature/flutter-mobile-app
   const { data, setData, get, processing } = useForm({
     search: filters.search || '',
   });
 
-<<<<<<< HEAD
-  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
-=======
   const syncForm = useForm({});
   const resetForm = useForm({ confirmed: true });
   const lineRoleForm = useForm({});
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
->>>>>>> feature/flutter-mobile-app
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,8 +97,6 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
     });
   };
 
-<<<<<<< HEAD
-=======
   const handleSyncDefaults = () => {
     syncForm.post(route('admin.roles.sync-defaults'), {
       preserveScroll: true,
@@ -138,7 +116,6 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
     });
   };
 
->>>>>>> feature/flutter-mobile-app
   const handleDeleteRole = () => {
     if (!roleToDelete) return;
 
@@ -149,37 +126,16 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
     });
   };
 
-<<<<<<< HEAD
-  const countPermissions = (permissions: string[] | null): number => {
-    return permissions ? permissions.length : 0;
-=======
   const countPermissions = (role: Role): number => {
     if (typeof role.permission_count === 'number') return role.permission_count;
     if (role.permissions_array) return role.permissions_array.length;
     return role.permissions ? role.permissions.length : 0;
->>>>>>> feature/flutter-mobile-app
   };
 
   return (
     <Layout>
       <Head title="Role Management" />
 
-<<<<<<< HEAD
-      <div className="container mx-auto py-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
-            <p className="mt-1 text-gray-500">
-              Manage system roles and their permissions
-            </p>
-          </div>
-          <Link href={route('admin.roles.create')}>
-            <Button className="flex items-center gap-1">
-              <PlusCircle className="h-4 w-4" />
-              <span>Add Role</span>
-            </Button>
-          </Link>
-=======
       <PageSurface>
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -216,7 +172,6 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
               </Button>
             </Link>
           </div>
->>>>>>> feature/flutter-mobile-app
         </div>
 
         {success && (
@@ -294,14 +249,11 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
                             >
                               {role.name}
                             </Badge>
-<<<<<<< HEAD
-=======
                             {role.is_default && (
                               <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-xs">
                                 Default
                               </Badge>
                             )}
->>>>>>> feature/flutter-mobile-app
                           </div>
                         </TableCell>
                         <TableCell className="max-w-md truncate">
@@ -309,11 +261,7 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant="outline" className="bg-blue-50 text-blue-800">
-<<<<<<< HEAD
-                            {countPermissions(role.permissions)}
-=======
                             {countPermissions(role)}
->>>>>>> feature/flutter-mobile-app
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
@@ -342,11 +290,7 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
                               <DropdownMenuItem
                                 className="cursor-pointer text-destructive focus:text-destructive"
                                 onClick={() => setRoleToDelete(role)}
-<<<<<<< HEAD
-                                disabled={role.name === 'Super Admin' || (role.users_count && role.users_count > 0)}
-=======
                                 disabled={Boolean(role.is_default) || role.name === 'Super Admin' || Boolean(role.users_count && role.users_count > 0)}
->>>>>>> feature/flutter-mobile-app
                               >
                                 <Trash className="mr-2 h-4 w-4" />
                                 <span>Delete</span>
@@ -361,11 +305,7 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
               </Table>
             </div>
 
-<<<<<<< HEAD
-            {/* Pagination */}
-=======
             {/* Pagination — Laravel `link.url` carries correct page + query (never `i + 1`). */}
->>>>>>> feature/flutter-mobile-app
             {roles.last_page > 1 && (
               <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6">
                 <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
@@ -380,51 +320,15 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
                   </div>
                   <div>
                     <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-<<<<<<< HEAD
-                      {roles.current_page > 1 && (
-                        <Link
-                          href={route('admin.roles.index', {
-                            page: roles.current_page - 1,
-                            search: data.search,
-                          })}
-=======
                       {roles.current_page > 1 && roles.links[0]?.url ? (
                         <Link
                           href={roles.links[0].url}
                           preserveState
->>>>>>> feature/flutter-mobile-app
                           className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
                         >
                           <span className="sr-only">Previous</span>
                           <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                         </Link>
-<<<<<<< HEAD
-                      )}
-
-                      {roles.links.slice(1, -1).map((link, i) => (
-                        <Link
-                          key={i}
-                          href={route('admin.roles.index', {
-                            page: i + 1,
-                            search: data.search,
-                          })}
-                          className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
-                            link.active
-                              ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
-                              : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
-                          }`}
-                        >
-                          {link.label}
-                        </Link>
-                      ))}
-
-                      {roles.current_page < roles.last_page && (
-                        <Link
-                          href={route('admin.roles.index', {
-                            page: roles.current_page + 1,
-                            search: data.search,
-                          })}
-=======
                       ) : null}
 
                       {roles.links.slice(1, -1).map((link, i) => {
@@ -471,17 +375,12 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
                         <Link
                           href={roles.links[roles.links.length - 1].url!}
                           preserveState
->>>>>>> feature/flutter-mobile-app
                           className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
                         >
                           <span className="sr-only">Next</span>
                           <ChevronRight className="h-5 w-5" aria-hidden="true" />
                         </Link>
-<<<<<<< HEAD
-                      )}
-=======
                       ) : null}
->>>>>>> feature/flutter-mobile-app
                     </nav>
                   </div>
                 </div>
@@ -489,11 +388,6 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
             )}
           </CardContent>
         </Card>
-<<<<<<< HEAD
-      </div>
-
-      {/* Delete Confirmation Dialog */}
-=======
       </PageSurface>
 
       {/* Delete Confirmation Dialog */}
@@ -520,7 +414,6 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
         </AlertDialogContent>
       </AlertDialog>
 
->>>>>>> feature/flutter-mobile-app
       <AlertDialog open={!!roleToDelete} onOpenChange={(open) => !open && setRoleToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

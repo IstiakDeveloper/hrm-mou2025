@@ -4,15 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Role;
-<<<<<<< HEAD
-use Illuminate\Http\Request;
-=======
 use App\Services\OrganogramLineRoleSyncService;
 use App\Support\PermissionRegistry;
 use App\Support\SectionRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class RoleController extends Controller
@@ -23,24 +19,14 @@ class RoleController extends Controller
     public function index(Request $request)
     {
         $roles = Role::when($request->search, function ($query, $search) {
-<<<<<<< HEAD
-                $query->where('name', 'like', "%{$search}%");
-            })
-=======
             $query->where('name', 'like', "%{$search}%")
                 ->orWhere('description', 'like', "%{$search}%");
         })
             ->withCount(['users', 'roleUsers'])
->>>>>>> feature/flutter-mobile-app
             ->orderBy('id')
             ->paginate(10)
             ->withQueryString();
 
-<<<<<<< HEAD
-        return Inertia::render('admin/roles/index', [
-            'roles' => $roles,
-            'filters' => $request->only(['search']),
-=======
         $roles->getCollection()->transform(function ($role) {
             $permissions = PermissionRegistry::permissionsFromStorage($role->permissions);
             $role->permission_count = count($permissions);
@@ -56,13 +42,10 @@ class RoleController extends Controller
             'filters' => $request->only(['search']),
             'permission_categories' => PermissionRegistry::categories(),
             'can_sync_defaults' => true,
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Create default roles that are missing. Does not overwrite saved permissions.
      */
     public function syncDefaultRoles()
@@ -105,23 +88,15 @@ class RoleController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Show form to create a new role.
      */
     public function create()
     {
-<<<<<<< HEAD
-        $permissions = $this->getAvailablePermissions();
-
-        return Inertia::render('admin/roles/create', [
-            'permissions' => $permissions,
-=======
         return Inertia::render('admin/roles/create', [
             'permissions' => PermissionRegistry::labels(),
             'permission_sections' => PermissionRegistry::editorSections(),
             'sections' => SectionRegistry::sections(),
             'supports_section_locks' => SectionRegistry::supportsRoleSectionLocks(),
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -130,22 +105,6 @@ class RoleController extends Controller
      */
     public function store(Request $request)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'name' => 'required|string|max:255|unique:roles',
-            'description' => 'nullable|string',
-            'permissions' => 'nullable|array',
-        ]);
-
-        Role::create([
-            'name' => $request->name,
-            'description' => $request->description,
-            'permissions' => json_encode($request->permissions ?? []),
-        ]);
-
-        return redirect()->route('admin.roles.index')
-            ->with('success', 'Role created successfully.');
-=======
         $rules = [
             'name' => 'required|string|max:255|unique:roles',
             'description' => 'nullable|string|max:500',
@@ -212,7 +171,6 @@ class RoleController extends Controller
             'permission_categories' => $permissionCategories,
             'total_permissions' => count($permissions),
         ]);
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -220,14 +178,6 @@ class RoleController extends Controller
      */
     public function edit(Role $role)
     {
-<<<<<<< HEAD
-        $permissions = $this->getAvailablePermissions();
-        $role->permissions = json_decode($role->permissions, true) ?? [];
-
-        return Inertia::render('admin/roles/edit', [
-            'role' => $role,
-            'permissions' => $permissions,
-=======
         $role->permissions = PermissionRegistry::normalizeRolePermissions($role->permissionList());
         $role->blocked_sections = $role->blockedSectionList();
 
@@ -279,7 +229,6 @@ class RoleController extends Controller
             'total_roles' => $roles->count(),
             'fixed_roles' => $fixedCount,
             'details' => $results,
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -288,21 +237,6 @@ class RoleController extends Controller
      */
     public function update(Request $request, Role $role)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'name' => 'required|string|max:255|unique:roles,name,' . $role->id,
-            'description' => 'nullable|string',
-            'permissions' => 'nullable|array',
-        ]);
-
-        $role->name = $request->name;
-        $role->description = $request->description;
-        $role->permissions = json_encode($request->permissions ?? []);
-        $role->save();
-
-        return redirect()->route('admin.roles.index')
-            ->with('success', 'Role updated successfully.');
-=======
         $isDefault = PermissionRegistry::isDefaultRoleName($role->name);
 
         $rules = [
@@ -347,7 +281,6 @@ class RoleController extends Controller
 
         return redirect()->route('admin.roles.index')
             ->with('success', "Role '{$role->name}' updated successfully. Permissions changed from {$oldPermissionCount} to {$newPermissionCount}.");
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -355,100 +288,6 @@ class RoleController extends Controller
      */
     public function destroy(Role $role)
     {
-<<<<<<< HEAD
-        // Check if role is associated with users
-        if ($role->users()->count() > 0) {
-            return redirect()->route('admin.roles.index')
-                ->with('error', 'Cannot delete role that is assigned to users.');
-        }
-
-        $role->delete();
-
-        return redirect()->route('admin.roles.index')
-            ->with('success', 'Role deleted successfully.');
-    }
-
-    /**
-     * Get all available permissions for the application.
-     */
-    private function getAvailablePermissions()
-    {
-        return [
-            'users' => [
-                'users.view' => 'View Users',
-                'users.create' => 'Create Users',
-                'users.edit' => 'Edit Users',
-                'users.delete' => 'Delete Users',
-            ],
-            'roles' => [
-                'roles.view' => 'View Roles',
-                'roles.create' => 'Create Roles',
-                'roles.edit' => 'Edit Roles',
-                'roles.delete' => 'Delete Roles',
-            ],
-            'employees' => [
-                'employees.view' => 'View Employees',
-                'employees.create' => 'Create Employees',
-                'employees.edit' => 'Edit Employees',
-                'employees.delete' => 'Delete Employees',
-            ],
-            'branches' => [
-                'branches.view' => 'View Branches',
-                'branches.create' => 'Create Branches',
-                'branches.edit' => 'Edit Branches',
-                'branches.delete' => 'Delete Branches',
-            ],
-            'departments' => [
-                'departments.view' => 'View Departments',
-                'departments.create' => 'Create Departments',
-                'departments.edit' => 'Edit Departments',
-                'departments.delete' => 'Delete Departments',
-            ],
-            'designations' => [
-                'designations.view' => 'View Designations',
-                'designations.create' => 'Create Designations',
-                'designations.edit' => 'Edit Designations',
-                'designations.delete' => 'Delete Designations',
-            ],
-            'attendance' => [
-                'attendance.view' => 'View Attendance',
-                'attendance.create' => 'Create Attendance',
-                'attendance.edit' => 'Edit Attendance',
-                'attendance.delete' => 'Delete Attendance',
-                'attendance.sync' => 'Sync Attendance Devices',
-                'attendance.admin' => 'Advanced Attendance Management',
-            ],
-            'leaves' => [
-                'leaves.view' => 'View Leaves',
-                'leaves.create' => 'Create Leaves',
-                'leaves.edit' => 'Edit Leaves',
-                'leaves.delete' => 'Delete Leaves',
-                'leaves.approve' => 'Approve Leaves',
-            ],
-            'transfers' => [
-                'transfers.view' => 'View Transfers',
-                'transfers.create' => 'Create Transfers',
-                'transfers.edit' => 'Edit Transfers',
-                'transfers.delete' => 'Delete Transfers',
-                'transfers.approve' => 'Approve Transfers',
-            ],
-            'movements' => [
-                'movements.view' => 'View Movements',
-                'movements.create' => 'Create Movements',
-                'movements.edit' => 'Edit Movements',
-                'movements.delete' => 'Delete Movements',
-                'movements.approve' => 'Approve Movements',
-            ],
-            'reports' => [
-                'reports.view' => 'View Reports',
-                'reports.export' => 'Export Reports',
-            ],
-            'special' => [
-                'branch_manager' => 'Branch Manager Privileges',
-                'department_head' => 'Department Head Privileges',
-            ],
-        ];
-=======
         if (PermissionRegistry::isDefaultRoleName($role->name)) {
             return redirect()->route('admin.roles.index')
                 ->with('error', 'Cannot delete a default system role. Remove it from config/default_roles.php if it must be retired.');
@@ -536,6 +375,5 @@ class RoleController extends Controller
 
         return redirect()->route('admin.roles.index')
             ->with('warning', "Updated {$updated} role(s) with ".count($errors).' errors: '.implode(', ', $errors));
->>>>>>> feature/flutter-mobile-app
     }
 }

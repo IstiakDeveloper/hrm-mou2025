@@ -2,11 +2,6 @@
 
 namespace App\Http\Middleware;
 
-<<<<<<< HEAD
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Http\Request;
-use Inertia\Middleware;
-=======
 use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\OfficeOpenDate;
@@ -21,7 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Middleware;
 use Symfony\Component\HttpFoundation\Response;
->>>>>>> feature/flutter-mobile-app
 
 class HandleInertiaRequests extends Middleware
 {
@@ -53,19 +47,6 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-<<<<<<< HEAD
-        [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
-
-        return [
-            ...parent::share($request),
-            'name' => config('app.name'),
-            'quote' => ['message' => trim($message), 'author' => trim($author)],
-            'auth' => [
-                'user' => $request->user(),
-            ],
-        ];
-    }
-=======
         if ($this->isLightweightJsonRequest($request)) {
             return [
                 ...parent::share($request),
@@ -283,5 +264,4 @@ class HandleInertiaRequests extends Middleware
     {
         return $request->is('notifications', 'notifications/*');
     }
->>>>>>> feature/flutter-mobile-app
 }

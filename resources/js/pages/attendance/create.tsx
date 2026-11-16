@@ -24,18 +24,10 @@ import {
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-<<<<<<< HEAD
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
 }
 
@@ -194,11 +186,7 @@ export default function AttendanceCreate({ employees, devices, date, statuses, u
                   <SelectContent>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
-<<<<<<< HEAD
-                        {employee.first_name} {employee.last_name} ({employee.employee_id})
-=======
                         {employeeDisplayName(employee)} ({employee.employee_id})
->>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>

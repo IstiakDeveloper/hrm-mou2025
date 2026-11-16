@@ -22,8 +22,5 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
-<<<<<<< HEAD
-=======
 .qodo
 hrm-mou.zip
->>>>>>> feature/flutter-mobile-app

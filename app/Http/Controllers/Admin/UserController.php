@@ -3,14 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
-use App\Models\Role;
-use App\Models\User;
-use App\Models\Employee;
-use App\Models\Branch;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-=======
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\Role;
@@ -21,14 +13,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class UserController extends Controller
 {
-<<<<<<< HEAD
-=======
     private const AUTO_EMAIL_DOMAIN_ENV = 'HRM_AUTO_EMAIL_DOMAIN';
 
     private function getAutoEmailDomain(): string
@@ -63,29 +52,11 @@ class UserController extends Controller
         return 'Employee '.$employee->employee_id;
     }
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Display a listing of users.
      */
     public function index(Request $request)
     {
-<<<<<<< HEAD
-        $users = User::with('role', 'employee', 'branch')
-            ->when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            })
-            ->orderBy('id', 'desc')
-            ->paginate(10)
-            ->withQueryString();
-
-        return Inertia::render('admin/users/index', [
-            'users' => $users,
-            'filters' => $request->only(['search']),
-        ]);
-    }
-
-=======
         $perPage = (int) $request->get('per_page', 10);
         if (! in_array($perPage, [10, 25, 50, 100, 200, 500], true)) {
             $perPage = 10;
@@ -140,29 +111,20 @@ class UserController extends Controller
         );
     }
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Show form to create a new user.
      */
     public function create()
     {
-<<<<<<< HEAD
-        $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')->get();
-=======
         $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email', 'pin')->get();
         $roles = Role::all();
->>>>>>> feature/flutter-mobile-app
         $branches = Branch::all();
 
         return Inertia::render('admin/users/create', [
             'roles' => $roles,
             'employees' => $employees,
             'branches' => $branches,
-<<<<<<< HEAD
-=======
             'autoEmailDomain' => $this->getAutoEmailDomain(),
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -171,30 +133,6 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-            'role_id' => 'required|exists:roles,id',
-            'employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'nullable|exists:branches,id',
-            'active_status' => 'boolean',
-        ]);
-
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role_id' => $request->role_id,
-            'employee_id' => $request->employee_id,
-            'branch_id' => $request->branch_id,
-            'active_status' => $request->active_status ?? true,
-        ]);
-
-        return redirect()->route('admin.users.index')
-            ->with('success', 'User created successfully.');
-=======
         $rules = [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -291,7 +229,6 @@ class UserController extends Controller
                     ->subject('Welcome to '.config('app.name').' - Your Account Information');
             }
         );
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -300,26 +237,17 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-<<<<<<< HEAD
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')->get();
-        $branches = Branch::all();
-
-=======
         $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email', 'pin')->get();
         $branches = Branch::all();
 
         $user->load('roles');
 
->>>>>>> feature/flutter-mobile-app
         return Inertia::render('admin/users/edit', [
             'user' => $user,
             'roles' => $roles,
             'employees' => $employees,
             'branches' => $branches,
-<<<<<<< HEAD
-=======
             'autoEmailDomain' => $this->getAutoEmailDomain(),
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -328,10 +256,6 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'name' => 'required|string|max:255',
-=======
         $rules = [
             'name' => 'required|string|max:255',
             'username' => [
@@ -340,7 +264,6 @@ class UserController extends Controller
                 'max:191',
                 Rule::unique('users', 'username')->ignore($user->id),
             ],
->>>>>>> feature/flutter-mobile-app
             'email' => [
                 'required',
                 'string',
@@ -348,27 +271,6 @@ class UserController extends Controller
                 'max:255',
                 Rule::unique('users')->ignore($user->id),
             ],
-<<<<<<< HEAD
-            'password' => 'nullable|string|min:8|confirmed',
-            'role_id' => 'required|exists:roles,id',
-            'employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'nullable|exists:branches,id',
-            'active_status' => 'boolean',
-        ]);
-
-        $user->name = $request->name;
-        $user->email = $request->email;
-        $user->role_id = $request->role_id;
-        $user->employee_id = $request->employee_id;
-        $user->branch_id = $request->branch_id;
-        $user->active_status = $request->active_status ?? $user->active_status;
-
-        if ($request->filled('password')) {
-            $user->password = Hash::make($request->password);
-        }
-
-        $user->save();
-=======
             'password' => 'nullable|string|min:4|confirmed',
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,id',
@@ -428,15 +330,12 @@ class UserController extends Controller
 
             $user->roles()->sync($roleIds);
         }
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User updated successfully.');
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Show bulk email form
      */
     public function bulkEmailForm()
@@ -626,7 +525,6 @@ class UserController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Delete the specified user.
      */
     public function destroy(User $user)

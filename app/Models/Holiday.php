@@ -18,21 +18,11 @@ class Holiday extends Model
     ];
 
     protected $casts = [
-<<<<<<< HEAD
-        'date' => 'date',
-=======
         'date' => 'date:Y-m-d',  // Ensure proper date format
->>>>>>> feature/flutter-mobile-app
         'is_recurring' => 'boolean',
         'applicable_branches' => 'array',
     ];
 
-<<<<<<< HEAD
-    public function isApplicableToBranch($branchId)
-    {
-        $branches = $this->applicable_branches;
-        return $branches === null || in_array($branchId, $branches);
-=======
     // public function isApplicableToBranch($branchId)
     // {
     //     $branches = $this->applicable_branches;
@@ -59,6 +49,5 @@ class Holiday extends Model
                 ->orWhereJsonLength('applicable_branches', 0)
                 ->orWhereNull('applicable_branches');
         });
->>>>>>> feature/flutter-mobile-app
     }
 }

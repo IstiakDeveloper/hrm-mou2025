@@ -2,10 +2,7 @@
 
 namespace App\Models;
 
-<<<<<<< HEAD
-=======
 use Carbon\Carbon;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,16 +17,6 @@ class AttendanceSetting extends Model
         'late_threshold_minutes',
         'half_day_hours',
         'weekend_days',
-<<<<<<< HEAD
-    ];
-
-    protected $casts = [
-        'work_start_time' => 'datetime',
-        'work_end_time' => 'datetime',
-        'weekend_days' => 'array',
-    ];
-
-=======
         'enable_bulk_attendance',
         'allow_multi_day_movement',
     ];
@@ -80,13 +67,10 @@ class AttendanceSetting extends Model
         return $value; // Return the raw time string (19:00:00)
     }
 
->>>>>>> feature/flutter-mobile-app
     public function branch()
     {
         return $this->belongsTo(Branch::class);
     }
-<<<<<<< HEAD
-=======
 
     /**
      * Company-wide attendance rules (same for all branches).
@@ -241,5 +225,4 @@ class AttendanceSetting extends Model
     {
         return static::dateFallsOnWeekend($date, static::weekendDaysForEmployee($employeeId));
     }
->>>>>>> feature/flutter-mobile-app
 }

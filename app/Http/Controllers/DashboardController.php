@@ -3,17 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-<<<<<<< HEAD
-use App\Models\Branch;
-use App\Models\Department;
-use App\Models\Employee;
-use App\Models\LeaveApplication;
-use App\Models\Movement;
-use App\Models\Transfer;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-=======
 use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\BranchPayrollBank;
@@ -59,14 +48,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
     /**
-<<<<<<< HEAD
-=======
      * Section Landing - Modules (with 3-day recent notices formatted for news ticker)
      */
     public function sections(Request $request)
@@ -800,7 +786,6 @@ class DashboardController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Display the dashboard.
      */
     public function index()
@@ -811,18 +796,6 @@ class DashboardController extends Controller
         $currentMonth = Carbon::now()->format('m');
         $currentYear = Carbon::now()->format('Y');
 
-<<<<<<< HEAD
-        // Basic stats - filtered by branch for branch managers if applicable
-        $stats = $this->getFilteredStats($user);
-
-        // Get attendance stats if user has attendance.view permission
-        $attendanceStats = $user->hasPermission('attendance.view')
-            ? $this->getAttendanceStats($user, $today)
-            : ['present' => 0, 'absent' => 0, 'late' => 0];
-
-        // Get leave stats if user has leaves.view permission
-        $leaveStats = $user->hasPermission('leaves.view')
-=======
         // Get the user's roles
         $roles = $user->roles;
         $primaryRole = $roles->isNotEmpty() ? $roles->first()->name : 'User';
@@ -847,40 +820,20 @@ class DashboardController extends Controller
 
         // Get leave stats if user has leaves.view permission
         $leaveStats = $hasPermission($user, 'leaves.view')
->>>>>>> feature/flutter-mobile-app
             ? $this->getLeaveStats($user, $today, $currentMonth, $currentYear)
             : ['pending' => 0, 'approved' => 0, 'todayOnLeave' => 0];
 
         // Get movement stats if user has movements.view permission
-<<<<<<< HEAD
-        $movementStats = $user->hasPermission('movements.view')
-=======
         $movementStats = $hasPermission($user, 'movements.view')
->>>>>>> feature/flutter-mobile-app
             ? $this->getMovementStats($user, $today)
             : ['pending' => 0, 'ongoing' => 0];
 
         // Get transfer stats if user has transfers.view permission
-<<<<<<< HEAD
-        $transferStats = $user->hasPermission('transfers.view')
-=======
         $transferStats = $hasPermission($user, 'transfers.view')
->>>>>>> feature/flutter-mobile-app
             ? $this->getTransferStats($user, $currentMonth, $currentYear)
             : ['pending' => 0, 'approved' => 0];
 
         // Get recent activities based on permissions
-<<<<<<< HEAD
-        $recentLeaves = $user->hasPermission('leaves.view')
-            ? $this->getRecentLeaves($user)
-            : [];
-
-        $recentMovements = $user->hasPermission('movements.view')
-            ? $this->getRecentMovements($user)
-            : [];
-
-        $recentTransfers = $user->hasPermission('transfers.view')
-=======
         $recentLeaves = $hasPermission($user, 'leaves.view')
             ? $this->getRecentLeaves($user)
             : [];
@@ -890,7 +843,6 @@ class DashboardController extends Controller
             : [];
 
         $recentTransfers = $hasPermission($user, 'transfers.view')
->>>>>>> feature/flutter-mobile-app
             ? $this->getRecentTransfers($user)
             : [];
 
@@ -908,33 +860,6 @@ class DashboardController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-     * Get filtered statistics based on user role and branch
-     */
-    private function getFilteredStats($user)
-    {
-        // If user is a branch manager, filter by their branch
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-
-        $employeeQuery = Employee::query();
-        $branchQuery = Branch::query();
-        $departmentQuery = Department::query();
-
-        // Filter by branch if user is a branch manager
-        if ($isBranchManager && $branchId) {
-            $employeeQuery->where('branch_id', $branchId);
-            $branchQuery->where('id', $branchId);
-            $departmentQuery->whereHas('employees', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
-        }
-
-        return [
-            'totalEmployees' => $employeeQuery->count(),
-            'totalBranches' => $branchQuery->count(),
-            'totalDepartments' => $departmentQuery->count(),
-=======
      * Display the employee dashboard
      */
     private function employeeDashboard($user, $today)
@@ -1089,33 +1014,10 @@ class DashboardController extends Controller
             'weekendDaySummary' => $this->weekendDaysLabel($weekendDays),
             'upcomingHolidays' => $upcomingHolidays,
             'hrProfile' => $hrProfile,
->>>>>>> feature/flutter-mobile-app
         ];
     }
 
     /**
-<<<<<<< HEAD
-     * Get attendance statistics, filtered by branch if applicable
-     */
-    private function getAttendanceStats($user, $today)
-    {
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-
-        $query = Attendance::where('date', $today);
-
-        // Filter by branch if user is a branch manager
-        if ($isBranchManager && $branchId) {
-            $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
-        }
-
-        return [
-            'present' => (clone $query)->where('status', 'present')->count(),
-            'absent' => (clone $query)->where('status', 'absent')->count(),
-            'late' => (clone $query)->where('status', 'late')->count(),
-=======
      * @return array<string, mixed>|null
      */
     private function buildAttendanceMovementEmployeeDashboardProps(User $user, Carbon $today): ?array
@@ -2315,7 +2217,6 @@ class DashboardController extends Controller
             'absent' => $absent,
             'late' => $late,
             'onLeave' => $exempt,
->>>>>>> feature/flutter-mobile-app
         ];
     }
 
@@ -2324,28 +2225,8 @@ class DashboardController extends Controller
      */
     private function getLeaveStats($user, $today, $currentMonth, $currentYear)
     {
-<<<<<<< HEAD
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
-        $baseQuery = LeaveApplication::query();
-
-        // Apply filters based on user role
-        if ($isBranchManager && $branchId) {
-            $baseQuery->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $baseQuery->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-=======
         $baseQuery = LeaveApplication::query();
         $this->applyDashboardBranchOrDepartmentScope($baseQuery, $user);
->>>>>>> feature/flutter-mobile-app
 
         return [
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
@@ -2358,11 +2239,7 @@ class DashboardController extends Controller
                 ->where('status', 'approved')
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
-<<<<<<< HEAD
-                ->count()
-=======
                 ->count(),
->>>>>>> feature/flutter-mobile-app
         ];
     }
 
@@ -2371,28 +2248,8 @@ class DashboardController extends Controller
      */
     private function getMovementStats($user, $today)
     {
-<<<<<<< HEAD
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
-        $baseQuery = Movement::query();
-
-        // Apply filters based on user role
-        if ($isBranchManager && $branchId) {
-            $baseQuery->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $baseQuery->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-=======
         $baseQuery = Movement::query();
         $this->applyDashboardBranchOrDepartmentScope($baseQuery, $user);
->>>>>>> feature/flutter-mobile-app
 
         return [
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
@@ -2409,26 +2266,16 @@ class DashboardController extends Controller
      */
     private function getTransferStats($user, $currentMonth, $currentYear)
     {
-<<<<<<< HEAD
-        $isBranchManager = $user->hasPermission('branch_manager');
-=======
         $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
->>>>>>> feature/flutter-mobile-app
         $branchId = $user->branch_id;
 
         $baseQuery = Transfer::query();
 
         // Apply filters based on user role - branch managers can see transfers to or from their branch
         if ($isBranchManager && $branchId) {
-<<<<<<< HEAD
-            $baseQuery->where(function($q) use ($branchId) {
-                $q->where('from_branch_id', $branchId)
-                  ->orWhere('to_branch_id', $branchId);
-=======
             $baseQuery->where(function ($q) use ($branchId) {
                 $q->where('from_branch_id', $branchId)
                     ->orWhere('to_branch_id', $branchId);
->>>>>>> feature/flutter-mobile-app
             });
         }
 
@@ -2438,11 +2285,7 @@ class DashboardController extends Controller
                 ->whereMonth('effective_date', $currentMonth)
                 ->whereYear('effective_date', $currentYear)
                 ->where('status', 'approved')
-<<<<<<< HEAD
-                ->count()
-=======
                 ->count(),
->>>>>>> feature/flutter-mobile-app
         ];
     }
 
@@ -2451,30 +2294,10 @@ class DashboardController extends Controller
      */
     private function getRecentLeaves($user)
     {
-<<<<<<< HEAD
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
-        $query = LeaveApplication::with(['employee', 'leaveType'])
-                                ->orderBy('created_at', 'desc');
-
-        if ($isBranchManager && $branchId) {
-            $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $query->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-=======
         $query = LeaveApplication::with(['employee', 'leaveType'])
             ->orderBy('created_at', 'desc');
 
         $this->applyDashboardBranchOrDepartmentScope($query, $user);
->>>>>>> feature/flutter-mobile-app
 
         return $query->take(5)->get();
     }
@@ -2484,37 +2307,15 @@ class DashboardController extends Controller
      */
     private function getRecentMovements($user)
     {
-<<<<<<< HEAD
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
-        $query = Movement::with('employee')
-                        ->orderBy('created_at', 'desc');
-
-        if ($isBranchManager && $branchId) {
-            $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $query->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-=======
         $query = Movement::with('employee')
             ->orderBy('created_at', 'desc');
 
         $this->applyDashboardBranchOrDepartmentScope($query, $user);
->>>>>>> feature/flutter-mobile-app
 
         return $query->take(5)->get();
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Active employee IDs for organogram-scoped dashboards; null = no filter (full visibility).
      *
      * @return list<int>|null
@@ -2548,23 +2349,10 @@ class DashboardController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Get recent transfers, filtered by branch if applicable
      */
     private function getRecentTransfers($user)
     {
-<<<<<<< HEAD
-        $isBranchManager = $user->hasPermission('branch_manager');
-        $branchId = $user->branch_id;
-
-        $query = Transfer::with(['employee', 'fromBranch', 'toBranch'])
-                        ->orderBy('created_at', 'desc');
-
-        if ($isBranchManager && $branchId) {
-            $query->where(function($q) use ($branchId) {
-                $q->where('from_branch_id', $branchId)
-                  ->orWhere('to_branch_id', $branchId);
-=======
         $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
@@ -2575,7 +2363,6 @@ class DashboardController extends Controller
             $query->where(function ($q) use ($branchId) {
                 $q->where('from_branch_id', $branchId)
                     ->orWhere('to_branch_id', $branchId);
->>>>>>> feature/flutter-mobile-app
             });
         }
 

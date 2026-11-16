@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
-import Layout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-=======
 import React, { useMemo, useState } from 'react';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { Head, Link, router } from '@inertiajs/react';
@@ -13,7 +6,6 @@ import { useEmployeeLookup } from '@/lib/employee-lookup';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
->>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -62,10 +54,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Label } from '@radix-ui/react-dropdown-menu';
-<<<<<<< HEAD
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
->>>>>>> feature/flutter-mobile-app
 
 interface Department {
   id: number;
@@ -82,15 +71,8 @@ interface Designation {
   name: string;
 }
 
-<<<<<<< HEAD
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
   department: Department;
   designation: Designation;
@@ -175,18 +157,12 @@ export default function AttendanceReport({
   const [branchId, setBranchId] = useState(filters.branch_id || null);
   const [departmentId, setDepartmentId] = useState(filters.department_id || null);
   const [status, setStatus] = useState(filters.status || null);
-<<<<<<< HEAD
-  const [employeeId, setEmployeeId] = useState(filters.employee_id || null);
-=======
   const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
->>>>>>> feature/flutter-mobile-app
   const [currentStartDate, setCurrentStartDate] = useState(startDate);
   const [currentEndDate, setCurrentEndDate] = useState(endDate);
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [endDateOpen, setEndDateOpen] = useState(false);
 
-<<<<<<< HEAD
-=======
   const employeeLookup = useEmployeeLookup({
     enabled: employees.length === 0,
     branchId: branchId ?? null,
@@ -207,7 +183,6 @@ export default function AttendanceReport({
     return items;
   }, [employeeOptions]);
 
->>>>>>> feature/flutter-mobile-app
   const handleSearch = () => {
     router.get(route('attendance.report'), {
       start_date: currentStartDate,
@@ -215,11 +190,7 @@ export default function AttendanceReport({
       branch_id: branchId || '',
       department_id: departmentId || '',
       status: status || '',
-<<<<<<< HEAD
-      employee_id: employeeId || ''
-=======
       employee_id: employeeId !== 'all' ? employeeId : ''
->>>>>>> feature/flutter-mobile-app
     }, { preserveState: true });
   };
 
@@ -227,11 +198,7 @@ export default function AttendanceReport({
     setBranchId(null);
     setDepartmentId(null);
     setStatus(null);
-<<<<<<< HEAD
-    setEmployeeId(null);
-=======
     setEmployeeId('all');
->>>>>>> feature/flutter-mobile-app
     router.get(route('attendance.report'), {
       start_date: currentStartDate,
       end_date: currentEndDate
@@ -261,11 +228,7 @@ export default function AttendanceReport({
       branch_id: branchId || '',
       department_id: departmentId || '',
       status: status || '',
-<<<<<<< HEAD
-      employee_id: employeeId || ''
-=======
       employee_id: employeeId !== 'all' ? employeeId : ''
->>>>>>> feature/flutter-mobile-app
     }, { preserveState: true });
   };
 
@@ -418,15 +381,9 @@ export default function AttendanceReport({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Branches</SelectItem>
-<<<<<<< HEAD
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-=======
                     {sortPayrollBranches(branches).map((branch) => (
                       <SelectItem key={branch.id} value={branch.id.toString()}>
                         {formatBranchSelectLabel(branch)}
->>>>>>> feature/flutter-mobile-app
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -453,31 +410,12 @@ export default function AttendanceReport({
               </div>
 
               <div>
-<<<<<<< HEAD
-                <Select
-                  value={employeeId || undefined}
-                  onValueChange={(value) => setEmployeeId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-=======
                 <ComboSelect
                   value={employeeId}
                   onChange={(value) => setEmployeeId(value ?? 'all')}
                   items={employeeItems}
                   placeholder="All Employees"
                 />
->>>>>>> feature/flutter-mobile-app
               </div>
 
               <div>
@@ -603,11 +541,7 @@ export default function AttendanceReport({
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">
-<<<<<<< HEAD
-                          {attendance.employee.first_name} {attendance.employee.last_name}
-=======
                           {employeeDisplayName(attendance.employee)}
->>>>>>> feature/flutter-mobile-app
                         </div>
                         <div className="text-xs text-gray-500">
                           {attendance.employee.employee_id}
@@ -650,11 +584,7 @@ export default function AttendanceReport({
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center">
                       No attendance records found for the selected criteria.
-<<<<<<< HEAD
-                      {(branchId || departmentId || status || employeeId) && (
-=======
                       {(branchId || departmentId || status || (employeeId && employeeId !== 'all')) && (
->>>>>>> feature/flutter-mobile-app
                         <Button
                           variant="link"
                           onClick={resetFilters}
@@ -688,11 +618,7 @@ export default function AttendanceReport({
                           branch_id: branchId || '',
                           department_id: departmentId || '',
                           status: status || '',
-<<<<<<< HEAD
-                          employee_id: employeeId || ''
-=======
                           employee_id: employeeId !== 'all' ? employeeId : ''
->>>>>>> feature/flutter-mobile-app
                         }, { preserveState: true });
                       }}
                     />
@@ -724,11 +650,7 @@ export default function AttendanceReport({
                               branch_id: branchId || '',
                               department_id: departmentId || '',
                               status: status || '',
-<<<<<<< HEAD
-                              employee_id: employeeId || ''
-=======
                               employee_id: employeeId !== 'all' ? employeeId : ''
->>>>>>> feature/flutter-mobile-app
                             }, { preserveState: true });
                           }
                         }}
@@ -751,11 +673,7 @@ export default function AttendanceReport({
                           branch_id: branchId || '',
                           department_id: departmentId || '',
                           status: status || '',
-<<<<<<< HEAD
-                          employee_id: employeeId || ''
-=======
                           employee_id: employeeId !== 'all' ? employeeId : ''
->>>>>>> feature/flutter-mobile-app
                         }, { preserveState: true });
                       }}
                     />

@@ -4,8 +4,6 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
-<<<<<<< HEAD
-=======
 
 export function calculateServiceLengthFromDate(dateStr: string, isBn: boolean = true): string | null {
     if (!dateStr || typeof dateStr !== 'string') return null;
@@ -79,4 +77,3 @@ export function calculateServiceLengthFromDate(dateStr: string, isBn: boolean = 
     }
 }
 
->>>>>>> feature/flutter-mobile-app

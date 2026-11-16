@@ -25,10 +25,6 @@ import {
     Briefcase,
     Users,
     User,
-<<<<<<< HEAD
-    Building2
-=======
->>>>>>> feature/flutter-mobile-app
 } from 'lucide-react';
 import {
     Pagination,
@@ -39,18 +35,10 @@ import {
     PaginationNext,
     PaginationPrevious
 } from '@/components/ui/pagination';
-<<<<<<< HEAD
-
-interface Employee {
-    id: number;
-    first_name: string;
-    last_name: string;
-=======
 import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
     id: number;
->>>>>>> feature/flutter-mobile-app
     employee_id: string;
     photo: string | null;
     designation: {
@@ -59,28 +47,13 @@ interface Employee extends EmployeeNameFields {
     };
 }
 
-<<<<<<< HEAD
-interface Branch {
-    id: number;
-    name: string;
-}
-
-=======
->>>>>>> feature/flutter-mobile-app
 interface ParentDepartment {
     id: number;
     name: string;
 }
 
-<<<<<<< HEAD
-interface HeadEmployee {
-    id: number;
-    first_name: string;
-    last_name: string;
-=======
 interface HeadEmployee extends EmployeeNameFields {
     id: number;
->>>>>>> feature/flutter-mobile-app
     employee_id: string;
     photo: string | null;
 }
@@ -89,10 +62,6 @@ interface Department {
     id: number;
     name: string;
     description: string | null;
-<<<<<<< HEAD
-    branch: Branch;
-=======
->>>>>>> feature/flutter-mobile-app
     parentDepartment: ParentDepartment | null;
     headEmployee: HeadEmployee | null;
 }
@@ -131,13 +100,6 @@ interface DepartmentShowProps {
 }
 
 export default function DepartmentShow({ department, employees }: DepartmentShowProps) {
-<<<<<<< HEAD
-    // Get initials for avatar fallback
-    const getInitials = (firstName: string, lastName: string) => {
-        return `${firstName.charAt(0)}${lastName.charAt(0)}`;
-    };
-=======
->>>>>>> feature/flutter-mobile-app
     const hasPagination = employees.meta && employees.links;
     const totalEmployees = employees.meta?.total || employees.data.length;
 
@@ -162,12 +124,6 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">{department.name}</h1>
                         <div className="mt-2 flex items-center flex-wrap gap-2">
-<<<<<<< HEAD
-                            <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-                                {department.branch.name}
-                            </Badge>
-=======
->>>>>>> feature/flutter-mobile-app
                             {department.parentDepartment && (
                                 <Badge variant="outline" className="border-gray-300">
                                     Sub-department of {department.parentDepartment.name}
@@ -207,17 +163,6 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div>
-<<<<<<< HEAD
-                                    <h3 className="text-sm font-medium text-gray-500 mb-1">Branch</h3>
-                                    <div className="flex items-center">
-                                        <Building2 className="h-4 w-4 text-gray-400 mr-1" />
-                                        <span className="text-gray-900">{department.branch.name}</span>
-                                    </div>
-                                </div>
-
-                                <div>
-=======
->>>>>>> feature/flutter-mobile-app
                                     <h3 className="text-sm font-medium text-gray-500 mb-1">Parent Department</h3>
                                     <div className="flex items-center">
                                         {department.parentDepartment ? (
@@ -256,19 +201,11 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                                         {department.headEmployee.photo ? (
                                             <AvatarImage
                                                 src={`/storage/${department.headEmployee.photo}`}
-<<<<<<< HEAD
-                                                alt={`${department.headEmployee.first_name} ${department.headEmployee.last_name}`}
-                                            />
-                                        ) : (
-                                            <AvatarFallback className="bg-purple-100 text-purple-600">
-                                                {getInitials(department.headEmployee.first_name, department.headEmployee.last_name)}
-=======
                                                 alt={employeeDisplayName(department.headEmployee)}
                                             />
                                         ) : (
                                             <AvatarFallback className="bg-purple-100 text-purple-600">
                                                 {employeeInitials(department.headEmployee)}
->>>>>>> feature/flutter-mobile-app
                                             </AvatarFallback>
                                         )}
                                     </Avatar>
@@ -277,11 +214,7 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                                             href={route('employees.show', department.headEmployee.id)}
                                             className="text-base font-medium text-gray-900 hover:text-blue-600"
                                         >
-<<<<<<< HEAD
-                                            {department.headEmployee.first_name} {department.headEmployee.last_name}
-=======
                                             {employeeDisplayName(department.headEmployee)}
->>>>>>> feature/flutter-mobile-app
                                         </Link>
                                         <p className="text-sm text-gray-500">ID: {department.headEmployee.employee_id}</p>
                                     </div>
@@ -300,11 +233,7 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                 <div className="mb-6">
                     <h2 className="text-xl font-semibold text-gray-900 flex items-center mb-4">
                         <Users className="h-5 w-5 mr-2 text-gray-500" />
-<<<<<<< HEAD
-                        Employees at this Branch ({totalEmployees})
-=======
                         Employees in this Department ({totalEmployees})
->>>>>>> feature/flutter-mobile-app
                     </h2>
 
                     <Card>
@@ -328,28 +257,16 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                                                             {employee.photo ? (
                                                                 <AvatarImage
                                                                     src={`/storage/${employee.photo}`}
-<<<<<<< HEAD
-                                                                    alt={`${employee.first_name} ${employee.last_name}`}
-                                                                />
-                                                            ) : (
-                                                                <AvatarFallback className="bg-gray-100 text-gray-600">
-                                                                    {getInitials(employee.first_name, employee.last_name)}
-=======
                                                                     alt={employeeDisplayName(employee)}
                                                                 />
                                                             ) : (
                                                                 <AvatarFallback className="bg-gray-100 text-gray-600">
                                                                     {employeeInitials(employee)}
->>>>>>> feature/flutter-mobile-app
                                                                 </AvatarFallback>
                                                             )}
                                                         </Avatar>
                                                         <span className="font-medium">
-<<<<<<< HEAD
-                                                            {employee.first_name} {employee.last_name}
-=======
                                                             {employeeDisplayName(employee)}
->>>>>>> feature/flutter-mobile-app
                                                         </span>
                                                     </div>
                                                 </TableCell>

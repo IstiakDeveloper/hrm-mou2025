@@ -2,8 +2,6 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-<<<<<<< HEAD
-=======
 use Illuminate\Support\Facades\Schedule;
 use Carbon\Carbon;
 use App\Models\Attendance;
@@ -25,13 +23,10 @@ Schedule::call(function () {
         ->where('adms_enabled', true)
         ->each(fn (AttendanceDevice $device) => $ingest->processAbsentEmployees($device));
 })->dailyAt('23:30')->name('zkteco-adms-mark-absents');
->>>>>>> feature/flutter-mobile-app
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
-<<<<<<< HEAD
-=======
 
 Artisan::command('movement:backfill-attendance-times {--from= : Start date (Y-m-d)} {--to= : End date (Y-m-d)} {--dry-run : Show changes only}', function () {
     $fromOpt = $this->option('from');
@@ -173,4 +168,3 @@ Artisan::command('movement:backfill-attendance-times {--from= : Start date (Y-m-
 
     return 0;
 })->purpose('Backfill attendance times created via movements');
->>>>>>> feature/flutter-mobile-app

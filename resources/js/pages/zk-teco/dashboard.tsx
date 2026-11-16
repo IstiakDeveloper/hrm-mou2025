@@ -52,10 +52,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-<<<<<<< HEAD
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
->>>>>>> feature/flutter-mobile-app
 
 interface AttendanceDevice {
   id: number;
@@ -70,17 +67,9 @@ interface AttendanceDevice {
   last_sync?: string;
 }
 
-<<<<<<< HEAD
-interface Employee {
-  id: number;
-  employee_id: string;
-  first_name: string;
-  last_name: string;
-=======
 interface Employee extends EmployeeNameFields {
   id: number;
   employee_id: string;
->>>>>>> feature/flutter-mobile-app
   current_branch_id: number;
 }
 
@@ -206,30 +195,6 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
       <Head title="ZK Teco Devices" />
 
       <div className="container mx-auto py-8">
-<<<<<<< HEAD
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Attendance Devices</h1>
-            <p className="mt-1 text-gray-500">
-              Manage and sync ZKTeco biometric devices
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSyncAll}
-              variant="outline"
-              className="flex items-center"
-            >
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Sync All Devices
-            </Button>
-            <Link href="">
-              <Button className="flex items-center">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Device
-              </Button>
-            </Link>
-=======
         <div className="mb-6 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -255,88 +220,10 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
                 </Button>
               </Link>
             </div>
->>>>>>> feature/flutter-mobile-app
           </div>
         </div>
 
         {/* Devices Table */}
-<<<<<<< HEAD
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Device Name</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Sync</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {devices.length > 0 ? (
-                  devices.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center">
-                          <Server className="mr-2 h-4 w-4 text-gray-500" />
-                          {device.name}
-                        </div>
-                      </TableCell>
-                      <TableCell>{device.ip_address}:{device.port}</TableCell>
-                      <TableCell>{device.branch.name}</TableCell>
-                      <TableCell>{getStatusBadge(device.status)}</TableCell>
-                      <TableCell>
-                        {device.last_sync
-                          ? new Date(device.last_sync).toLocaleString()
-                          : 'Never synced'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleSyncDevice(device)}
-                              className="cursor-pointer"
-                              disabled={device.status !== 'active'}
-                            >
-                              <RefreshCcw className="mr-2 h-4 w-4" />
-                              <span>Sync Device</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleTestConnection(device)}
-                              className="cursor-pointer"
-                            >
-                              <LinkIcon className="mr-2 h-4 w-4" />
-                              <span>Test Connection</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openUploadDialog(device)}
-                              className="cursor-pointer"
-                              disabled={device.status !== 'active'}
-                            >
-                              <Users className="mr-2 h-4 w-4" />
-                              <span>Upload Employees</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => router.get(route('zkteco.devices.edit', device.id))}
-                              className="cursor-pointer"
-                            >
-                              <Clock className="mr-2 h-4 w-4" />
-                              <span>Edit Device</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-=======
         {/* Devices Table */}
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardContent className="p-0">
@@ -418,7 +305,6 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
                         </TableCell>
                       </TableRow>
                     ))
->>>>>>> feature/flutter-mobile-app
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="h-24 text-center">
@@ -439,10 +325,7 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
                 )}
               </TableBody>
             </Table>
-<<<<<<< HEAD
-=======
             </div>
->>>>>>> feature/flutter-mobile-app
           </CardContent>
         </Card>
       </div>
@@ -477,11 +360,7 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
                       htmlFor={`employee-${employee.id}`}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                     >
-<<<<<<< HEAD
-                      {employee.employee_id} - {employee.first_name} {employee.last_name}
-=======
                       {employee.employee_id} - {employeeDisplayName(employee)}
->>>>>>> feature/flutter-mobile-app
                     </label>
                   </div>
                 ))

@@ -3,11 +3,6 @@
 namespace App\Http\Controllers\Attendance;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
-use App\Models\AttendanceSetting;
-use App\Models\Branch;
-use Illuminate\Http\Request;
-=======
 use App\Models\AttendanceDevice;
 use App\Models\AttendanceDeviceCommand;
 use App\Models\AttendanceDeviceUser;
@@ -23,14 +18,11 @@ use App\Services\AdmsDeviceCommandService;
 use App\Services\MultiBranchAttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class AttendanceSettingController extends Controller
 {
     /**
-<<<<<<< HEAD
-=======
      * HTML time inputs send "HH:mm"; DB stores "HH:mm:ss". Validation uses H:i:s.
      */
     private function normalizeTimeToHis(?string $value): ?string
@@ -91,7 +83,6 @@ class AttendanceSettingController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Display a listing of attendance settings.
      */
     public function index()
@@ -105,8 +96,6 @@ class AttendanceSettingController extends Controller
         return Inertia::render('attendance/settings/index', [
             'settings' => $settings,
             'branches' => $branches,
-<<<<<<< HEAD
-=======
             'isBulkAttendanceEnabled' => AttendanceSetting::isBulkAttendanceEnabled(),
             'guardShift' => GuardShiftSetting::current()->present(),
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
@@ -114,13 +103,10 @@ class AttendanceSettingController extends Controller
             'devicePushes' => $this->devicePushRows(),
             'officeOpenDates' => $this->officeOpenDateRows(),
             'multiBranchPermissions' => $this->multiBranchPermissionsData(),
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
     /**
-<<<<<<< HEAD
-=======
      * @return list<array{id: int, date: string, note: ?string}>
      */
     private function officeOpenDateRows(): array
@@ -480,7 +466,6 @@ class AttendanceSettingController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Show form to create new attendance settings.
      */
     public function create()
@@ -497,22 +482,6 @@ class AttendanceSettingController extends Controller
      */
     public function store(Request $request)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'branch_id' => 'required|exists:branches,id|unique:attendance_settings',
-            'work_start_time' => 'required|date_format:H:i',
-            'work_end_time' => 'required|date_format:H:i',
-            'late_threshold_minutes' => 'required|integer|min:0',
-            'half_day_hours' => 'required|integer|min:1',
-            'weekend_days' => 'required|array',
-            'weekend_days.*' => 'integer|min:0|max:6',
-        ]);
-
-        $data = $request->all();
-        $data['weekend_days'] = json_encode($data['weekend_days']);
-
-        AttendanceSetting::create($data);
-=======
         $request->merge([
             'work_start_time' => $this->normalizeTimeToHis($request->input('work_start_time')) ?? '',
             'work_end_time' => $this->normalizeTimeToHis($request->input('work_end_time')) ?? '',
@@ -538,7 +507,6 @@ class AttendanceSettingController extends Controller
                 'allow_multi_day_movement' => (bool) $request->boolean('allow_multi_day_movement'),
             ]);
         }
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('attendance.settings.index')
             ->with('success', 'Attendance settings created successfully.');
@@ -549,13 +517,6 @@ class AttendanceSettingController extends Controller
      */
     public function edit(AttendanceSetting $setting)
     {
-<<<<<<< HEAD
-        $setting->weekend_days = json_decode($setting->weekend_days);
-        $branches = Branch::all();
-
-        return Inertia::render('attendance/settings/edit', [
-            'setting' => $setting,
-=======
         $branches = Branch::all();
 
         $payload = $setting->toArray();
@@ -566,7 +527,6 @@ class AttendanceSettingController extends Controller
 
         return Inertia::render('attendance/settings/edit', [
             'setting' => $payload,
->>>>>>> feature/flutter-mobile-app
             'branches' => $branches,
         ]);
     }
@@ -576,23 +536,6 @@ class AttendanceSettingController extends Controller
      */
     public function update(Request $request, AttendanceSetting $setting)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'branch_id' => 'required|exists:branches,id|unique:attendance_settings,branch_id,' . $setting->id,
-            'work_start_time' => 'required|date_format:H:i',
-            'work_end_time' => 'required|date_format:H:i',
-            'late_threshold_minutes' => 'required|integer|min:0',
-            'half_day_hours' => 'required|integer|min:1',
-            'weekend_days' => 'required|array',
-            'weekend_days.*' => 'integer|min:0|max:6',
-        ]);
-
-        $data = $request->all();
-        $data['weekend_days'] = json_encode($data['weekend_days']);
-
-        $setting->update($data);
-
-=======
         $request->merge([
             'work_start_time' => $this->normalizeTimeToHis($request->input('work_start_time')) ?? '',
             'work_end_time' => $this->normalizeTimeToHis($request->input('work_end_time')) ?? '',
@@ -619,7 +562,6 @@ class AttendanceSettingController extends Controller
             ]);
         }
 
->>>>>>> feature/flutter-mobile-app
         return redirect()->route('attendance.settings.index')
             ->with('success', 'Attendance settings updated successfully.');
     }

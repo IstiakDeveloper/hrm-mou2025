@@ -9,10 +9,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-<<<<<<< HEAD
-=======
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
->>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -22,9 +19,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-<<<<<<< HEAD
-import { ArrowLeft, Building, Network } from 'lucide-react';
-=======
 import { ArrowLeft, Network, Radio } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
@@ -49,7 +43,6 @@ function mapServerErrorsToFormErrors(
   }
   return out;
 }
->>>>>>> feature/flutter-mobile-app
 
 interface Branch {
   id: number;
@@ -62,17 +55,12 @@ interface AttendanceDevice {
   name: string;
   ip_address: string;
   port: number;
-<<<<<<< HEAD
-  branch_id: number;
-  status: string;
-=======
   serial_number: string | null;
   branch_id: number;
   status: string;
   adms_enabled?: boolean;
   adms_attlog_keep_days?: number;
   agent_sync_enabled?: boolean;
->>>>>>> feature/flutter-mobile-app
 }
 
 interface EditProps {
@@ -85,11 +73,6 @@ export default function Edit({ device, branches, statuses }: EditProps) {
   const [deviceId, setDeviceId] = useState(device.device_id);
   const [name, setName] = useState(device.name);
   const [ipAddress, setIpAddress] = useState(device.ip_address);
-<<<<<<< HEAD
-  const [port, setPort] = useState(device.port.toString());
-  const [branchId, setBranchId] = useState(device.branch_id.toString());
-  const [status, setStatus] = useState(device.status);
-=======
   const [port, setPort] = useState(
     String(device.port != null ? device.port : 4370)
   );
@@ -98,7 +81,6 @@ export default function Edit({ device, branches, statuses }: EditProps) {
   const [status, setStatus] = useState(device.status);
   const [admsEnabled, setAdmsEnabled] = useState(!!device.adms_enabled);
   const [agentSyncEnabled, setAgentSyncEnabled] = useState(device.agent_sync_enabled !== false);
->>>>>>> feature/flutter-mobile-app
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -135,13 +117,6 @@ export default function Edit({ device, branches, statuses }: EditProps) {
       name,
       ip_address: ipAddress,
       port: parseInt(port),
-<<<<<<< HEAD
-      branch_id: parseInt(branchId),
-      status
-    }, {
-      onError: (errors) => {
-        setErrors(errors);
-=======
       serial_number: serialNumber || null,
       branch_id: parseInt(branchId),
       status,
@@ -150,7 +125,6 @@ export default function Edit({ device, branches, statuses }: EditProps) {
     }, {
       onError: (errs) => {
         setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
->>>>>>> feature/flutter-mobile-app
         setSubmitting(false);
       },
       onFinish: () => setSubmitting(false)
@@ -257,8 +231,6 @@ export default function Edit({ device, branches, statuses }: EditProps) {
                 </div>
               </div>
 
-<<<<<<< HEAD
-=======
               <div className="space-y-2">
                 <Label htmlFor="serialNumber">Device serial (ADMS SN)</Label>
                 <Input
@@ -313,7 +285,6 @@ export default function Edit({ device, branches, statuses }: EditProps) {
                 </div>
               </div>
 
->>>>>>> feature/flutter-mobile-app
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch</Label>
@@ -325,15 +296,9 @@ export default function Edit({ device, branches, statuses }: EditProps) {
                       <SelectValue placeholder="Select Branch" />
                     </SelectTrigger>
                     <SelectContent>
-<<<<<<< HEAD
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id.toString()}>
-                          {branch.name}
-=======
                       {sortPayrollBranches(branches).map((branch) => (
                         <SelectItem key={branch.id} value={branch.id.toString()}>
                           {formatBranchSelectLabel(branch)}
->>>>>>> feature/flutter-mobile-app
                         </SelectItem>
                       ))}
                     </SelectContent>

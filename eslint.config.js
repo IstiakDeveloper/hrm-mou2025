@@ -11,11 +11,7 @@ export default [
     ...typescript.configs.recommended,
     {
         ...react.configs.flat.recommended,
-<<<<<<< HEAD
-        ...react.configs.flat['jsx-runtime'], // Required for React 17+
-=======
         ...react.configs.flat['jsx-runtime'], 
->>>>>>> feature/flutter-mobile-app
         languageOptions: {
             globals: {
                 ...globals.browser,

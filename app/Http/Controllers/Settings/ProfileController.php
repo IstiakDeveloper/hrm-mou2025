@@ -7,12 +7,8 @@ use App\Http\Requests\Settings\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-<<<<<<< HEAD
-use Illuminate\Support\Facades\Auth;
-=======
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,13 +17,6 @@ class ProfileController extends Controller
     /**
      * Show the user's profile settings page.
      */
-<<<<<<< HEAD
-    public function edit(Request $request): Response
-    {
-        return Inertia::render('settings/profile', [
-            'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
-            'status' => $request->session()->get('status'),
-=======
     public function edit(Request $request): Response|RedirectResponse
     {
         if ($request->user()?->isBranchAccount()) {
@@ -41,7 +30,6 @@ class ProfileController extends Controller
             'status' => $request->session()->get('status'),
             'signature' => $user->getSignaturePath(),
             'employee' => $user->employee,
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -58,30 +46,6 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
-<<<<<<< HEAD
-        return to_route('profile.edit');
-    }
-
-    /**
-     * Delete the user's account.
-     */
-    public function destroy(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'password' => ['required', 'current_password'],
-        ]);
-
-        $user = $request->user();
-
-        Auth::logout();
-
-        $user->delete();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect('/');
-=======
         return to_route('settings.profile.edit')->with('success', 'Profile updated successfully.');
     }
 
@@ -178,6 +142,5 @@ class ProfileController extends Controller
         }
 
         return back()->with('success', 'ডিজিটাল স্বাক্ষর মুছে ফেলা হয়েছে (Signature removed successfully).');
->>>>>>> feature/flutter-mobile-app
     }
 }

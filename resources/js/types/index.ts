@@ -22,11 +22,6 @@ export interface NavItem {
 }
 
 export interface SharedData {
-<<<<<<< HEAD
-    name: string;
-    quote: { message: string; author: string };
-    auth: Auth;
-=======
     csrf_token?: string;
     name: string;
     quote: { message: string; author: string };
@@ -56,7 +51,6 @@ export interface SharedData {
         total: number;
     };
     pendingFinalClearanceCount?: number;
->>>>>>> feature/flutter-mobile-app
     [key: string]: unknown;
 }
 
@@ -66,10 +60,7 @@ export interface User {
     email: string;
     avatar?: string;
     email_verified_at: string | null;
-<<<<<<< HEAD
-=======
     signature?: string | null;
->>>>>>> feature/flutter-mobile-app
     created_at: string;
     updated_at: string;
     [key: string]: unknown; // This allows for additional properties...

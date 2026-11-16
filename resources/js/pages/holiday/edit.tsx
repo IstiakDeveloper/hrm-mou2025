@@ -9,10 +9,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-<<<<<<< HEAD
-=======
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
->>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -227,11 +224,7 @@ export default function EditHoliday({ holiday, branches }: EditHolidayProps) {
 
                                         {!allBranches && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 pt-2">
-<<<<<<< HEAD
-                                                {branches.map((branch) => (
-=======
                                                 {sortPayrollBranches(branches).map((branch) => (
->>>>>>> feature/flutter-mobile-app
                                                     <div key={branch.id} className="flex items-center space-x-2">
                                                         <Checkbox
                                                             id={`branch-${branch.id}`}
@@ -239,11 +232,7 @@ export default function EditHoliday({ holiday, branches }: EditHolidayProps) {
                                                             onCheckedChange={() => handleBranchSelect(branch.id)}
                                                         />
                                                         <Label htmlFor={`branch-${branch.id}`}>
-<<<<<<< HEAD
-                                                            {branch.name}
-=======
                                                             {formatBranchSelectLabel(branch)}
->>>>>>> feature/flutter-mobile-app
                                                         </Label>
                                                     </div>
                                                 ))}

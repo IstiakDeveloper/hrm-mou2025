@@ -14,11 +14,7 @@ class EmailVerificationNotificationController extends Controller
     public function store(Request $request): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
-<<<<<<< HEAD
-            return redirect()->intended(route('dashboard', absolute: false));
-=======
             return redirect()->intended(route('sections.index', absolute: false));
->>>>>>> feature/flutter-mobile-app
         }
 
         $request->user()->sendEmailVerificationNotification();

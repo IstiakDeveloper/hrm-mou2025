@@ -1,12 +1,5 @@
 import '../css/app.css';
 
-<<<<<<< HEAD
-import { createInertiaApp } from '@inertiajs/react';
-import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import { createRoot } from 'react-dom/client';
-import { route as routeFn } from 'ziggy-js';
-import { initializeTheme } from './hooks/use-appearance';
-=======
 import InertiaNotificationGate from '@/components/inertia-notification-gate';
 import PWAManager from '@/components/PWAManager';
 import PwaRoot from '@/components/pwa-root';
@@ -20,27 +13,11 @@ import { route as routeFn } from 'ziggy-js';
 import { type ComponentType } from 'react';
 import { initializeTheme } from './hooks/use-appearance';
 import SplashLoader from '@/components/splash-loader';
->>>>>>> feature/flutter-mobile-app
 
 declare global {
     const route: typeof routeFn;
 }
 
-<<<<<<< HEAD
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
-
-createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
-    resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
-    setup({ el, App, props }) {
-        const root = createRoot(el);
-
-        root.render(<App {...props} />);
-    },
-    progress: {
-        color: '#4B5563',
-    },
-=======
 const appName = import.meta.env.VITE_APP_NAME || 'HRM Admin';
 
 function AppGlobalChrome() {
@@ -100,13 +77,10 @@ createInertiaApp({
         );
     },
     progress: false,
->>>>>>> feature/flutter-mobile-app
 });
 
 // This will set light / dark mode on load...
 initializeTheme();
-<<<<<<< HEAD
-=======
 
 installPreventNumberInputWheelScroll();
 installHoverPrefetch();
@@ -174,4 +148,3 @@ function installHoverPrefetch(): void {
         { passive: true },
     );
 }
->>>>>>> feature/flutter-mobile-app

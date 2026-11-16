@@ -4,17 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-<<<<<<< HEAD
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-=======
 use App\Services\OrganogramLineRoleSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -41,9 +35,6 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-<<<<<<< HEAD
-        return redirect()->intended(route('dashboard', absolute: false));
-=======
         try {
             $user = $request->user();
             if ($user) {
@@ -57,7 +48,6 @@ class AuthenticatedSessionController extends Controller
         }
 
         return redirect()->intended(route('sections.index', absolute: false));
->>>>>>> feature/flutter-mobile-app
     }
 
     /**

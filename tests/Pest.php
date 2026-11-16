@@ -15,11 +15,8 @@ pest()->extend(Tests\TestCase::class)
     ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
     ->in('Feature');
 
-<<<<<<< HEAD
-=======
 pest()->extend(Tests\TestCase::class)->in('Unit');
 
->>>>>>> feature/flutter-mobile-app
 /*
 |--------------------------------------------------------------------------
 | Expectations
@@ -46,11 +43,6 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-<<<<<<< HEAD
-function something()
-{
-    // ..
-=======
 function userWithProfileAccess(): \App\Models\User
 {
     $role = \App\Models\Role::query()->create([
@@ -61,5 +53,4 @@ function userWithProfileAccess(): \App\Models\User
     return \App\Models\User::factory()->create([
         'role_id' => $role->id,
     ]);
->>>>>>> feature/flutter-mobile-app
 }

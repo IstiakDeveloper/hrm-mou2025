@@ -1,10 +1,7 @@
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Link } from '@inertiajs/react';
 import { type PropsWithChildren } from 'react';
-<<<<<<< HEAD
-=======
 import { LayoutGrid } from 'lucide-react';
->>>>>>> feature/flutter-mobile-app
 
 interface AuthLayoutProps {
     name?: string;
@@ -12,11 +9,6 @@ interface AuthLayoutProps {
     description?: string;
 }
 
-<<<<<<< HEAD
-export default function AuthSimpleLayout({ children, title, description }: PropsWithChildren<AuthLayoutProps>) {
-    return (
-        <div className="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-=======
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || 'http://localhost:3000';
 
 export default function AuthSimpleLayout({ children, title, description }: PropsWithChildren<AuthLayoutProps>) {
@@ -37,7 +29,6 @@ export default function AuthSimpleLayout({ children, title, description }: Props
                 </a>
             </div>
 
->>>>>>> feature/flutter-mobile-app
             <div className="w-full max-w-sm">
                 <div className="flex flex-col gap-8">
                     <div className="flex flex-col items-center gap-4">

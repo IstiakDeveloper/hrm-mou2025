@@ -152,11 +152,7 @@ class ZKDeviceController extends Controller
             //     $zk->setUser(
             //         $employee->id,
             //         $employee->employee_id,
-<<<<<<< HEAD
-            //         $employee->first_name . ' ' . $employee->last_name
-=======
             //         $employee->name_en ?? $employee->full_name_en
->>>>>>> feature/flutter-mobile-app
             //     );
             // }
 
@@ -219,22 +215,7 @@ class ZKDeviceController extends Controller
     private function processAttendanceLogs($logs, AttendanceDevice $device)
     {
         $processedCount = 0;
-<<<<<<< HEAD
-        $settings = AttendanceSetting::where('branch_id', $device->branch_id)->first();
-
-        if (!$settings) {
-            // Use default settings if none found for this branch
-            $settings = new AttendanceSetting([
-                'work_start_time' => '09:00',
-                'work_end_time' => '17:00',
-                'late_threshold_minutes' => 15,
-                'half_day_hours' => 4,
-                'weekend_days' => json_encode([0, 6]), // Sunday and Saturday
-            ]);
-        }
-=======
         $settings = AttendanceSetting::global();
->>>>>>> feature/flutter-mobile-app
 
         // Group logs by employee and date
         $groupedLogs = [];
@@ -271,14 +252,8 @@ class ZKDeviceController extends Controller
         foreach ($groupedLogs as $employeeId => $dates) {
             foreach ($dates as $date => $record) {
                 // Skip weekend days if configured
-<<<<<<< HEAD
-                $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-                $weekendDays = json_decode($settings->weekend_days);
-                if (in_array($dayOfWeek, $weekendDays)) {
-=======
                 $weekendDays = $settings->weekendDayNumbers();
                 if (AttendanceSetting::dateFallsOnWeekend($date, $weekendDays)) {
->>>>>>> feature/flutter-mobile-app
                     continue;
                 }
 
@@ -292,13 +267,6 @@ class ZKDeviceController extends Controller
                     $existing->check_in = $record['check_in'] ? Carbon::parse($record['check_in'])->format('H:i:s') : null;
                     $existing->check_out = $record['check_out'] ? Carbon::parse($record['check_out'])->format('H:i:s') : null;
                     $existing->device_id = $device->id;
-<<<<<<< HEAD
-
-                    // Determine status
-                    $existing->status = $this->determineAttendanceStatus($record, $settings);
-
-=======
->>>>>>> feature/flutter-mobile-app
                     $existing->save();
                 } else {
                     // Create new record
@@ -307,10 +275,6 @@ class ZKDeviceController extends Controller
                         'date' => $date,
                         'check_in' => $record['check_in'] ? Carbon::parse($record['check_in'])->format('H:i:s') : null,
                         'check_out' => $record['check_out'] ? Carbon::parse($record['check_out'])->format('H:i:s') : null,
-<<<<<<< HEAD
-                        'status' => $this->determineAttendanceStatus($record, $settings),
-=======
->>>>>>> feature/flutter-mobile-app
                         'device_id' => $device->id,
                     ]);
                 }
@@ -323,44 +287,6 @@ class ZKDeviceController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-     * Determine attendance status based on check-in/out times and settings.
-     */
-    private function determineAttendanceStatus($record, $settings)
-    {
-        if (!$record['check_in']) {
-            return 'absent';
-        }
-
-        $checkIn = Carbon::parse($record['check_in']);
-        $workStart = Carbon::parse($checkIn->format('Y-m-d') . ' ' . $settings->work_start_time);
-
-        // Check if late
-        $isLate = $checkIn->diffInMinutes($workStart) > $settings->late_threshold_minutes &&
-            $checkIn->greaterThan($workStart);
-
-        // Check if half day
-// Check if half day
-        $isHalfDay = false;
-
-        if ($record['check_out']) {
-            $checkOut = Carbon::parse($record['check_out']);
-            $workHours = $checkIn->diffInHours($checkOut);
-            $isHalfDay = $workHours < $settings->half_day_hours;
-        }
-
-        if ($isHalfDay) {
-            return 'half_day';
-        } elseif ($isLate) {
-            return 'late';
-        } else {
-            return 'present';
-        }
-    }
-
-    /**
-=======
->>>>>>> feature/flutter-mobile-app
      * Simulate connection to device (for demo purposes).
      */
     private function simulateConnection(AttendanceDevice $device)

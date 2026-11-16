@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React, { useState, FormEvent, useEffect } from 'react';
-=======
 import React, { useMemo, useState, FormEvent, useEffect } from 'react';
->>>>>>> feature/flutter-mobile-app
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -16,29 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-<<<<<<< HEAD
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import { format, addDays } from 'date-fns';
-import { cn } from '@/lib/utils';
-import {
-    ArrowLeft,
-    ArrowRight,
-    Calendar,
-    Building,
-    Briefcase,
-    User,
-=======
 import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays } from 'date-fns';
 import {
@@ -48,7 +21,6 @@ import {
     Briefcase,
     User,
     Calendar,
->>>>>>> feature/flutter-mobile-app
     FileText,
     CornerDownRight,
     AlertTriangle
@@ -56,32 +28,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-<<<<<<< HEAD
-
-// Create a safe calendar component to avoid SVG props issues
-const SafeCalendar = ({ disabledDates, ...props }: any) => {
-    return (
-        <Calendar
-            {...props}
-            modifiers={{
-                disabled: disabledDates ? (date: Date) => disabledDates(date) : undefined,
-            }}
-        />
-    );
-};
-
-interface Employee {
-    id: number;
-    first_name: string;
-    last_name: string;
-=======
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
     id: number;
->>>>>>> feature/flutter-mobile-app
     employee_id: string;
     department_id: number | null;
     designation_id: number | null;
@@ -141,10 +93,7 @@ export default function EditTransfer({
     departments,
     designations
 }: EditTransferProps) {
-<<<<<<< HEAD
-=======
     const branchItems = useMemo(() => branchComboSelectItems(branches), [branches]);
->>>>>>> feature/flutter-mobile-app
     const [employeeId, setEmployeeId] = useState(transfer.employee_id.toString());
     const [fromBranchId, setFromBranchId] = useState(transfer.from_branch_id.toString());
     const [toBranchId, setToBranchId] = useState(transfer.to_branch_id.toString());
@@ -159,10 +108,6 @@ export default function EditTransfer({
     const [reason, setReason] = useState(transfer.reason);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
-<<<<<<< HEAD
-    const [effectiveDateOpen, setEffectiveDateOpen] = useState(false);
-=======
->>>>>>> feature/flutter-mobile-app
 
     // Selected employee details
     const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
@@ -245,24 +190,6 @@ export default function EditTransfer({
                                 <form onSubmit={handleSubmit} className="space-y-6">
                                     <div className="space-y-2">
                                         <Label htmlFor="employee">Employee</Label>
-<<<<<<< HEAD
-                                        <Select
-                                            value={employeeId}
-                                            onValueChange={setEmployeeId}
-                                            disabled={true} // Cannot change employee on edit
-                                        >
-                                            <SelectTrigger id="employee">
-                                                <SelectValue placeholder="Select Employee" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {employees.map((employee) => (
-                                                    <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                        {employee.first_name} {employee.last_name} ({employee.employee_id})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-=======
                                         <ComboSelect<number>
                                             value={employeeId ? Number(employeeId) : null}
                                             onChange={(v) => {
@@ -278,7 +205,6 @@ export default function EditTransfer({
                                                 keywords: `${e.employee_id} ${employeeDisplayName(e)}`,
                                             }))}
                                         />
->>>>>>> feature/flutter-mobile-app
                                         {errors.employee_id && (
                                             <p className="text-sm font-medium text-red-500">{errors.employee_id}</p>
                                         )}
@@ -296,30 +222,12 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromBranch">Current Branch</Label>
-<<<<<<< HEAD
-                                                <Select
-                                                    value={fromBranchId}
-                                                    onValueChange={setFromBranchId}
-                                                >
-                                                    <SelectTrigger id="fromBranch">
-                                                        <SelectValue placeholder="Select Branch" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {branches.map((branch) => (
-                                                            <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                                {branch.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-=======
                                                 <ComboSelect<string>
                                                     value={fromBranchId || null}
                                                     onChange={(v) => setFromBranchId(v ?? '')}
                                                     placeholder="Select branch…"
                                                     items={branchItems}
                                                 />
->>>>>>> feature/flutter-mobile-app
                                                 {errors.from_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.from_branch_id}</p>
                                                 )}
@@ -327,24 +235,6 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromDepartment">Current Department</Label>
-<<<<<<< HEAD
-                                                <Select
-                                                    value={fromDepartmentId}
-                                                    onValueChange={setFromDepartmentId}
-                                                >
-                                                    <SelectTrigger id="fromDepartment">
-                                                        <SelectValue placeholder="Select Department" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">None</SelectItem>
-                                                        {departments.map((department) => (
-                                                            <SelectItem key={department.id} value={department.id.toString()}>
-                                                                {department.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-=======
                                                 <ComboSelect<string>
                                                     value={fromDepartmentId || null}
                                                     onChange={(v) => setFromDepartmentId(v ?? '')}
@@ -358,29 +248,10 @@ export default function EditTransfer({
                                                         })),
                                                     ]}
                                                 />
->>>>>>> feature/flutter-mobile-app
                                             </div>
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromDesignation">Current Designation</Label>
-<<<<<<< HEAD
-                                                <Select
-                                                    value={fromDesignationId}
-                                                    onValueChange={setFromDesignationId}
-                                                >
-                                                    <SelectTrigger id="fromDesignation">
-                                                        <SelectValue placeholder="Select Designation" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">None</SelectItem>
-                                                        {designations.map((designation) => (
-                                                            <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                                {designation.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-=======
                                                 <ComboSelect<string>
                                                     value={fromDesignationId || null}
                                                     onChange={(v) => setFromDesignationId(v ?? '')}
@@ -394,7 +265,6 @@ export default function EditTransfer({
                                                         })),
                                                     ]}
                                                 />
->>>>>>> feature/flutter-mobile-app
                                             </div>
                                         </div>
 
@@ -407,30 +277,12 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toBranch">Destination Branch</Label>
-<<<<<<< HEAD
-                                                <Select
-                                                    value={toBranchId}
-                                                    onValueChange={setToBranchId}
-                                                >
-                                                    <SelectTrigger id="toBranch">
-                                                        <SelectValue placeholder="Select Branch" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {branches.map((branch) => (
-                                                            <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                                {branch.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-=======
                                                 <ComboSelect<string>
                                                     value={toBranchId || null}
                                                     onChange={(v) => setToBranchId(v ?? '')}
                                                     placeholder="Select destination branch…"
                                                     items={branchItems}
                                                 />
->>>>>>> feature/flutter-mobile-app
                                                 {errors.to_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.to_branch_id}</p>
                                                 )}
@@ -438,24 +290,6 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toDepartment">Destination Department</Label>
-<<<<<<< HEAD
-                                                <Select
-                                                    value={toDepartmentId}
-                                                    onValueChange={setToDepartmentId}
-                                                >
-                                                    <SelectTrigger id="toDepartment">
-                                                        <SelectValue placeholder="Select Department" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">Same as Current</SelectItem>
-                                                        {departments.map((department) => (
-                                                            <SelectItem key={department.id} value={department.id.toString()}>
-                                                                {department.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-=======
                                                 <ComboSelect<string>
                                                     value={toDepartmentId || null}
                                                     onChange={(v) => setToDepartmentId(v ?? '')}
@@ -469,29 +303,10 @@ export default function EditTransfer({
                                                         })),
                                                     ]}
                                                 />
->>>>>>> feature/flutter-mobile-app
                                             </div>
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toDesignation">Destination Designation</Label>
-<<<<<<< HEAD
-                                                <Select
-                                                    value={toDesignationId}
-                                                    onValueChange={setToDesignationId}
-                                                >
-                                                    <SelectTrigger id="toDesignation">
-                                                        <SelectValue placeholder="Select Designation" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">Same as Current</SelectItem>
-                                                        {designations.map((designation) => (
-                                                            <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                                {designation.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-=======
                                                 <ComboSelect<string>
                                                     value={toDesignationId || null}
                                                     onChange={(v) => setToDesignationId(v ?? '')}
@@ -505,7 +320,6 @@ export default function EditTransfer({
                                                         })),
                                                     ]}
                                                 />
->>>>>>> feature/flutter-mobile-app
                                             </div>
                                         </div>
                                     </div>
@@ -515,43 +329,11 @@ export default function EditTransfer({
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
                                             <Label>Effective Date</Label>
-<<<<<<< HEAD
-                                            <Popover open={effectiveDateOpen} onOpenChange={setEffectiveDateOpen}>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "w-full justify-start text-left font-normal",
-                                                            !effectiveDate && "text-muted-foreground"
-                                                        )}
-                                                    >
-                                                        <Calendar className="mr-2 h-4 w-4" />
-                                                        {effectiveDate ? format(effectiveDate, 'PPP') : <span>Select date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <SafeCalendar
-                                                        mode="single"
-                                                        selected={effectiveDate}
-                                                        onSelect={(date: Date | undefined) => {
-                                                            setEffectiveDate(date);
-                                                            setEffectiveDateOpen(false);
-                                                        }}
-                                                        disabledDates={(date: Date) => {
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return date < today;
-                                                        }}
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-=======
                                             <DatePicker
                                                 selected={effectiveDate ?? null}
                                                 onSelect={(d) => setEffectiveDate(d ?? undefined)}
                                                 placeholderText="DD/MM/YYYY"
                                             />
->>>>>>> feature/flutter-mobile-app
                                             {errors.effective_date && (
                                                 <p className="text-sm font-medium text-red-500">{errors.effective_date}</p>
                                             )}
@@ -610,11 +392,7 @@ export default function EditTransfer({
                                     <div className="space-y-4">
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Name</p>
-<<<<<<< HEAD
-                                            <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
-=======
                                             <p className="font-medium">{employeeDisplayName(selectedEmployee)}</p>
->>>>>>> feature/flutter-mobile-app
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Employee ID</p>

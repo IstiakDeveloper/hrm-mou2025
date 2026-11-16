@@ -3,18 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-<<<<<<< HEAD
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-=======
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
->>>>>>> feature/flutter-mobile-app
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -25,16 +19,11 @@ class ProfileController extends Controller
      */
     public function edit(Request $request)
     {
-<<<<<<< HEAD
-        return Inertia::render('profile/edit', [
-            'user' => $request->user(),
-=======
         $user = $request->user()->loadMissing(['role', 'employee']);
 
         return Inertia::render('profile/edit', [
             'user' => $user,
             'signature' => $user->getSignaturePath(),
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -62,8 +51,6 @@ class ProfileController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Upload or update user / employee signature image.
      */
     public function updateSignature(Request $request): RedirectResponse
@@ -159,18 +146,13 @@ class ProfileController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Update the user's password.
      */
     public function updatePassword(Request $request)
     {
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
-<<<<<<< HEAD
-            'password' => ['required', 'confirmed', 'min:8'],
-=======
             'password' => ['required', 'confirmed', 'min:4'],
->>>>>>> feature/flutter-mobile-app
         ]);
 
         $request->user()->update([

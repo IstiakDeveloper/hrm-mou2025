@@ -3,29 +3,19 @@
 namespace App\Http\Controllers\Leave;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
-=======
 use App\Models\Branch;
->>>>>>> feature/flutter-mobile-app
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
-<<<<<<< HEAD
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-=======
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class LeaveBalanceController extends Controller
 {
-<<<<<<< HEAD
-=======
     private function abortUnlessSuperAdmin(): void
     {
         /** @var \App\Models\User|null $user */
@@ -261,46 +251,11 @@ class LeaveBalanceController extends Controller
             ->with('success', $msg);
     }
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Display a listing of leave balances.
      */
     public function index(Request $request)
     {
-<<<<<<< HEAD
-        $year = $request->year ?? Carbon::now()->year;
-
-        $query = LeaveBalance::with(['employee.department', 'employee.designation', 'leaveType'])
-            ->where('year', $year)
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
-            })
-            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
-                $query->where('leave_type_id', $leaveTypeId);
-            })
-            ->when($request->search, function ($query, $search) {
-                $query->whereHas('employee', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('employee_id', 'like', "%{$search}%");
-                });
-            });
-
-        $leaveBalances = $query->orderBy('id', 'desc')
-            ->paginate(15)
-            ->withQueryString();
-
-        $departments = Department::all();
-        $leaveTypes = LeaveType::all();
-
-        return Inertia::render('leave/balances/index', [
-            'leaveBalances' => $leaveBalances,
-            'departments' => $departments,
-            'leaveTypes' => $leaveTypes,
-            'filters' => $request->only(['year', 'department_id', 'leave_type_id', 'search']),
-=======
         $year = (int) ($request->year ?? Carbon::now()->year);
         $branchId = $request->input('branch_id');
         $search = trim((string) $request->input('search', ''));
@@ -382,7 +337,6 @@ class LeaveBalanceController extends Controller
                 'search' => $search,
                 'per_page' => (string) $perPage,
             ],
->>>>>>> feature/flutter-mobile-app
             'year' => $year,
             'years' => range(Carbon::now()->year - 2, Carbon::now()->year + 1),
         ]);
@@ -444,9 +398,6 @@ class LeaveBalanceController extends Controller
      */
     public function edit(LeaveBalance $leaveBalance)
     {
-<<<<<<< HEAD
-        $employees = Employee::where('status', 'active')->get();
-=======
         $this->abortUnlessSuperAdmin();
 
         $leaveBalance->load([
@@ -458,7 +409,6 @@ class LeaveBalanceController extends Controller
         $employees = Employee::with(['department', 'designation'])
             ->where('status', 'active')
             ->get();
->>>>>>> feature/flutter-mobile-app
         $leaveTypes = LeaveType::all();
         $currentYear = Carbon::now()->year;
 
@@ -475,11 +425,8 @@ class LeaveBalanceController extends Controller
      */
     public function update(Request $request, LeaveBalance $leaveBalance)
     {
-<<<<<<< HEAD
-=======
         $this->abortUnlessSuperAdmin();
 
->>>>>>> feature/flutter-mobile-app
         $request->validate([
             'allocated_days' => 'required|integer|min:0',
             'used_days' => 'required|integer|min:0',
@@ -499,13 +446,9 @@ class LeaveBalanceController extends Controller
      */
     public function allocateBulk()
     {
-<<<<<<< HEAD
-        $employees = Employee::where('status', 'active')->get();
-=======
         $employees = Employee::with(['department', 'designation'])
             ->where('status', 'active')
             ->get();
->>>>>>> feature/flutter-mobile-app
         $departments = Department::all();
         $leaveTypes = LeaveType::all();
         $currentYear = Carbon::now()->year;
@@ -547,10 +490,7 @@ class LeaveBalanceController extends Controller
 
             if ($existing) {
                 $skipped++;
-<<<<<<< HEAD
-=======
 
->>>>>>> feature/flutter-mobile-app
                 continue;
             }
 

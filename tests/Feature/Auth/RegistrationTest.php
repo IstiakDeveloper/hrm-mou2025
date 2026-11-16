@@ -17,10 +17,5 @@ test('new users can register', function () {
     ]);
 
     $this->assertAuthenticated();
-<<<<<<< HEAD
-    $response->assertRedirect(route('dashboard', absolute: false));
-});
-=======
     $response->assertRedirect(route('sections.index', absolute: false));
 });
->>>>>>> feature/flutter-mobile-app

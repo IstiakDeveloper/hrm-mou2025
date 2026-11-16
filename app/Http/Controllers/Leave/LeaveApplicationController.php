@@ -3,19 +3,6 @@
 namespace App\Http\Controllers\Leave;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
-use App\Models\Department;
-use App\Models\Employee;
-use App\Models\LeaveApplication;
-use App\Models\LeaveApproval;
-use App\Models\LeaveBalance;
-use App\Models\LeaveType;
-use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
-=======
 use App\Mail\LeaveApplicationNotification;
 use App\Models\Attendance;
 use App\Models\Branch;
@@ -37,13 +24,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
->>>>>>> feature/flutter-mobile-app
 use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
 {
-<<<<<<< HEAD
-=======
     private ?Collection $cachedActiveTiers = null;
 
     private ?Collection $cachedExecutiveDirectors = null;
@@ -685,54 +669,12 @@ class LeaveApplicationController extends Controller
         return response()->json(['eligible' => false]);
     }
 
->>>>>>> feature/flutter-mobile-app
     /**
      * Display a listing of leave applications.
      */
     public function index(Request $request)
     {
         $user = Auth::user();
-<<<<<<< HEAD
-        $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType', 'approver']);
-
-        // Apply filters based on user's role and permissions
-        if (!$user->hasPermission('leaves.view')) {
-            if ($user->employee) {
-                // Regular employee can only see their own applications
-                $query->where('employee_id', $user->employee->id);
-            } elseif ($user->hasPermission('leaves.approve')) {
-                // Users with only approve permission (like team leaders)
-
-                // If they're a branch manager, show all applications from their branch
-                if ($user->hasPermission('branch_manager') && $user->branch_id) {
-                    $query->whereHas('employee', function ($q) use ($user) {
-                        $q->where('current_branch_id', $user->branch_id);
-                    });
-                }
-                // If they're a department head, show all applications from their department
-                elseif ($user->employee && $user->employee->department_id) {
-                    $query->whereHas('employee', function ($q) use ($user) {
-                        $q->where('department_id', $user->employee->department_id);
-                    });
-                }
-                // Default to showing only pending applications
-                else {
-                    $query->where('status', 'pending');
-                }
-            }
-        } else {
-            // For users with full leave.view permission but with branch/department limitations
-            if ($user->hasPermission('branch_manager') && $user->branch_id) {
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('current_branch_id', $user->branch_id);
-                });
-            } elseif ($user->employee && $user->employee->department_id && !$user->hasPermission('employees.view')) {
-                // Department heads without full employee view permission
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('department_id', $user->employee->department_id);
-                });
-            }
-=======
 
         $query = LeaveApplication::with([
             'employee.department',
@@ -779,7 +721,6 @@ class LeaveApplicationController extends Controller
             }
         } else {
             OrganogramAccessService::constrainLeaveApplications($query, $user);
->>>>>>> feature/flutter-mobile-app
         }
 
         // Apply user-selected filters
@@ -802,18 +743,6 @@ class LeaveApplicationController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->whereHas('employee', function ($q) use ($search) {
-<<<<<<< HEAD
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('employee_id', 'like', "%{$search}%");
-                });
-            });
-
-        $applications = $query->orderBy('id', 'desc')
-            ->paginate(10)
-            ->withQueryString();
-
-=======
                     $q->where('name_en', 'like', "%{$search}%")
                         ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%")
@@ -840,45 +769,10 @@ class LeaveApplicationController extends Controller
             return $app;
         });
 
->>>>>>> feature/flutter-mobile-app
         // Get departments based on user's permissions
         $departments = $this->getAccessibleDepartments($user);
 
         // Get employees based on user's permissions
-<<<<<<< HEAD
-        $employees = $this->getAccessibleEmployees($user);
-
-        // Check different approval scenarios
-        $canApproveAny = $user->hasPermission('leaves.approve');
-        $canApproveOwn = $user->employee && $user->hasPermission('leaves.approve');
-
-        // Special case: if the user is a department head but without explicit approve
-        // permission, they can still approve for their department
-        $isDepartmentHeadWithoutPermission = $user->employee &&
-            $user->employee->id === optional($user->employee->department)->head_employee_id &&
-            !$user->hasPermission('leaves.approve');
-
-
-        return Inertia::render('leave/applications/index', [
-            'applications' => $applications,
-            'departments' => $departments,
-            'employees' => $employees,
-            'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_date', 'to_date', 'search']),
-            'canApprove' => $canApproveAny,
-            'canApproveOwn' => $canApproveOwn,
-            'isDepartmentHead' => $user->employee && $user->employee->id === optional($user->employee->department)->head_employee_id,
-            'userPermissions' => [
-                'canView' => $user->hasPermission('leaves.view'),
-                'canCreate' => $user->hasPermission('leaves.create'),
-                'canEdit' => $user->hasPermission('leaves.edit'),
-                'canApprove' => $user->hasPermission('leaves.approve'),
-                'isBranchManager' => $user->hasPermission('branch_manager'),
-                'userBranchId' => $user->branch_id,
-                'userDepartmentId' => optional($user->employee)->department_id,
-                'isEmployee' => $user->employee_id ? true : false,
-                'employeeId' => $user->employee_id,
-            ],
-=======
         $employees = $this->getAccessibleEmployees($user, $request);
 
         // Check different approval scenarios
@@ -922,13 +816,10 @@ class LeaveApplicationController extends Controller
                 'employeeId' => $userEmployeeId,
             ],
             'currentUserId' => $user->id,
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Get departments accessible to the user based on permissions
      */
     private function getAccessibleDepartments($user)
@@ -1319,7 +1210,6 @@ class LeaveApplicationController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Show form to create a new leave application.
      */
     public function create()
@@ -1327,28 +1217,10 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
-<<<<<<< HEAD
-        if (!$employee) {
-            if ($user->hasPermission('leaves.create') && $user->hasPermission('employees.view')) {
-                // Admin creating leave request for someone else
-                $employees = Employee::where('status', 'active')->get();
-                $leaveTypes = LeaveType::all();
-
-                return Inertia::render('leave/applications/admin-create', [
-                    'employees' => $employees,
-                    'leaveTypes' => $leaveTypes,
-                    'isAdmin' => true,
-                ]);
-            } else {
-                return redirect()->route('leave.applications.index')
-                    ->with('error', 'You must be associated with an employee record to apply for leave.');
-            }
-=======
         if (! $employee) {
 
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You must be associated with an employee record to apply for leave.');
->>>>>>> feature/flutter-mobile-app
         }
 
         $leaveTypes = LeaveType::all();
@@ -1357,8 +1229,6 @@ class LeaveApplicationController extends Controller
             ->with('leaveType')
             ->get();
 
-<<<<<<< HEAD
-=======
         $existingLeaves = LeaveApplication::where('employee_id', $employee->id)
             ->whereIn('status', ['pending', 'approved'])
             ->select(['id', 'start_date', 'end_date', 'days', 'status', 'leave_type_id'])
@@ -1366,23 +1236,15 @@ class LeaveApplicationController extends Controller
             ->orderBy('start_date')
             ->get();
 
->>>>>>> feature/flutter-mobile-app
         return Inertia::render('leave/applications/create', [
             'employee' => $employee,
             'leaveTypes' => $leaveTypes,
             'balances' => $balances,
-<<<<<<< HEAD
-            'userPermissions' => [
-                'canCreate' => $user->hasPermission('leaves.create'),
-                'canEdit' => $user->hasPermission('leaves.edit'),
-                'canApprove' => $user->hasPermission('leaves.approve'),
-=======
             'existingLeaves' => $existingLeaves,
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('leave-applications.create'),
                 'canEdit' => $user->hasPermission('leave-applications.edit'),
                 'canApprove' => $user->hasPermission('leave-applications.approve'),
->>>>>>> feature/flutter-mobile-app
                 'isEmployee' => true,
             ],
         ]);
@@ -1397,20 +1259,12 @@ class LeaveApplicationController extends Controller
         $employee = null;
 
         // Check if user is admin creating for someone else
-<<<<<<< HEAD
-        if ($request->has('employee_id') && $user->hasPermission('leaves.create') && $user->hasPermission('employees.view')) {
-=======
         if ($request->has('employee_id') && $user->hasPermission('leave-applications.create') && $user->hasPermission('employees.view')) {
->>>>>>> feature/flutter-mobile-app
             $employee = Employee::findOrFail($request->employee_id);
         } else {
             $employee = $user->employee;
 
-<<<<<<< HEAD
-            if (!$employee) {
-=======
             if (! $employee) {
->>>>>>> feature/flutter-mobile-app
                 return redirect()->route('leave.applications.index')
                     ->with('error', 'You must be associated with an employee record to apply for leave.');
             }
@@ -1425,50 +1279,20 @@ class LeaveApplicationController extends Controller
             'documents.*' => 'file|mimes:jpeg,png,jpg,pdf,doc,docx|max:2048',
         ]);
 
-<<<<<<< HEAD
-        // CRITICAL FIX: Correctly parse and calculate date differences
-=======
->>>>>>> feature/flutter-mobile-app
         try {
             // Parse dates using Carbon and ensure they are formatted consistently
             $startDate = Carbon::parse($request->start_date)->startOfDay();
             $endDate = Carbon::parse($request->end_date)->startOfDay();
 
-<<<<<<< HEAD
-            // Log the actual date objects for debugging
-            \Log::info("Leave application date calculation:", [
-                'start_date_raw' => $request->start_date,
-                'end_date_raw' => $request->end_date,
-                'start_date_parsed' => $startDate->toDateString(),
-                'end_date_parsed' => $endDate->toDateString(),
-            ]);
-
-            // Calculate days INCLUDING both start and end date (add 1 to the difference)
-            // For example: March 11 to March 14 should be 4 days
-            $diffDays = $startDate->diffInDays($endDate);
-            $days = $diffDays + 1;
-
-            \Log::info("Date calculation result:", [
-                'diff_days' => $diffDays,
-                'total_days' => $days,
-            ]);
-        } catch (\Exception $e) {
-            \Log::error("Error calculating leave days: " . $e->getMessage());
-=======
             // Calculate days INCLUDING both start and end date (add 1 to the difference)
             $diffDays = $startDate->diffInDays($endDate);
             $days = $diffDays + 1;
         } catch (\Exception $e) {
->>>>>>> feature/flutter-mobile-app
             return redirect()->back()->withErrors([
                 'date_calculation' => 'Error calculating leave days. Please check your dates.',
             ])->withInput();
         }
 
-<<<<<<< HEAD
-        // Check leave balance for regular employees (not for admins creating on behalf)
-        if (!$user->hasPermission('leaves.edit')) {
-=======
         // Prevent duplicate/overlapping leave applications for the same employee
         $overlappingLeave = LeaveApplication::where('employee_id', $employee->id)
             ->whereIn('status', ['pending', 'approved'])
@@ -1504,18 +1328,13 @@ class LeaveApplicationController extends Controller
 
         // Check leave balance for regular employees on paid leaves (not for admins creating on behalf)
         if (! $isUnpaid && ! $user->hasPermission('leave-applications.edit')) {
->>>>>>> feature/flutter-mobile-app
             $currentYear = Carbon::now()->year;
             $balance = LeaveBalance::where('employee_id', $employee->id)
                 ->where('leave_type_id', $request->leave_type_id)
                 ->where('year', $currentYear)
                 ->first();
 
-<<<<<<< HEAD
-            if (!$balance) {
-=======
             if (! $balance) {
->>>>>>> feature/flutter-mobile-app
                 return redirect()->back()->withErrors([
                     'leave_type_id' => 'You do not have a leave balance for this leave type.',
                 ])->withInput();
@@ -1523,11 +1342,7 @@ class LeaveApplicationController extends Controller
 
             if ($balance->remaining_days < $days) {
                 return redirect()->back()->withErrors([
-<<<<<<< HEAD
-                    'leave_type_id' => 'Not enough leave balance. Available: ' . $balance->remaining_days . ' days, Requested: ' . $days . ' days.',
-=======
                     'leave_type_id' => 'Not enough leave balance. Available: '.$balance->remaining_days.' days, Requested: '.$days.' days.',
->>>>>>> feature/flutter-mobile-app
                 ])->withInput();
             }
         }
@@ -1545,14 +1360,6 @@ class LeaveApplicationController extends Controller
             }
         }
 
-<<<<<<< HEAD
-        // Auto-approve if user has approval permission
-        $status = 'pending';
-        $approvedBy = null;
-
-        // Auto-approve if admin is creating the application
-        if ($user->hasPermission('leaves.approve') && $request->has('auto_approve') && $request->auto_approve) {
-=======
         // Auto-approve if user has approval permission and is creating on behalf of someone else
         $status = 'pending';
         $approvedBy = null;
@@ -1567,7 +1374,6 @@ class LeaveApplicationController extends Controller
                     ])
                     ->withInput();
             }
->>>>>>> feature/flutter-mobile-app
             $status = 'approved';
             $approvedBy = $user->id;
         }
@@ -1576,24 +1382,14 @@ class LeaveApplicationController extends Controller
         $leaveApplication = LeaveApplication::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $request->leave_type_id,
-<<<<<<< HEAD
-            'start_date' => $startDate->toDateString(),  // Ensure consistent date format
-            'end_date' => $endDate->toDateString(),      // Ensure consistent date format
-            'days' => $days,                             // Correctly calculated days
-=======
             'start_date' => $startDate->toDateString(),
             'end_date' => $endDate->toDateString(),
             'days' => $days,
->>>>>>> feature/flutter-mobile-app
             'reason' => $request->reason,
             'status' => $status,
             'approved_by' => $approvedBy,
             'applied_at' => now(),
-<<<<<<< HEAD
-            'documents' => !empty($documents) ? json_encode($documents) : null,
-=======
             'documents' => ! empty($documents) ? json_encode($documents) : null,
->>>>>>> feature/flutter-mobile-app
         ]);
 
         // Create approval record if auto-approved
@@ -1609,12 +1405,6 @@ class LeaveApplicationController extends Controller
 
             // Update leave balance
             $this->updateLeaveBalance($employee->id, $request->leave_type_id, $days);
-<<<<<<< HEAD
-        }
-
-        return redirect()->route('leave.applications.index')
-            ->with('success', 'Leave application submitted successfully for ' . $days . ' day(s).');
-=======
 
             // Ensure attendance is marked as leave for the approved date range
             $this->syncAttendanceForApprovedLeave($leaveApplication);
@@ -1843,7 +1633,6 @@ class LeaveApplicationController extends Controller
         $this->cachedExecutiveDirectors = $users->merge($permissionHolders)->unique('id')->values();
 
         return $this->cachedExecutiveDirectors;
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -1854,18 +1643,11 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
 
         // Check if user has permission to view this application
-<<<<<<< HEAD
-        if (!$this->canViewApplication($user, $application)) {
-=======
         if (! $this->canViewApplication($user, $application)) {
->>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to view this leave application.');
         }
 
-<<<<<<< HEAD
-        $application->load(['employee.department', 'employee.designation', 'leaveType', 'approver', 'approvals.approver']);
-=======
         $application->load([
             'employee.department',
             'employee.designation',
@@ -1875,7 +1657,6 @@ class LeaveApplicationController extends Controller
             'approver',
             'approvals.approver',
         ]);
->>>>>>> feature/flutter-mobile-app
         $application->documents = json_decode($application->documents, true);
 
         $canApprove = $this->canApproveApplication($user, $application);
@@ -1888,17 +1669,10 @@ class LeaveApplicationController extends Controller
             'canCancel' => $canCancel,
             'canEdit' => $canEdit,
             'userPermissions' => [
-<<<<<<< HEAD
-                'canView' => $user->hasPermission('leaves.view'),
-                'canCreate' => $user->hasPermission('leaves.create'),
-                'canEdit' => $user->hasPermission('leaves.edit'),
-                'canApprove' => $user->hasPermission('leaves.approve'),
-=======
                 'canView' => $user->hasPermission('leave-applications.view'),
                 'canCreate' => $user->hasPermission('leave-applications.create'),
                 'canEdit' => $user->hasPermission('leave-applications.edit'),
                 'canApprove' => $user->hasPermission('leave-applications.approve'),
->>>>>>> feature/flutter-mobile-app
                 'isEmployee' => $user->employee_id ? true : false,
                 'employeeId' => $user->employee_id,
             ],
@@ -1912,11 +1686,7 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
-<<<<<<< HEAD
-        if (!$this->canCancelApplication($user, $application)) {
-=======
         if (! $this->canCancelApplication($user, $application)) {
->>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to cancel this leave application.');
         }
@@ -1939,14 +1709,9 @@ class LeaveApplicationController extends Controller
     public function approve(Request $request, LeaveApplication $application)
     {
         $user = Auth::user();
-<<<<<<< HEAD
-
-        if (!$this->canApproveApplication($user, $application)) {
-=======
         $application->loadMissing(['employee.currentBranch', 'employee.branch']);
 
         if (! $this->canApproveApplication($user, $application)) {
->>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to approve this leave application.');
         }
@@ -1960,25 +1725,6 @@ class LeaveApplicationController extends Controller
             'comments' => 'nullable|string',
         ]);
 
-<<<<<<< HEAD
-        // Update leave application
-        $application->status = 'approved';
-        $application->approved_by = $user->id;
-        $application->save();
-
-        // Create approval record
-        LeaveApproval::create([
-            'leave_application_id' => $application->id,
-            'approved_by' => $user->id,
-            'level' => 1,
-            'status' => 'approved',
-            'comments' => $request->comments,
-            'approved_at' => now(),
-        ]);
-
-        // Update leave balance
-        $this->updateLeaveBalance($application->employee_id, $application->leave_type_id, $application->days);
-=======
         // Start a database transaction
         DB::beginTransaction();
 
@@ -2018,15 +1764,12 @@ class LeaveApplicationController extends Controller
         }
 
         $this->notifyEmployeeOfApprovedLeave($application);
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('leave.applications.index')
             ->with('success', 'Leave application approved successfully.');
     }
 
     /**
-<<<<<<< HEAD
-=======
      * Queue in-app and email notice after the approval transaction has committed.
      */
     private function notifyEmployeeOfApprovedLeave(LeaveApplication $application): void
@@ -2155,20 +1898,14 @@ class LeaveApplicationController extends Controller
     }
 
     /**
->>>>>>> feature/flutter-mobile-app
      * Reject the specified leave application.
      */
     public function reject(Request $request, LeaveApplication $application)
     {
         $user = Auth::user();
-<<<<<<< HEAD
-
-        if (!$this->canApproveApplication($user, $application)) {
-=======
         $application->loadMissing(['employee.currentBranch', 'employee.branch']);
 
         if (! $this->canApproveApplication($user, $application)) {
->>>>>>> feature/flutter-mobile-app
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to reject leave applications.');
         }
@@ -2209,31 +1946,19 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
-<<<<<<< HEAD
-        if (!$this->canViewApplication($user, $application)) {
-=======
         if (! $this->canViewApplication($user, $application)) {
->>>>>>> feature/flutter-mobile-app
             abort(403, 'Unauthorized action.');
         }
 
         $documents = json_decode($application->documents, true);
 
-<<<<<<< HEAD
-        if (!isset($documents[$index])) {
-=======
         if (! isset($documents[$index])) {
->>>>>>> feature/flutter-mobile-app
             abort(404);
         }
 
         $document = $documents[$index];
-<<<<<<< HEAD
-        return response()->download(storage_path('app/public/' . $document['path']), $document['name']);
-=======
 
         return response()->download(storage_path('app/public/'.$document['path']), $document['name']);
->>>>>>> feature/flutter-mobile-app
     }
 
     /**
@@ -2243,37 +1968,6 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
-<<<<<<< HEAD
-        if (!$user->hasPermission('leaves.view') && !$user->hasPermission('reports.view')) {
-            return redirect()->route('leave.applications.index')
-                ->with('error', 'You do not have permission to view leave reports.');
-        }
-
-        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
-
-        $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType'])
-            ->whereBetween('start_date', [$startDate, $endDate]);
-
-        // Apply permission filters
-        if (!$user->hasPermission('leaves.view')) {
-            if ($user->employee) {
-                // Regular employee can only see their own applications
-                $query->where('employee_id', $user->employee->id);
-            }
-        } else {
-            // Users with leaves.view but with branch/department restrictions
-            if ($user->hasPermission('branch_manager') && $user->branch_id) {
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('current_branch_id', $user->branch_id);
-                });
-            } elseif ($user->employee && $user->employee->department_id && !$user->hasPermission('employees.view')) {
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('department_id', $user->employee->department_id);
-                });
-            }
-        }
-=======
         if (! $user->hasPermission('reports.view') && ! $user->hasPermission('leave-applications.view')) {
             abort(403);
         }
@@ -2300,7 +1994,6 @@ class LeaveApplicationController extends Controller
             ->whereBetween('start_date', [$startDate, $endDate]);
 
         OrganogramAccessService::constrainLeaveApplications($query, $user);
->>>>>>> feature/flutter-mobile-app
 
         // Apply user-selected filters
         $query->when($request->status, function ($query, $status) {
@@ -2349,11 +2042,6 @@ class LeaveApplicationController extends Controller
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
             'userPermissions' => [
-<<<<<<< HEAD
-                'canView' => $user->hasPermission('leaves.view'),
-                'canExport' => $user->hasPermission('reports.view'),
-                'isEmployee' => $user->employee_id ? true : false,
-=======
                 'canView' => $hasViewPermission,
                 'canExport' => $hasReportPermission,
                 'isEmployee' => $userEmployeeId ? true : false,
@@ -2361,223 +2049,11 @@ class LeaveApplicationController extends Controller
                 'userDepartmentId' => $userDepartmentId,
                 'isBranchManager' => $isBranchManager,
                 'isDepartmentHead' => $isDepartmentHead,
->>>>>>> feature/flutter-mobile-app
             ],
         ]);
     }
 
     /**
-<<<<<<< HEAD
-     * Get departments accessible to the user based on permissions
-     */
-    private function getAccessibleDepartments($user)
-    {
-        // If user has full employee view permission, show all departments
-        if ($user->hasPermission('employees.view')) {
-            return Department::all();
-        }
-
-        // Branch managers see departments in their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Department::whereHas('employees', function ($q) use ($user) {
-                $q->where('current_branch_id', $user->branch_id);
-            })->get();
-        }
-
-        // Department heads see only their department
-        if ($user->employee && $user->employee->department_id) {
-            return Department::where('id', $user->employee->department_id)->get();
-        }
-
-        // Regular employees see their own department only
-        if ($user->employee) {
-            return Department::where('id', $user->employee->department_id)->get();
-        }
-
-        // Default - show no departments
-        return collect([]);
-    }
-
-    /**
-     * Get employees accessible to the user based on permissions
-     */
-    private function getAccessibleEmployees($user)
-    {
-        // If user has full employee view permission, show all active employees
-        if ($user->hasPermission('employees.view')) {
-            return Employee::where('status', 'active')->get();
-        }
-
-        // Branch managers see employees in their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Employee::where('status', 'active')
-                ->where('current_branch_id', $user->branch_id)
-                ->get();
-        }
-
-        // Department heads see employees in their department
-        if (
-            $user->employee && $user->employee->department_id &&
-            $user->employee->id === optional(Department::find($user->employee->department_id))->head_employee_id
-        ) {
-            return Employee::where('status', 'active')
-                ->where('department_id', $user->employee->department_id)
-                ->get();
-        }
-
-        // Team leaders see their direct reports
-        if ($user->employee) {
-            $directReports = Employee::where('status', 'active')
-                ->where('reporting_to', $user->employee->id)
-                ->get();
-
-            // If they have direct reports, return those
-            if ($directReports->count() > 0) {
-                return $directReports;
-            }
-
-            // Otherwise just return themselves
-            return Employee::where('id', $user->employee->id)->get();
-        }
-
-        // Default - show no employees
-        return collect([]);
-    }
-
-    /**
-     * Check if user can view a specific leave application
-     */
-    private function canViewApplication($user, $application)
-    {
-        // Super admins and users with leave.view permission can view all applications
-        if ($user->hasPermission('leaves.view')) {
-            // But branch managers are restricted to their branch
-            if ($user->hasPermission('branch_manager') && $user->branch_id) {
-                $employee = Employee::find($application->employee_id);
-                return $employee && $employee->current_branch_id == $user->branch_id;
-            }
-
-            // And department heads to their department
-            if (!$user->hasPermission('employees.view') && $user->employee && $user->employee->department_id) {
-                $employee = Employee::find($application->employee_id);
-                return $employee && $employee->department_id == $user->employee->department_id;
-            }
-
-            return true;
-        }
-
-        // Employees can view their own applications
-        if ($user->employee && $application->employee_id == $user->employee->id) {
-            return true;
-        }
-
-        // Users with approval permission can view applications they need to approve
-        if ($user->hasPermission('leaves.approve')) {
-            // Department heads
-            if ($user->employee && $user->employee->department_id) {
-                $employee = Employee::find($application->employee_id);
-                return $employee && $employee->department_id == $user->employee->department_id;
-            }
-
-            // Team leaders can view their direct reports' applications
-            if ($user->employee) {
-                $employee = Employee::find($application->employee_id);
-                return $employee && $employee->reporting_to == $user->employee->id;
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Check if user can approve a specific leave application
-     */
-    private function canApproveApplication($user, $application)
-    {
-        // Must have approval permission
-        if (!$user->hasPermission('leaves.approve')) {
-            // Special case: department heads without explicit permission
-            if ($user->employee && $user->employee->department_id) {
-                $dept = Department::find($user->employee->department_id);
-                if ($dept && $dept->head_employee_id == $user->employee->id) {
-                    $employee = Employee::find($application->employee_id);
-                    return $employee && $employee->department_id == $user->employee->department_id;
-                }
-            }
-
-            return false;
-        }
-
-        // Can't approve own application
-        if ($user->employee && $application->employee_id == $user->employee->id) {
-            return false;
-        }
-
-        // Branch managers can approve for their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            $employee = Employee::find($application->employee_id);
-            return $employee && $employee->current_branch_id == $user->branch_id;
-        }
-
-        // Department heads for their department
-        if ($user->employee && $user->employee->department_id) {
-            $employee = Employee::find($application->employee_id);
-            return $employee && $employee->department_id == $user->employee->department_id;
-        }
-
-        // Team leaders for their direct reports
-        if ($user->employee) {
-            $employee = Employee::find($application->employee_id);
-            return $employee && $employee->reporting_to == $user->employee->id;
-        }
-
-        // Admins can approve all
-        return true;
-    }
-
-    /**
-     * Check if user can cancel a specific leave application
-     */
-    private function canCancelApplication($user, $application)
-    {
-        // Admins can cancel all applications
-        if ($user->hasPermission('leaves.edit')) {
-            return true;
-        }
-
-        // Employees can cancel their own pending applications
-        if ($user->employee && $application->employee_id == $user->employee->id && $application->status == 'pending') {
-            return true;
-        }
-
-        // Department heads and branch managers with appropriate permissions
-        if ($user->hasPermission('leaves.approve')) {
-            // Only pending applications can be cancelled
-            if ($application->status != 'pending') {
-                return false;
-            }
-
-            // Branch managers for their branch
-            if ($user->hasPermission('branch_manager') && $user->branch_id) {
-                $employee = Employee::find($application->employee_id);
-                return $employee && $employee->current_branch_id == $user->branch_id;
-            }
-
-            // Department heads for their department
-            if ($user->employee && $user->employee->department_id) {
-                $employee = Employee::find($application->employee_id);
-                return $employee && $employee->department_id == $user->employee->department_id;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-=======
->>>>>>> feature/flutter-mobile-app
      * Check if user can edit a specific leave application
      */
     private function canEditApplication($user, $application)
@@ -2588,11 +2064,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Admins can edit all applications
-<<<<<<< HEAD
-        if ($user->hasPermission('leaves.edit')) {
-=======
         if ($user->hasPermission('leave-applications.edit')) {
->>>>>>> feature/flutter-mobile-app
             return true;
         }
 
@@ -2609,10 +2081,7 @@ class LeaveApplicationController extends Controller
      */
     private function updateLeaveBalance($employeeId, $leaveTypeId, $days)
     {
-<<<<<<< HEAD
-=======
         $leaveType = LeaveType::find($leaveTypeId);
->>>>>>> feature/flutter-mobile-app
         $currentYear = Carbon::now()->year;
         $balance = LeaveBalance::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
@@ -2620,13 +2089,6 @@ class LeaveApplicationController extends Controller
             ->first();
 
         if ($balance) {
-<<<<<<< HEAD
-            $balance->used_days += $days;
-            $balance->remaining_days = $balance->allocated_days - $balance->used_days;
-            $balance->save();
-        }
-    }
-=======
             $balance->applyUsage((float) $days, ! ($leaveType && ! $leaveType->is_paid));
             $balance->save();
         } elseif ($leaveType && ! $leaveType->is_paid) {
@@ -2756,5 +2218,4 @@ class LeaveApplicationController extends Controller
             ],
         ]);
     }
->>>>>>> feature/flutter-mobile-app
 }

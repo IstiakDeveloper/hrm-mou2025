@@ -1,14 +1,4 @@
 import InputError from '@/components/input-error';
-<<<<<<< HEAD
-import AppLayout from '@/layouts/app-layout';
-import SettingsLayout from '@/layouts/settings/layout';
-import { type BreadcrumbItem } from '@/types';
-import { Transition } from '@headlessui/react';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler, useRef } from 'react';
-
-import HeadingSmall from '@/components/heading-small';
-=======
 import AdminLayout from '@/layouts/AdminLayout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { Transition } from '@headlessui/react';
@@ -18,23 +8,10 @@ import { FormEventHandler, useRef, useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
 import { Alert, AlertDescription } from '@/components/ui/alert';
->>>>>>> feature/flutter-mobile-app
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-<<<<<<< HEAD
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Password settings',
-        href: '/settings/password',
-    },
-];
-
-export default function Password() {
-    const passwordInput = useRef<HTMLInputElement>(null);
-    const currentPasswordInput = useRef<HTMLInputElement>(null);
-=======
 interface BranchInfo {
     id: number;
     name: string;
@@ -54,7 +31,6 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
     const [showCurrent, setShowCurrent] = useState(false);
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
->>>>>>> feature/flutter-mobile-app
 
     const { data, setData, errors, put, reset, processing, recentlySuccessful } = useForm({
         current_password: '',
@@ -65,28 +41,16 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
     const updatePassword: FormEventHandler = (e) => {
         e.preventDefault();
 
-<<<<<<< HEAD
-        put(route('password.update'), {
-            preserveScroll: true,
-            onSuccess: () => reset(),
-            onError: (errors) => {
-                if (errors.password) {
-=======
         put(route('settings.password.update'), {
             preserveScroll: true,
             onSuccess: () => reset(),
             onError: (formErrors) => {
                 if (formErrors.password) {
->>>>>>> feature/flutter-mobile-app
                     reset('password', 'password_confirmation');
                     passwordInput.current?.focus();
                 }
 
-<<<<<<< HEAD
-                if (errors.current_password) {
-=======
                 if (formErrors.current_password) {
->>>>>>> feature/flutter-mobile-app
                     reset('current_password');
                     currentPasswordInput.current?.focus();
                 }
@@ -94,30 +58,6 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
         });
     };
 
-<<<<<<< HEAD
-    return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Profile settings" />
-
-            <SettingsLayout>
-                <div className="space-y-6">
-                    <HeadingSmall title="Update password" description="Ensure your account is using a long, random password to stay secure" />
-
-                    <form onSubmit={updatePassword} className="space-y-6">
-                        <div className="grid gap-2">
-                            <Label htmlFor="current_password">Current password</Label>
-
-                            <Input
-                                id="current_password"
-                                ref={currentPasswordInput}
-                                value={data.current_password}
-                                onChange={(e) => setData('current_password', e.target.value)}
-                                type="password"
-                                className="mt-1 block w-full"
-                                autoComplete="current-password"
-                                placeholder="Current password"
-                            />
-=======
     const handlePinInput = (field: 'current_password' | 'password' | 'password_confirmation', val: string) => {
         if (isBranchAccount) {
             setData(field, val.replace(/\D/g, ''));
@@ -194,26 +134,11 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
                                     {showCurrent ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                                 </button>
                             </div>
->>>>>>> feature/flutter-mobile-app
 
                             <InputError message={errors.current_password} />
                         </div>
 
                         <div className="grid gap-2">
-<<<<<<< HEAD
-                            <Label htmlFor="password">New password</Label>
-
-                            <Input
-                                id="password"
-                                ref={passwordInput}
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
-                                type="password"
-                                className="mt-1 block w-full"
-                                autoComplete="new-password"
-                                placeholder="New password"
-                            />
-=======
                             <Label htmlFor="password">
                                 {isBranchAccount ? 'New Branch PIN' : 'New password'}
                             </Label>
@@ -238,31 +163,11 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
                                     {showNew ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                                 </button>
                             </div>
->>>>>>> feature/flutter-mobile-app
 
                             <InputError message={errors.password} />
                         </div>
 
                         <div className="grid gap-2">
-<<<<<<< HEAD
-                            <Label htmlFor="password_confirmation">Confirm password</Label>
-
-                            <Input
-                                id="password_confirmation"
-                                value={data.password_confirmation}
-                                onChange={(e) => setData('password_confirmation', e.target.value)}
-                                type="password"
-                                className="mt-1 block w-full"
-                                autoComplete="new-password"
-                                placeholder="Confirm password"
-                            />
-
-                            <InputError message={errors.password_confirmation} />
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <Button disabled={processing}>Save password</Button>
-=======
                             <Label htmlFor="password_confirmation">
                                 {isBranchAccount ? 'Confirm New Branch PIN' : 'Confirm new password'}
                             </Label>
@@ -308,7 +213,6 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
                             >
                                 {processing ? 'Saving…' : isBranchAccount ? 'Save PIN' : 'Save password'}
                             </Button>
->>>>>>> feature/flutter-mobile-app
 
                             <Transition
                                 show={recentlySuccessful}
@@ -323,10 +227,6 @@ export default function Password({ loginId, isBranchAccount = false, branch }: P
                     </form>
                 </div>
             </SettingsLayout>
-<<<<<<< HEAD
-        </AppLayout>
-=======
         </AdminLayout>
->>>>>>> feature/flutter-mobile-app
     );
 }

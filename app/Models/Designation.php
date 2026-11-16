@@ -12,15 +12,6 @@ class Designation extends Model
     protected $fillable = [
         'name',
         'description',
-<<<<<<< HEAD
-        'department_id',
-        'rank',
-    ];
-
-    public function department()
-    {
-        return $this->belongsTo(Department::class);
-=======
         'rank',
     ];
 
@@ -31,7 +22,6 @@ class Designation extends Model
     public function getTitleAttribute(): ?string
     {
         return $this->name;
->>>>>>> feature/flutter-mobile-app
     }
 
     public function employees()

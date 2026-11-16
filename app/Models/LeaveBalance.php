@@ -33,8 +33,6 @@ class LeaveBalance extends Model
         $this->remaining_days = $this->allocated_days - $this->used_days;
         return $this->remaining_days;
     }
-<<<<<<< HEAD
-=======
 
     public function applyUsage(float $days, bool $isPaid = true): void
     {
@@ -55,5 +53,4 @@ class LeaveBalance extends Model
         return $this->hasMany(LeaveApplication::class, 'leave_type_id', 'leave_type_id')
             ->where('employee_id', $this->employee_id);
     }
->>>>>>> feature/flutter-mobile-app
 }

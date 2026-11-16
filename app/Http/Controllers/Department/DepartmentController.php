@@ -3,10 +3,6 @@
 namespace App\Http\Controllers\Department;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
-use App\Models\Branch;
-=======
->>>>>>> feature/flutter-mobile-app
 use App\Models\Department;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -19,25 +15,6 @@ class DepartmentController extends Controller
      */
     public function index(Request $request)
     {
-<<<<<<< HEAD
-        $departments = Department::with(['headEmployee', 'branch', 'parentDepartment'])
-            ->when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
-            ->when($request->branch_id, function ($query, $branchId) {
-                $query->where('branch_id', $branchId);
-            })
-            ->orderBy('name')
-            ->paginate(10)
-            ->withQueryString();
-
-        $branches = Branch::all();
-
-        return Inertia::render('department/index', [
-            'departments' => $departments,
-            'branches' => $branches,
-            'filters' => $request->only(['search', 'branch_id']),
-=======
         $perPage = (int) $request->get('per_page', 10);
         if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
             $perPage = 10;
@@ -100,7 +77,6 @@ class DepartmentController extends Controller
                 ],
             ],
             'filters' => $request->only(['search', 'per_page']),
->>>>>>> feature/flutter-mobile-app
         ]);
     }
 
@@ -109,18 +85,10 @@ class DepartmentController extends Controller
      */
     public function create()
     {
-<<<<<<< HEAD
-        $branches = Branch::all();
-=======
->>>>>>> feature/flutter-mobile-app
         $employees = Employee::where('status', 'active')->get();
         $departments = Department::all();
 
         return Inertia::render('department/create', [
-<<<<<<< HEAD
-            'branches' => $branches,
-=======
->>>>>>> feature/flutter-mobile-app
             'employees' => $employees,
             'departments' => $departments,
         ]);
@@ -131,17 +99,6 @@ class DepartmentController extends Controller
      */
     public function store(Request $request)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'head_employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'required|exists:branches,id',
-            'parent_department_id' => 'nullable|exists:departments,id',
-        ]);
-
-        Department::create($request->all());
-=======
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -150,7 +107,6 @@ class DepartmentController extends Controller
         ]);
 
         Department::create($validated);
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('departments.index')
             ->with('success', 'Department created successfully.');
@@ -161,19 +117,11 @@ class DepartmentController extends Controller
      */
     public function edit(Department $department)
     {
-<<<<<<< HEAD
-        $branches = Branch::all();
-=======
->>>>>>> feature/flutter-mobile-app
         $employees = Employee::where('status', 'active')->get();
         $departments = Department::where('id', '!=', $department->id)->get();
 
         return Inertia::render('department/edit', [
             'department' => $department,
-<<<<<<< HEAD
-            'branches' => $branches,
-=======
->>>>>>> feature/flutter-mobile-app
             'employees' => $employees,
             'departments' => $departments,
         ]);
@@ -184,18 +132,10 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, Department $department)
     {
-<<<<<<< HEAD
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'head_employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'required|exists:branches,id',
-=======
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'head_employee_id' => 'nullable|exists:employees,id',
->>>>>>> feature/flutter-mobile-app
             'parent_department_id' => 'nullable|exists:departments,id',
         ]);
 
@@ -206,11 +146,7 @@ class DepartmentController extends Controller
             ]);
         }
 
-<<<<<<< HEAD
-        $department->update($request->all());
-=======
         $department->update($validated);
->>>>>>> feature/flutter-mobile-app
 
         return redirect()->route('departments.index')
             ->with('success', 'Department updated successfully.');
@@ -246,23 +182,14 @@ class DepartmentController extends Controller
      */
     public function show(Department $department)
     {
-<<<<<<< HEAD
-        $department->load(['headEmployee', 'branch', 'parentDepartment']);
-
-=======
         // Load basic relationships without headEmployee
         $department->load(['parentDepartment']);
 
         // Fetch employees for this department
->>>>>>> feature/flutter-mobile-app
         $employees = Employee::where('department_id', $department->id)
             ->with(['designation'])
             ->paginate(10);
 
-<<<<<<< HEAD
-        return Inertia::render('department/show', [
-            'department' => $department,
-=======
         // Convert department to array for manipulation
         $departmentArray = $department->toArray();
 
@@ -282,7 +209,6 @@ class DepartmentController extends Controller
 
         return Inertia::render('department/show', [
             'department' => $departmentArray,
->>>>>>> feature/flutter-mobile-app
             'employees' => $employees,
         ]);
     }

@@ -10,10 +10,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-<<<<<<< HEAD
-=======
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
->>>>>>> feature/flutter-mobile-app
 import { Input } from '@/components/ui/input';
 import {
   Card,
@@ -23,15 +20,6 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import {
-<<<<<<< HEAD
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import {
-=======
->>>>>>> feature/flutter-mobile-app
   Select,
   SelectContent,
   SelectItem,
@@ -50,19 +38,10 @@ import {
 import {
   Edit,
   Trash2,
-<<<<<<< HEAD
-  MoreHorizontal,
-=======
->>>>>>> feature/flutter-mobile-app
   Plus,
   Search,
   Activity,
   Network,
-<<<<<<< HEAD
-  Building
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-=======
   Building,
   RefreshCw,
   Clock,
@@ -72,7 +51,6 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { PageSurface } from '@/components/page-surface';
->>>>>>> feature/flutter-mobile-app
 
 interface Branch {
   id: number;
@@ -85,11 +63,6 @@ interface AttendanceDevice {
   name: string;
   ip_address: string;
   port: number;
-<<<<<<< HEAD
-  branch_id: number;
-  status: string;
-  branch: Branch;
-=======
   serial_number: string | null;
   branch_id: number;
   status: string;
@@ -100,7 +73,6 @@ interface AttendanceDevice {
   last_sync_status: string | null;
   last_adms_at: string | null;
   adms_link?: 'connected' | 'stale' | 'waiting';
->>>>>>> feature/flutter-mobile-app
 }
 
 interface PaginationLinks {
@@ -140,18 +112,12 @@ interface DevicesIndexProps {
     status: string;
   };
   statuses: string[];
-<<<<<<< HEAD
-}
-
-export default function DevicesIndex({ devices, branches, filters, statuses }: DevicesIndexProps) {
-=======
   syncSettings: {
     agent_sync_enabled: boolean;
   };
 }
 
 export default function DevicesIndex({ devices, branches, filters, statuses, syncSettings }: DevicesIndexProps) {
->>>>>>> feature/flutter-mobile-app
   const [search, setSearch] = useState(filters.search || '');
   const [branchId, setBranchId] = useState(filters.branch_id || 'all');
   const [status, setStatus] = useState(filters.status || 'all');
@@ -187,8 +153,6 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
     router.post(route('attendance.devices.test-connection', id));
   };
 
-<<<<<<< HEAD
-=======
   const toggleGlobalAgent = (enabled: boolean) => {
     router.put(route('attendance.devices.sync-settings'), {
       agent_sync_enabled: enabled,
@@ -214,7 +178,6 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
     });
   };
 
->>>>>>> feature/flutter-mobile-app
   const getStatusBadge = (status: string) => {
     const statusColors: Record<string, string> = {
       active: 'bg-green-100 text-green-800',
@@ -231,8 +194,6 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
     );
   };
 
-<<<<<<< HEAD
-=======
   const getAdmsLinkBadge = (device: AttendanceDevice) => {
     const link = device.adms_link ?? (device.last_adms_at ? 'stale' : 'waiting');
 
@@ -277,180 +238,10 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
     );
   };
 
->>>>>>> feature/flutter-mobile-app
   return (
     <Layout>
       <Head title="Attendance Devices" />
 
-<<<<<<< HEAD
-      <div className="container mx-auto py-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Attendance Devices</h1>
-            <p className="mt-1 text-gray-500">
-              Manage biometric and attendance tracking devices
-            </p>
-          </div>
-
-          <div className="mt-4 md:mt-0">
-            <Link href={route('attendance.devices.create')}>
-              <Button className="flex items-center">
-                <Plus className="mr-1 h-4 w-4" />
-                Add Device
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle>Filters</CardTitle>
-            <CardDescription>Filter devices by name, branch or status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                  <Input
-                    placeholder="Search by name, device ID or IP address..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-
-              <div className="w-full md:w-64">
-                <Select
-                  value={branchId}
-                  onValueChange={(value) => setBranchId(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Branches</SelectItem>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="w-full md:w-64">
-                <Select
-                  value={status}
-                  onValueChange={(value) => setStatus(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {statuses.map((statusOption) => (
-                      <SelectItem key={statusOption} value={statusOption}>
-                        {statusOption.charAt(0).toUpperCase() + statusOption.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex space-x-2">
-                <Button variant="outline" onClick={resetFilters}>
-                  Reset
-                </Button>
-                <Button onClick={handleSearch}>
-                  Apply Filters
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Devices Table */}
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Device ID</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Port</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {devices.data && devices.data.length > 0 ? (
-                  devices.data.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell>
-                        <div className="font-medium">{device.name}</div>
-                      </TableCell>
-                      <TableCell>{device.device_id}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Building className="mr-2 h-4 w-4 text-gray-400" />
-                          <span>{device.branch.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Network className="mr-2 h-4 w-4 text-gray-400" />
-                          <span>{device.ip_address}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{device.port}</TableCell>
-                      <TableCell>
-                        {getStatusBadge(device.status)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => testConnection(device.id)}
-                              className="cursor-pointer"
-                            >
-                              <Activity className="mr-2 h-4 w-4" />
-                              <span>Test Connection</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => router.get(route('attendance.devices.edit', device.id))}
-                              className="cursor-pointer"
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              <span>Edit</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(device.id)}
-                              className="cursor-pointer text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
-=======
       <PageSurface>
         <div className="mb-6 space-y-4">
           {/* Top row: Title and primary actions */}
@@ -689,7 +480,6 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
                 ) : (
                   <TableRow>
                     <TableCell colSpan={11} className="h-24 text-center">
->>>>>>> feature/flutter-mobile-app
                       No devices found.
                       {(search || branchId || status) && (
                         <Button
@@ -705,10 +495,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
                 )}
               </TableBody>
             </Table>
-<<<<<<< HEAD
-=======
             </div>
->>>>>>> feature/flutter-mobile-app
           </CardContent>
         </Card>
 
@@ -785,11 +572,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
             </Pagination>
           </div>
         )}
-<<<<<<< HEAD
-      </div>
-=======
       </PageSurface>
->>>>>>> feature/flutter-mobile-app
     </Layout>
   );
 }

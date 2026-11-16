@@ -39,18 +39,10 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-<<<<<<< HEAD
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-=======
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
   id: number;
->>>>>>> feature/flutter-mobile-app
   employee_id: string;
   department: {
     id: number;
@@ -173,8 +165,6 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
   };
 
   const effectiveDate = new Date(transfer.effective_date);
-<<<<<<< HEAD
-=======
   const fromBranch = (transfer as any).fromBranch ?? (transfer as any).from_branch;
   const toBranch = (transfer as any).toBranch ?? (transfer as any).to_branch;
 
@@ -186,7 +176,6 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
 
   const fromBranchName = formatBranch(fromBranch);
   const toBranchName = formatBranch(toBranch);
->>>>>>> feature/flutter-mobile-app
 
   return (
     <Layout>
@@ -209,11 +198,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
           </div>
 
           <div className="flex space-x-2">
-<<<<<<< HEAD
-            {transfer.status === 'pending' && (
-=======
             {(transfer.status === 'pending' || transfer.status === 'approved') && (
->>>>>>> feature/flutter-mobile-app
               <Link href={route('transfers.edit', transfer.id)}>
                 <Button variant="outline">Edit Request</Button>
               </Link>
@@ -276,11 +261,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
               </Button>
             )}
 
-<<<<<<< HEAD
-            {transfer.status === 'pending' && (
-=======
             {(transfer.status === 'pending' || transfer.status === 'approved') && (
->>>>>>> feature/flutter-mobile-app
               <Button
                 variant="destructive"
                 onClick={handleCancel}
@@ -324,11 +305,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                     <div className="space-y-3">
                       <div>
                         <p className="text-sm text-gray-500">Branch</p>
-<<<<<<< HEAD
-                        <p className="font-medium">{transfer.fromBranch?.name}</p>
-=======
                         <p className="font-medium">{fromBranchName}</p>
->>>>>>> feature/flutter-mobile-app
                       </div>
 
                       {transfer.fromDepartment && (
@@ -356,11 +333,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                     <div className="space-y-3">
                       <div>
                         <p className="text-sm text-gray-500">Branch</p>
-<<<<<<< HEAD
-                        <p className="font-medium">{transfer.toBranch?.name}</p>
-=======
                         <p className="font-medium">{toBranchName}</p>
->>>>>>> feature/flutter-mobile-app
                       </div>
 
                       <div>
@@ -419,11 +392,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                       <div>
                         <p className="font-medium">Request Created</p>
                         <p className="text-sm text-gray-500">
-<<<<<<< HEAD
-                          Created by admin for {transfer.employee.first_name} {transfer.employee.last_name}
-=======
                           Created by admin for {employeeDisplayName(transfer.employee)}
->>>>>>> feature/flutter-mobile-app
                         </p>
                       </div>
                     </div>
@@ -494,11 +463,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Name</p>
-<<<<<<< HEAD
-                    <p className="font-medium">{transfer.employee.first_name} {transfer.employee.last_name}</p>
-=======
                     <p className="font-medium">{employeeDisplayName(transfer.employee)}</p>
->>>>>>> feature/flutter-mobile-app
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Employee ID</p>
@@ -552,11 +517,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                   <Alert className="mt-6 bg-blue-50 border-blue-200">
                     <AlertTriangle className="h-4 w-4 text-blue-700" />
                     <AlertDescription className="text-blue-700">
-<<<<<<< HEAD
-                      This transfer has been approved but not yet completed. The employee's records will be updated when the transfer is completed.
-=======
                       This transfer is scheduled. The employee's records will be updated automatically on the effective date ({format(effectiveDate, 'MMMM d, yyyy')}).
->>>>>>> feature/flutter-mobile-app
                     </AlertDescription>
                   </Alert>
                 )}
