@@ -347,8 +347,14 @@ function ReportPreview({
                                         <React.Fragment key={secKey}>
                                             {/* Parent Group Header Row: Data in exact columns, no inline labels */}
                                             <tr
-                                                onClick={() => toggleSection(secKey)}
-                                                className="bg-[#dbeafe] hover:bg-[#bfdbfe] cursor-pointer border-b border-slate-300 font-semibold text-slate-900 transition-colors select-none group"
+                                                onClick={() => {
+                                                    const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
+                                                    if (selection && selection.trim().length > 0) {
+                                                        return;
+                                                    }
+                                                    toggleSection(secKey);
+                                                }}
+                                                className="bg-[#dbeafe] hover:bg-[#bfdbfe] cursor-pointer border-b border-slate-300 font-semibold text-slate-900 transition-colors group"
                                             >
                                                 {colKeys.map((k, colIdx) => {
                                                     if (colIdx === 0) {
@@ -360,7 +366,11 @@ function ReportPreview({
                                                                 <div className="flex items-center gap-2">
                                                                     <button
                                                                         type="button"
-                                                                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#2563eb] text-white shadow-xs font-bold text-xs"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            toggleSection(secKey);
+                                                                        }}
+                                                                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#2563eb] text-white shadow-xs font-bold text-xs hover:bg-[#1d4ed8] cursor-pointer select-none"
                                                                         title={isExpanded ? 'Collapse' : 'Expand'}
                                                                     >
                                                                         {isExpanded ? (
