@@ -127,6 +127,7 @@ import { employeeLoanEmployeePath } from '@/lib/employee-loan-employee-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
 import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
+import { HR_REPORT_NAV, hrReportPath } from '@/lib/hr-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
 import { hasAppPermission, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
@@ -244,21 +245,15 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
         case 'human-resources':
             return [
                 {
-                    title: 'Employee Full Report',
+                    title: 'Employee Attendance, Movement & Leave Report',
                     path: '/employee/dashboard',
                     anyPermissions: ['employees.view', 'leave-applications.view', 'movements.view', 'transfers.view', 'attendance.view'],
                 },
-                {
-                    title: 'Employee Report',
-                    path: '/reports/employee',
+                ...HR_REPORT_NAV.map((r) => ({
+                    title: r.title,
+                    path: hrReportPath(r.slug),
                     allPermissions: ['reports.view', 'employees.view'],
-                    hrOnly: true,
-                },
-                {
-                    title: 'Branch transfer register',
-                    path: '/reports/transfer',
-                    allPermissions: ['reports.view', 'transfers.view'],
-                },
+                })),
             ];
         case 'attendance-movement':
             return [

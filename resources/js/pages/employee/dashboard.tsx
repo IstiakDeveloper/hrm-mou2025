@@ -461,12 +461,12 @@ export default function EmployeeDashboard({
 
     return (
         <Layout>
-            <Head title="Employee report" />
+            <Head title="Employee Attendance, Movement & Leave Report" />
 
             <PageSurface className="px-4 sm:px-6">
                 <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Employee report</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Employee Attendance, Movement & Leave Report</h1>
                         <p className="mt-1 text-sm text-zinc-600">
                             {userPermissions.isDepartmentHead
                                 ? 'View attendance, leave, and movements for employees in your department.'

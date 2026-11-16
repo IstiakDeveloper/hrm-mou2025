@@ -176,6 +176,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
 
     if (p.startsWith('/leave')) return 'leave';
+    if (p.startsWith('/hr/reports')) return 'human-resources';
     if (p.startsWith('/transfers') || p.startsWith('/promotions') || p.startsWith('/demotions')) {
         return 'human-resources';
     }

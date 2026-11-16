@@ -292,7 +292,7 @@ class Employee extends Model
             return null;
         }
 
-        return Carbon::parse($this->date_of_birth)->diffInYears($this->getServiceEndDate());
+        return (int) Carbon::parse($this->date_of_birth)->diffInYears($this->getServiceEndDate());
     }
 
     public function getLengthOfServiceOnLastPromotionDaysAttribute(): ?int

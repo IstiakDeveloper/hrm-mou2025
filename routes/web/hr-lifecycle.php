@@ -352,3 +352,17 @@ Route::prefix('resignation-applications')->name('resignation-applications.')->gr
     Route::post('/{resignationApplication}/ed-approve', [\App\Http\Controllers\ResignationApplicationController::class, 'edApprove'])->name('edApprove');
     Route::put('/{resignationApplication}/signatures/{signature}/comment', [\App\Http\Controllers\ResignationApplicationController::class, 'correctComment'])->name('signatures.comment');
 });
+
+// ====================
+// HUMAN RESOURCE REPORTS
+// ====================
+Route::middleware(['permission:reports.view', 'permission:employees.view'])->prefix('hr/reports')->name('hr.reports.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Hr\HrReportController::class, 'index'])->name('index');
+    Route::get('/{report}', [\App\Http\Controllers\Hr\HrReportController::class, 'show'])->name('show');
+    Route::get('/{report}/print', [\App\Http\Controllers\Hr\HrReportController::class, 'print'])->name('print');
+
+    Route::middleware(['permission:reports.export'])->group(function () {
+        Route::get('/{report}/pdf', [\App\Http\Controllers\Hr\HrReportController::class, 'pdf'])->name('pdf');
+        Route::get('/{report}/excel', [\App\Http\Controllers\Hr\HrReportController::class, 'excel'])->name('excel');
+    });
+});
