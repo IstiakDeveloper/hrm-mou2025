@@ -2,9 +2,11 @@
     'companyName' => $companyName ?? '',
     'companyAddress' => $companyAddress ?? '',
     'title' => $title ?? '',
+    'reportMonth' => !empty($issueDate) ? ($salaryMonth ?? '') : '',
+    'reportIssueDate' => $issueDate ?? '',
 ])
 
-@if (($sectionLabel ?? '') !== '' || ($salaryMonth ?? '') !== '')
+@if (($sectionLabel ?? '') !== '' || (empty($issueDate) && ($salaryMonth ?? '') !== ''))
     <table class="section-title-table" width="100%">
         <tr>
             <td class="section-title">
@@ -13,7 +15,7 @@
                 @endif
             </td>
             <td class="section-meta">
-                @if (($salaryMonth ?? '') !== '')
+                @if (empty($issueDate) && ($salaryMonth ?? '') !== '')
                     Salary Month: {{ $salaryMonth }}
                 @endif
             </td>

@@ -167,10 +167,31 @@ use Inertia\Inertia;
     });
 
     Route::middleware(['permission:payroll.view'])->group(function () {
+        Route::prefix('payroll/reports/bank-advice')->name('payroll.bank-advice.')->group(function () {
+            $controller = \App\Http\Controllers\Payroll\BankAdviceController::class;
+            Route::get('/', [$controller, 'index'])->name('index');
+            Route::middleware('permission:payroll.edit')->group(function () use ($controller) {
+                Route::get('/create', [$controller, 'create'])->name('create');
+                Route::post('/', [$controller, 'store'])->name('store');
+                Route::post('/defaults', [$controller, 'saveDefaults'])->name('defaults');
+                Route::get('/{advice}/edit', [$controller, 'edit'])->whereNumber('advice')->name('edit');
+                Route::put('/{advice}', [$controller, 'update'])->whereNumber('advice')->name('update');
+            });
+            Route::get('/{advice}', [$controller, 'show'])->whereNumber('advice')->name('show');
+            Route::delete('/{advice}', [$controller, 'destroy'])->whereNumber('advice')->name('destroy');
+            Route::get('/{advice}/print', [$controller, 'print'])->whereNumber('advice')->name('print');
+            Route::get('/{advice}/preview', [$controller, 'preview'])->whereNumber('advice')->name('preview');
+            Route::middleware('permission:reports.export')->group(function () use ($controller) {
+                Route::get('/{advice}/pdf', [$controller, 'pdf'])->whereNumber('advice')->name('pdf');
+                Route::get('/{advice}/excel', [$controller, 'excel'])->whereNumber('advice')->name('excel');
+            });
+        });
         Route::prefix('payroll/reports')->name('payroll.reports.')->group(function () {
+            Route::post('/salary-certificate/generate', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'generateCertificate'])->name('certificate.generate');
             Route::get('/', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'index'])->name('index');
             Route::get('/{report}', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'show'])->name('show');
             Route::get('/{report}/print', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'print'])->name('print');
+            Route::get('/{report}/preview', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'preview'])->name('preview');
             Route::middleware(['permission:reports.export'])->group(function () {
                 Route::get('/{report}/pdf', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'pdf'])->name('pdf');
                 Route::get('/{report}/excel', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'excel'])->name('excel');

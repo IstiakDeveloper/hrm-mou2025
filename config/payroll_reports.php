@@ -108,9 +108,17 @@ return [
             'template' => 'salary-sheet-grouped',
             'group_by' => 'designation',
         ],
+        'salary-summary-sheet' => [
+            'title' => 'Salary Summery Sheet',
+            'description' => 'Employee net salary, bank account and monthly salary remarks with total and amount in words.',
+            'filters' => ['year', 'month', 'branch_id', 'project_id'],
+            'status' => 'posted',
+            'salary_type' => 'salary',
+            'template' => 'salary-summary',
+        ],
         'bank-advice' => [
             'title' => 'Bank Advice Report',
-            'description' => 'Bank transfer list for posted salary.',
+            'description' => 'Saved monthly salary transfer letters, editable references and signatories, with bank account lists.',
             'filters' => ['year', 'month', 'branch_id'],
             'status' => 'posted',
             'salary_type' => 'salary',
@@ -184,6 +192,9 @@ return [
             'template' => 'salary-certificate',
             'require_employee' => true,
             'single_page' => true,
+            'orientation' => 'portrait',
+            'reference_prefix' => 'Mou/HRD/LoI',
+            'retirement_age' => 60,
         ],
     ],
 ];

@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -75,6 +76,7 @@ export default function FinalClearanceShow({
     userHasSignature?: boolean;
     isSuperAdmin?: boolean;
 }) {
+    const listReturnUrl = useListReturnUrl('/final-clearances');
     const [deleteOpen, setDeleteOpen] = React.useState(false);
     const field = useForm({
         id_card_returned: clearance.id_card_returned,
@@ -150,7 +152,7 @@ export default function FinalClearanceShow({
             <div className="w-full space-y-3.5">
                 <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs md:flex-row md:items-center">
                     <div className="flex items-center gap-3">
-                        <Link href="/final-clearances" className="rounded-lg border border-slate-200 p-2 text-slate-600 transition-colors hover:bg-slate-50">
+                        <Link href={listReturnUrl} className="rounded-lg border border-slate-200 p-2 text-slate-600 transition-colors hover:bg-slate-50">
                             <ArrowLeft className="h-5 w-5" />
                         </Link>
                         <div>

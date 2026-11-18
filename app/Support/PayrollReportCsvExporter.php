@@ -35,6 +35,7 @@ class PayrollReportCsvExporter
             'grade-step' => self::gradeStepRows($payload),
             'salary-sheet' => self::salarySheetRows($payload),
             'salary-sheet-grouped' => self::salarySheetGroupedRows($payload),
+            'salary-summary' => self::salarySummaryRows($payload),
             'bank-advice' => self::bankAdviceRows($payload),
             'head-register' => self::headRegisterRows($payload),
             'advance-salary' => self::advanceSalaryRows($payload),
@@ -94,8 +95,12 @@ class PayrollReportCsvExporter
             $topsheet ? ['Net Payable'] : ['Net Payable', 'Account No.']
         );
         $rows = [];
-        foreach ($payload['rows'] ?? [] as $index => $row) {
-            $rows[] = self::salarySheetDataLine($row, $earningHeads, $deductionHeads, $index + 1, $topsheet);
+        $serial = 0;
+        foreach ($payload['rows'] ?? [] as $row) {
+            if (empty($row['is_subtotal'])) {
+                $serial++;
+            }
+            $rows[] = self::salarySheetDataLine($row, $earningHeads, $deductionHeads, $serial, $topsheet);
         }
 
         return [$headers, $rows];
@@ -116,7 +121,7 @@ class PayrollReportCsvExporter
     {
         $line = $topsheet
             ? [
-                $serial,
+                ! empty($row['is_subtotal']) ? '' : $serial,
                 $row['name'] ?? '',
                 $row['designation'] ?? '',
             ]
@@ -196,6 +201,30 @@ class PayrollReportCsvExporter
                 'rows' => [],
             ]);
         }
+
+        return [$headers, $rows];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{0: list<string>, 1: list<list<string|int|float|null>>}
+     */
+    protected static function salarySummaryRows(array $payload): array
+    {
+        $headers = ['SL No.', 'PIN', 'Name of Employee', 'Net Salary (Payable)', 'A/C No.', 'Remarks'];
+        $rows = [];
+        foreach ($payload['rows'] ?? [] as $index => $row) {
+            $rows[] = [
+                $index + 1,
+                $row['pin'] ?? '',
+                $row['name'] ?? '',
+                $row['net'] ?? 0,
+                $row['account_no'] ?? '',
+                $row['remarks'] ?? '',
+            ];
+        }
+        $rows[] = ['Total', '', '', $payload['totals']['net'] ?? 0, '', ''];
+        $rows[] = ['In Words: '.($payload['in_words'] ?? ''), '', '', '', '', ''];
 
         return [$headers, $rows];
     }
@@ -378,14 +407,25 @@ class PayrollReportCsvExporter
             $rows[] = ['PIN', $e['pin'] ?? '', ''];
             $rows[] = ['Designation', $e['designation'] ?? '', ''];
             $rows[] = ['Period', $payload['period'] ?? '', ''];
+            $rows[] = ['Reference', $payload['reference'] ?? '', ''];
+            $rows[] = ['Issue date', $payload['issued_at'] ?? '', ''];
+            foreach (['fathers_name', 'mothers_name', 'village', 'post_office', 'upazila', 'district', 'joining_date', 'confirmation_date', 'service_from_joining', 'service_from_confirmation'] as $field) {
+                $rows[] = [ucwords(str_replace('_', ' ', $field)), $e[$field] ?? '', ''];
+            }
         }
+        $rows[] = ['Salary', 'Basic Salary', $payload['basic'] ?? 0];
         foreach ($payload['earnings'] ?? [] as $line) {
+            if (strcasecmp($line['name'] ?? '', 'Basic') === 0) {
+                continue;
+            }
             $rows[] = ['Earning', $line['name'] ?? '', $line['amount'] ?? 0];
         }
-        foreach ($payload['deductions'] ?? [] as $line) {
+        $rows[] = ['Salary', 'Gross Salary', $payload['gross'] ?? 0];
+        foreach ($payload['certificate_deductions'] ?? $payload['deductions'] ?? [] as $line) {
             $rows[] = ['Deduction', $line['name'] ?? '', $line['amount'] ?? 0];
         }
         $rows[] = ['Net Payable', '', $payload['net'] ?? 0];
+        $rows[] = ['In Words', $payload['in_words'] ?? '', ''];
 
         return [$headers, $rows];
     }

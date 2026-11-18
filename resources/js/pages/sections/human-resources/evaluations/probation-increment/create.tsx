@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { PageSurface } from '@/components/page-surface';
 import { AppraisalEmployeeCombo } from '@/components/appraisal/AppraisalEmployeeCombo';
@@ -53,6 +54,7 @@ export default function ProbationIncrementEvaluationCreate({
     employeeLookupUrl = '/probation-increment-evaluations/employees/lookup', 
     templates = [] 
 }: CreateProps) {
+    const listReturnUrl = useListReturnUrl('/probation-increment-evaluations');
     const { auth } = usePage<SharedData>().props;
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -395,7 +397,7 @@ export default function ProbationIncrementEvaluationCreate({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 print:hidden">
                     <div className="flex items-center gap-3">
                         <Link 
-                            href="/probation-increment-evaluations"
+                            href={listReturnUrl}
                             className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors"
                         >
                             <ArrowLeft className="h-4 w-4" />
@@ -1030,7 +1032,7 @@ export default function ProbationIncrementEvaluationCreate({
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <Link href="/probation-increment-evaluations" className="hidden sm:inline-block">
+                                <Link href={listReturnUrl} className="hidden sm:inline-block">
                                     <Button type="button" variant="outline" className="text-xs h-9 border-slate-300 hover:bg-slate-50">
                                         {lang === 'bn' ? 'তালিকায় ফিরুন' : 'Back'}
                                     </Button>

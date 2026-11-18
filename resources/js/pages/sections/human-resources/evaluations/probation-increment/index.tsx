@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { MonthFilter } from '@/components/month-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,7 +44,9 @@ interface ProbationIncrementEvaluationIndexProps {
         approved: number;
         recommended: number;
     };
+    currentMonth: string;
     filters?: {
+        month?: string;
         search?: string;
         status?: string;
         form_type?: string;
@@ -58,7 +61,8 @@ interface ProbationIncrementEvaluationIndexProps {
 export default function ProbationIncrementEvaluationIndex({ 
     evaluations, 
     metrics = { total: 0, pending: 0, approved: 0, recommended: 0 }, 
-    filters = {}, 
+    filters = {},
+    currentMonth,
     canCreate,
     isSuperAdmin = false,
     currentUserId = null,
@@ -75,6 +79,15 @@ export default function ProbationIncrementEvaluationIndex({
     const [status, setStatus] = useState(filters.status || 'all');
     const [formType, setFormType] = useState(filters.form_type || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || '15');
+    const [month, setMonth] = useState(filters.month || currentMonth);
+
+    useEffect(() => {
+        setSearch(filters.search || '');
+        setStatus(filters.status || 'all');
+        setFormType(filters.form_type || 'all');
+        setPerPage(filters.per_page || '15');
+        setMonth(filters.month || currentMonth);
+    }, [filters.search, filters.status, filters.form_type, filters.per_page, filters.month, currentMonth]);
 
     const [selectedEvaluationForApproval, setSelectedEvaluationForApproval] = useState<any | null>(null);
 
@@ -91,12 +104,13 @@ export default function ProbationIncrementEvaluationIndex({
         setSelectedEvaluationForApproval(ev);
     };
 
-    const handleSearch = () => {
+    const handleSearch = (nextMonth?: string) => {
         router.get('/probation-increment-evaluations', {
             search,
             status,
             form_type: formType,
             per_page: perPage,
+            month: nextMonth ?? month,
         }, {
             preserveState: true,
             preserveScroll: true,
@@ -108,6 +122,7 @@ export default function ProbationIncrementEvaluationIndex({
         setStatus('all');
         setFormType('all');
         setPerPage('15');
+        setMonth(currentMonth);
         router.get('/probation-increment-evaluations', {}, {
             preserveState: true,
             preserveScroll: true,
@@ -356,7 +371,7 @@ export default function ProbationIncrementEvaluationIndex({
                 {/* Filters Section */}
                 <Card className="border-slate-200/80 shadow-xs">
                     <CardContent className="p-4 sm:p-5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                             {/* Search */}
                             <div className="relative">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -390,6 +405,15 @@ export default function ProbationIncrementEvaluationIndex({
                                 </Select>
                             </div>
 
+                            <MonthFilter
+                                value={month}
+                                lang={lang}
+                                onChange={(value) => {
+                                    setMonth(value);
+                                    handleSearch(value);
+                                }}
+                            />
+
                             {/* Form Type Filter */}
                             <div>
                                 <Select value={formType} onValueChange={setFormType}>
@@ -409,7 +433,7 @@ export default function ProbationIncrementEvaluationIndex({
                             <div className="flex items-center gap-2">
                                 <Button
                                     size="sm"
-                                    onClick={handleSearch}
+                                    onClick={() => handleSearch()}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 font-bold flex-1 shadow-xs"
                                 >
                                     <SlidersHorizontal className="h-3.5 w-3.5 mr-1" />

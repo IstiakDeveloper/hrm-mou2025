@@ -16,6 +16,7 @@ class PayrollReportXlsxExporter
     {
         $xlsx = match ($template) {
             'salary-sheet', 'salary-sheet-grouped' => self::salarySheetWorkbook($payload, $meta),
+            'salary-summary' => self::salarySummaryWorkbook($payload, $meta),
             default => self::genericWorkbook($template, $payload, $meta),
         };
 
@@ -104,6 +105,13 @@ class PayrollReportXlsxExporter
             $merges[] = [0, $lastCol, $r];
         }
 
+        if (! empty($payload['issue_date'])) {
+            $line = array_fill(0, $totalCols, '');
+            $line[0] = self::styled('Month: '.$salaryMonth.' | Issue Date: '.$payload['issue_date'], fontSize: 9);
+            $r = $addRow($line);
+            $merges[] = [0, $lastCol, $r];
+        }
+
         $addBlank();
 
         /** @var PayrollReportService $reportService */
@@ -120,20 +128,20 @@ class PayrollReportXlsxExporter
             $sectionLastCol = $sectionTotalCols - 1;
 
             $sectionLabel = (string) ($section['label'] ?? '');
-            if ($sectionLabel !== '' || $salaryMonth !== '') {
+            if ($sectionLabel !== '' || ($salaryMonth !== '' && empty($payload['issue_date']))) {
                 $mid = (int) floor($sectionTotalCols / 2);
                 $line = array_fill(0, $sectionTotalCols, '');
                 if ($sectionLabel !== '') {
                     $line[0] = self::styled($sectionLabel, bold: true, align: 'left', fontSize: 9);
                 }
-                if ($salaryMonth !== '') {
+                if ($salaryMonth !== '' && empty($payload['issue_date'])) {
                     $line[$mid] = self::styled('Salary Month: '.$salaryMonth, bold: true, align: 'right', fontSize: 9);
                 }
                 $r = $addRow($line);
                 if ($sectionLabel !== '') {
                     $merges[] = [0, max(0, $mid - 1), $r];
                 }
-                if ($salaryMonth !== '') {
+                if ($salaryMonth !== '' && empty($payload['issue_date'])) {
                     $merges[] = [$mid, $sectionLastCol, $r];
                 }
             }
@@ -192,10 +200,14 @@ class PayrollReportXlsxExporter
                 }
 
                 $serialStart = (int) ($page['serial_start'] ?? 0);
-                foreach ($page['rows'] ?? [] as $index => $row) {
+                foreach ($page['rows'] ?? [] as $row) {
+                    $isSubtotal = ! empty($row['is_subtotal']);
+                    if (! $isSubtotal) {
+                        $serialStart++;
+                    }
                     $line = [
-                        self::styled((string) ($serialStart + $index + 1), fontSize: 8),
-                        self::styled((string) ($row['name'] ?? ''), align: 'left', fontSize: 8),
+                        self::styled($isSubtotal ? '' : (string) $serialStart, fontSize: 8),
+                        self::styled((string) ($row['name'] ?? ''), bold: $isSubtotal, align: 'left', fontSize: 8),
                     ];
                     if (! $topsheet) {
                         $line[] = self::styled((string) ($row['pin'] ?? ''), fontSize: 8);
@@ -220,7 +232,7 @@ class PayrollReportXlsxExporter
                 $totalsLabel = (string) ($page['totals_label'] ?? 'Total');
                 if ($totals && ($page['rows'] ?? []) !== []) {
                     $line = array_fill(0, $sectionTotalCols, self::styled('', border: true));
-                    $line[0] = self::styled($totalsLabel, bold: true, align: 'right', fontSize: 8);
+                    $line[0] = self::styled($totalsLabel === 'Total' ? ($payload['totals_label'] ?? $totalsLabel) : $totalsLabel, bold: true, align: 'right', fontSize: 8);
                     $col = $employeeCols;
                     foreach ($sectionEarningHeads as $head) {
                         $line[$col++] = self::styled(self::amt($totals['components'][$head] ?? 0), bold: true, fontSize: 8);
@@ -266,6 +278,69 @@ class PayrollReportXlsxExporter
         }
 
         self::setSalarySheetColumnWidths($xlsx, $totalCols);
+
+        return $xlsx;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $meta
+     */
+    protected static function salarySummaryWorkbook(array $payload, array $meta): SimpleXLSXGen
+    {
+        [$headers, $dataRows] = PayrollReportCsvExporter::rowsFromPayload('salary-summary', $payload);
+        $rows = [];
+        $merges = [];
+        $title = (string) ($meta['title'] ?? 'Salary Summery Sheet');
+
+        foreach ([$meta['companyName'] ?? '', $meta['companyAddress'] ?? '', $title] as $text) {
+            if ($text === '') {
+                continue;
+            }
+            $rows[] = [self::styled($text, bold: true), '', '', '', '', ''];
+            $merges[] = 'A'.count($rows).':F'.count($rows);
+        }
+        $period = implode(' | ', array_filter([
+            ! empty($payload['salary_month']) ? 'Month: '.$payload['salary_month'] : null,
+            ! empty($payload['issue_date']) ? 'Issue Date: '.$payload['issue_date'] : null,
+        ]));
+        if ($period !== '') {
+            $rows[] = [self::styled($period), '', '', '', '', ''];
+            $merges[] = 'A'.count($rows).':F'.count($rows);
+        }
+        $rows[] = [];
+        $rows[] = array_map(fn (string $label) => self::styled($label, bold: true), $headers);
+        $employeeRowCount = count($payload['rows'] ?? []);
+
+        foreach ($dataRows as $index => $dataRow) {
+            $line = [];
+            foreach ($dataRow as $column => $value) {
+                $text = $column === 3 && is_numeric($value) && ! empty($payload['amount_decimals'])
+                    ? number_format((float) $value, (int) $payload['amount_decimals'], '.', '')
+                    : (string) $value;
+                $line[] = self::styled(
+                    $text,
+                    bold: $index >= $employeeRowCount,
+                    align: $column === 3 ? 'right' : (in_array($column, [0, 1], true) ? 'center' : 'left'),
+                    asText: is_string($value),
+                );
+            }
+            $rows[] = $line;
+            if ($index === $employeeRowCount) {
+                $merges[] = 'A'.count($rows).':C'.count($rows);
+            } elseif ($index > $employeeRowCount) {
+                $merges[] = 'A'.count($rows).':F'.count($rows);
+            }
+        }
+
+        $xlsx = SimpleXLSXGen::create($title);
+        $xlsx->setAuthor('HRM System')->addSheet($rows, 'Salary Summery Sheet');
+        foreach ($merges as $merge) {
+            $xlsx->mergeCells($merge);
+        }
+        foreach (['A' => 7, 'B' => 12, 'C' => 32, 'D' => 22, 'E' => 25, 'F' => 48] as $column => $width) {
+            $xlsx->setColWidth($column, $width);
+        }
 
         return $xlsx;
     }
@@ -391,9 +466,13 @@ class PayrollReportXlsxExporter
         string $align = 'center',
         bool $border = true,
         int $fontSize = 9,
+        bool $asText = false,
     ): string {
         $borderAttr = $border ? ' border="thin thin thin thin"' : '';
         $inner = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        if ($asText) {
+            $inner = '<raw>'.$inner.'</raw>';
+        }
         $tags = '<style'.$borderAttr.' font-size="'.$fontSize.'">'.$inner.'</style>';
 
         if ($bold) {

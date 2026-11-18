@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { MonthFilter } from '@/components/month-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,7 +44,9 @@ interface ConfirmationEvaluationIndexProps {
         approved: number;
         recommended: number;
     };
+    currentMonth: string;
     filters?: {
+        month?: string;
         search?: string;
         status?: string;
         form_type?: string;
@@ -58,7 +61,8 @@ interface ConfirmationEvaluationIndexProps {
 export default function ConfirmationEvaluationIndex({ 
     evaluations, 
     metrics = { total: 0, pending: 0, approved: 0, recommended: 0 }, 
-    filters = {}, 
+    filters = {},
+    currentMonth,
     canCreate,
     isSuperAdmin = false,
     currentUserId = null,
@@ -75,6 +79,15 @@ export default function ConfirmationEvaluationIndex({
     const [status, setStatus] = useState(filters.status || 'all');
     const [formType, setFormType] = useState(filters.form_type || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || '15');
+    const [month, setMonth] = useState(filters.month || currentMonth);
+
+    useEffect(() => {
+        setSearch(filters.search || '');
+        setStatus(filters.status || 'all');
+        setFormType(filters.form_type || 'all');
+        setPerPage(filters.per_page || '15');
+        setMonth(filters.month || currentMonth);
+    }, [filters.search, filters.status, filters.form_type, filters.per_page, filters.month, currentMonth]);
 
     const [selectedEvaluationForApproval, setSelectedEvaluationForApproval] = useState<any | null>(null);
 
@@ -91,8 +104,8 @@ export default function ConfirmationEvaluationIndex({
         setSelectedEvaluationForApproval(ev);
     };
 
-    const handleFilter = (newSearch?: string, newStatus?: string, newFormType?: string, newPerPage?: string) => {
-        const query: any = {};
+    const handleFilter = (newSearch?: string, newStatus?: string, newFormType?: string, newPerPage?: string, newMonth?: string) => {
+        const query: any = { month: newMonth ?? month };
         const s = newSearch !== undefined ? newSearch : search;
         const st = newStatus !== undefined ? newStatus : status;
         const ft = newFormType !== undefined ? newFormType : formType;
@@ -118,6 +131,7 @@ export default function ConfirmationEvaluationIndex({
         setStatus('all');
         setFormType('all');
         setPerPage('15');
+        setMonth(currentMonth);
         router.get('/confirmation-evaluations', {}, { replace: true });
     };
 
@@ -375,7 +389,7 @@ export default function ConfirmationEvaluationIndex({
                 </div>
 
                 {/* Filter and Search Bar - Responsive */}
-                <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-2">
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2">
                     <div className="relative w-full md:flex-1">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                         <Input 
@@ -387,7 +401,15 @@ export default function ConfirmationEvaluationIndex({
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto shrink-0">
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 w-full max-w-full md:w-auto shrink-0">
+                        <MonthFilter
+                            value={month}
+                            lang={lang}
+                            onChange={(value) => {
+                                setMonth(value);
+                                handleFilter(undefined, undefined, undefined, undefined, value);
+                            }}
+                        />
                         <Select 
                             value={status} 
                             onValueChange={(val) => {
@@ -441,7 +463,7 @@ export default function ConfirmationEvaluationIndex({
                                 <span className="sm:hidden text-xs">{lang === 'bn' ? 'অনুসন্ধান' : 'Search'}</span>
                             </Button>
 
-                            {(search || status !== 'all' || formType !== 'all') && (
+                            {(search || status !== 'all' || formType !== 'all' || month !== currentMonth) && (
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 

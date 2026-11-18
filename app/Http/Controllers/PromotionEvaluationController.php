@@ -13,6 +13,7 @@ use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\OrganogramAccessService;
 use App\Services\PromotionEvaluationWorkflowService;
 use App\Support\AppraisalRequiredFields;
+use App\Support\MonthlyListFilters;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -60,6 +61,8 @@ class PromotionEvaluationController extends Controller
         }
 
         // HR & ED can see all
+
+        MonthlyListFilters::apply($request, $query, 'promotions.evaluations.index', ['search', 'status', 'form_type', 'per_page']);
 
         $metrics = AppraisalListQuery::summarize(clone $query, [
             'pending' => "status NOT IN ('approved', 'rejected')",
@@ -116,7 +119,8 @@ class PromotionEvaluationController extends Controller
         return Inertia::render('sections/human-resources/evaluations/promotion/index', [
             'evaluations' => $evaluations,
             'metrics' => $metrics,
-            'filters' => $request->only(['search', 'status', 'form_type', 'per_page']),
+            'filters' => $request->only(['search', 'status', 'form_type', 'per_page', 'month']),
+            'currentMonth' => now()->format('Y-m'),
             'canCreate' => $user->isSuperAdmin() || $user->hasPermission('promotion-evaluations.create'),
             'isSuperAdmin' => $user->isSuperAdmin(),
             'currentUserId' => $user->id,
@@ -137,7 +141,7 @@ class PromotionEvaluationController extends Controller
                          in_array('Director Finance and Accounts', $roleNames, true) || in_array('Director Finance and Account', $roleNames, true);
 
         if (! $isLineManager && ! $user->isSuperAdmin()) {
-            return redirect()->route('promotions.evaluations.index')->with('error', 'Only Branch Managers, Regional Managers, Zonal Managers, or Directors can create a promotion evaluation.');
+            return redirect()->to(MonthlyListFilters::returnUrl($request, 'promotions.evaluations.index'))->with('error', 'Only Branch Managers, Regional Managers, Zonal Managers, or Directors can create a promotion evaluation.');
         }
 
         if (! $user->hasSignature()) {
@@ -145,10 +149,11 @@ class PromotionEvaluationController extends Controller
         }
 
         if (! $user->isSuperAdmin() && $isLineManager && ! $user->employee) {
-            return redirect()->route('promotions.evaluations.index')->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
+            return redirect()->to(MonthlyListFilters::returnUrl($request, 'promotions.evaluations.index'))->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
         }
 
         return Inertia::render('sections/human-resources/evaluations/promotion/create', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'promotions.evaluations.index'),
             'employeeLookupUrl' => route('promotions.evaluations.employees.lookup'),
             'templates' => AppraisalTemplateCache::load('promotion', activeOnly: true, activeCriteriaOnly: true),
         ]);
@@ -330,6 +335,7 @@ class PromotionEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/promotion/show', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'promotions.evaluations.index'),
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
             'currentUserId' => $user->id,
@@ -381,6 +387,7 @@ class PromotionEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/promotion/edit', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'promotions.evaluations.index'),
             'evaluation' => $evaluation,
             'isReviewerEdit' => $evaluation->status !== 'draft',
             'returnComment' => $sentBackSig?->comments,
@@ -602,7 +609,7 @@ class PromotionEvaluationController extends Controller
         $evaluation->signatures()->delete();
         $evaluation->delete();
 
-        return redirect()->route('promotions.evaluations.index')->with('success', 'Promotion evaluation deleted successfully.');
+        return redirect()->to(MonthlyListFilters::returnUrl($request, 'promotions.evaluations.index'))->with('success', 'Promotion evaluation deleted successfully.');
     }
 
     public function print(Request $request, PromotionEvaluation $evaluation)

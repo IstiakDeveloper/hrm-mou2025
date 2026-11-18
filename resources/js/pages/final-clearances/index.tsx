@@ -7,7 +7,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Building2, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, HandCoins, Plus, Printer, RotateCcw, Search, Trash2, Users, XCircle } from 'lucide-react';
 import ClearanceDeleteDialog from './components/ClearanceDeleteDialog';
 import { Card, CardContent } from '@/components/ui/card';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { MonthFilter } from '@/components/month-filter';
 
 type Row = {
     id: number;
@@ -91,13 +92,15 @@ function blockWithoutSignature(userHasSignature: boolean) {
 export default function FinalClearanceIndex({
     clearances,
     filters,
+    currentMonth,
     metrics = { total: 0, pending: 0, approved: 0, rejected: 0 },
     canCreate,
     userHasSignature = false,
     isSuperAdmin = false,
 }: {
     clearances: Paginator;
-    filters: { status?: string; search?: string; per_page?: string };
+    filters: { status?: string; search?: string; per_page?: string; month?: string };
+    currentMonth: string;
     metrics?: { total: number; pending: number; approved: number; rejected: number };
     canCreate: boolean;
     userHasSignature?: boolean;
@@ -106,10 +109,18 @@ export default function FinalClearanceIndex({
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status || 'all');
     const [perPage, setPerPage] = useState(filters.per_page || '15');
+    const [month, setMonth] = useState(filters.month || currentMonth);
+
+    useEffect(() => {
+        setSearch(filters.search || '');
+        setStatus(filters.status || 'all');
+        setPerPage(filters.per_page || '15');
+        setMonth(filters.month || currentMonth);
+    }, [filters.search, filters.status, filters.per_page, filters.month, currentMonth]);
     const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
 
-    const apply = (next?: { search?: string; status?: string; per_page?: string }) => {
-        const query: Record<string, string> = {};
+    const apply = (next?: { search?: string; status?: string; per_page?: string; month?: string }) => {
+        const query: Record<string, string> = { month: next?.month ?? month };
         const nextSearch = next?.search !== undefined ? next.search : search;
         const nextStatus = next?.status !== undefined ? next.status : status;
         const nextPerPage = next?.per_page !== undefined ? next.per_page : perPage;
@@ -123,6 +134,7 @@ export default function FinalClearanceIndex({
         setSearch('');
         setStatus('all');
         setPerPage('15');
+        setMonth(currentMonth);
         router.get('/final-clearances', {}, { replace: true });
     };
 
@@ -188,8 +200,8 @@ export default function FinalClearanceIndex({
                     ))}
                 </div>
 
-                <div className="flex flex-col items-stretch gap-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs sm:flex-row sm:items-center">
-                    <div className="relative w-full sm:flex-1">
+                <div className="flex flex-col items-stretch gap-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs sm:flex-row sm:flex-wrap sm:items-center">
+                    <div className="relative w-full min-w-48 sm:flex-1">
                         <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                         <Input
                             placeholder="Search by name or staff ID"
@@ -199,6 +211,13 @@ export default function FinalClearanceIndex({
                             className="h-9 rounded-lg border-slate-200 bg-slate-50/50 pl-8 text-xs placeholder:text-slate-400"
                         />
                     </div>
+                    <MonthFilter
+                        value={month}
+                        onChange={(value) => {
+                            setMonth(value);
+                            apply({ month: value });
+                        }}
+                    />
                     <div className="flex w-full items-center gap-2 sm:w-auto">
                         <Select
                             value={status}
@@ -220,7 +239,7 @@ export default function FinalClearanceIndex({
                         <Button variant="outline" size="sm" onClick={() => apply()} className="h-9 rounded-lg border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50">
                             <Search className="h-3.5 w-3.5" />
                         </Button>
-                        {(search || status !== 'all') && (
+                        {(search || status !== 'all' || month !== currentMonth) && (
                             <Button variant="ghost" size="sm" onClick={reset} className="h-9 rounded-lg px-2 text-slate-500 hover:text-slate-800" title="Reset filters">
                                 <RotateCcw className="h-3.5 w-3.5" />
                             </Button>

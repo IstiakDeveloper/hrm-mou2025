@@ -59,13 +59,14 @@
                         'title' => $title ?? '',
                         'sectionLabel' => $section['label'] ?? '',
                         'salaryMonth' => $salaryMonth,
+                        'issueDate' => $payload['issue_date'] ?? '',
                     ])
                 @endif
                 @include('payroll.reports.templates.salary-sheet-table', [
                     'payload' => array_merge($sectionLayoutPayload, [
                         'rows' => $page['rows'],
                         'totals' => $page['totals'],
-                        'totals_label' => $page['totals_label'],
+                        'totals_label' => $loop->last ? ($payload['totals_label'] ?? $page['totals_label']) : $page['totals_label'],
                         'serial_start' => $page['serial_start'],
                     ]),
                     'tableLayout' => $sectionTableLayout,

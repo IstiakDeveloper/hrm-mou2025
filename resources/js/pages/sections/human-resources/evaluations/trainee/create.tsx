@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { Head, useForm, Link } from '@inertiajs/react';
 import { initiatorGaps } from '@/lib/appraisal-required';
@@ -54,6 +55,7 @@ export default function TraineeEvaluationCreate({
     currentUserBranch,
     userHasSignature = false,
 }: CreateProps) {
+    const listReturnUrl = useListReturnUrl('/trainee-evaluations');
     const [lang, setLang] = useState<'bn' | 'en'>('bn');
     const [viewMode, setViewMode] = useState<'form' | 'preview'>('form');
     const [formType, setFormType] = useState<'officer_abm' | 'accountant' | 'bm_and_above'>('officer_abm');
@@ -337,7 +339,7 @@ export default function TraineeEvaluationCreate({
                 {/* Header Action Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                     <div className="flex items-center gap-3">
-                        <Link href="/trainee-evaluations">
+                        <Link href={listReturnUrl}>
                             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs bg-white border-slate-300 hover:bg-slate-50">
                                 <ArrowLeft className="w-3.5 h-3.5" />
                                 {lang === 'bn' ? 'তালিকায় ফিরুন' : 'Back'}

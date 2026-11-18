@@ -197,6 +197,14 @@
         text-align: right;
     }
 
+    .salary-summary-table thead {
+        display: table-header-group;
+    }
+
+    .salary-summary-table tr {
+        page-break-inside: avoid;
+    }
+
     .salary-sheet-page {
         page-break-inside: auto;
     }

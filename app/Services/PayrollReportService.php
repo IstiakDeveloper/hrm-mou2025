@@ -9,6 +9,7 @@ use App\Models\SalaryHead;
 use App\Models\SalaryStep;
 use App\Models\SalaryStructure;
 use App\Models\SeparationFinalPayment;
+use App\Support\AmountInWords;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use Carbon\Carbon;
@@ -61,6 +62,7 @@ class PayrollReportService
                 ? $this->salarySheetTopsheet($config, $filters)
                 : $this->salarySheet($config, $filters),
             'salary-sheet-grouped' => $this->salarySheetGrouped($config, $filters),
+            'salary-summary' => $this->salarySummary($config, $filters),
             'bank-advice' => $this->bankAdvice($config, $filters),
             'head-register' => $this->headRegister($config, $filters),
             'advance-salary' => $this->advanceSalary($config, $filters),
@@ -226,7 +228,7 @@ class PayrollReportService
         $sheet = $this->mapSalarySheet($payslips, $config);
         $groupBy = (string) ($config['topsheet_by'] ?? 'branch');
 
-        /** @var array<string, array{label: string, sort_tuple: list<int|string>, rows: list<array<string, mixed>>}> $groups */
+        /** @var array<string, array{is_head_office: bool, label: string, sort_tuple: list<int|string>, rows: list<array<string, mixed>>}> $groups */
         $groups = [];
 
         foreach ($sheet['rows'] as $row) {
@@ -239,6 +241,7 @@ class PayrollReportService
             if (! isset($groups[$key])) {
                 $branch = $this->resolveSalarySheetBranch($row);
                 $groups[$key] = [
+                    'is_head_office' => BranchOrganogram::isHeadOfficeStaffRow($row),
                     'label' => match ($groupBy) {
                         'month' => (string) ($row['period'] ?? 'Unknown'),
                         'designation' => (string) ($row['designation'] ?? 'Unassigned'),
@@ -260,6 +263,11 @@ class PayrollReportService
 
         uasort($groups, function (array $a, array $b) use ($groupBy) {
             if ($groupBy === 'branch') {
+                $officeCmp = (int) $a['is_head_office'] <=> (int) $b['is_head_office'];
+                if ($officeCmp !== 0) {
+                    return $officeCmp;
+                }
+
                 return ($a['sort_tuple'] ?? []) <=> ($b['sort_tuple'] ?? []);
             }
 
@@ -283,6 +291,7 @@ class PayrollReportService
                 'branch_id' => null,
                 'branch_model' => null,
                 'branch_label' => $group['label'],
+                'is_head_office' => $group['is_head_office'],
                 'grade' => null,
                 'step' => null,
                 'grade_step' => '',
@@ -297,10 +306,27 @@ class PayrollReportService
             ];
         }
 
+        $branchCount = count($topsheetRows);
+        if ($groupBy === 'branch') {
+            $branchRows = array_values(array_filter($topsheetRows, fn (array $row) => ! $row['is_head_office']));
+            if ($branchRows !== []) {
+                $employeeCount = array_sum(array_column($branchRows, 'employee_count'));
+                $subtotal = array_merge($branchRows[0], $this->sumSheetRows($branchRows, $heads), [
+                    'name' => 'Branch Total',
+                    'designation' => $employeeCount === 1 ? '1 employee' : $employeeCount.' employees',
+                    'employee_count' => $employeeCount,
+                    'is_subtotal' => true,
+                ]);
+                array_splice($topsheetRows, count($branchRows), 0, [$subtotal]);
+            }
+        }
+
         return [
             'template' => 'salary-sheet',
             'topsheet' => true,
             'topsheet_by' => $groupBy,
+            'issue_date' => now()->format('d/m/Y'),
+            'totals_label' => $groupBy === 'branch' ? 'Branch and Head Office Total' : 'Total',
             'salary_month' => $this->periodLabel($filters, $config),
             'heads' => $heads,
             'earning_heads' => $sheet['earning_heads'] ?? [],
@@ -309,7 +335,7 @@ class PayrollReportService
             'rows' => $topsheetRows,
             'totals' => $this->sumSheetRows($topsheetRows, $heads),
             'meta' => [
-                'row_count' => count($topsheetRows),
+                'row_count' => $branchCount,
                 'employee_count' => count($sheet['rows'] ?? []),
                 'status' => $config['status'] ?? null,
                 'salary_type' => $config['salary_type'] ?? 'salary',
@@ -1059,7 +1085,7 @@ class PayrollReportService
                 'serial_start' => $serialStart,
             ];
 
-            $serialStart += $take;
+            $serialStart += count(array_filter($chunk, fn (array $row) => empty($row['is_subtotal'])));
             $offset += $take;
             $isFirstPage = false;
         }
@@ -1080,6 +1106,10 @@ class PayrollReportService
         $net = 0.0;
 
         foreach ($rows as $row) {
+            if (! empty($row['is_subtotal'])) {
+                continue;
+            }
+
             foreach ($heads as $head) {
                 $components[$head] += (float) ($row['components'][$head] ?? 0);
             }
@@ -1107,7 +1137,7 @@ class PayrollReportService
 
         $query = Payslip::query()
             ->with([
-                'lines.head:id,name,short_name,type,is_loan_head,loan_head_type',
+                'lines.head:id,name,short_name,type,is_loan_head,loan_head_type,is_pf_head,is_welfare,is_income_tax_head',
                 'branch:id,name,branch_code,is_head_office,regional_office_id',
                 'branch.regionalOffice.zone:id,code,name',
                 'payrollRun.branch:id,name,branch_code,is_head_office,regional_office_id',
@@ -1281,6 +1311,56 @@ class PayrollReportService
                 }
             }
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    protected function salarySummary(array $config, array $filters): array
+    {
+        $payslips = $this->fetchPayslips($config, $filters);
+        $banks = $this->loadPrimaryBanks($payslips->pluck('employee_id')->unique()->filter()->values());
+        $rows = [];
+
+        foreach ($payslips as $payslip) {
+            if ($payslip->is_withheld) {
+                continue;
+            }
+
+            $month = (int) ($payslip->payrollRun?->month ?? $filters['month'] ?? 0);
+            $monthName = $month >= 1 && $month <= 12 ? Carbon::create(2000, $month, 1)->format('F') : '';
+            $bank = $banks[$payslip->employee_id] ?? null;
+            $rows[] = [
+                'pin' => (string) ($payslip->employee?->pin ?? ''),
+                'name' => (string) ($payslip->displayName() ?? ''),
+                // Match the whole-taka amounts shown on salary sheets.
+                'net' => round((float) $payslip->net_payable, 0),
+                'account_no' => (string) ($bank?->account_no ?? ''),
+                'remarks' => $monthName !== '' ? 'Salary for the Month of '.$monthName : 'Salary',
+            ];
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            return HeadOfficeOrganogram::compareEmployeePins($a['pin'], $b['pin'])
+                ?: strnatcasecmp($a['name'], $b['name']);
+        });
+
+        $total = round(array_sum(array_column($rows, 'net')), 0);
+
+        return [
+            'template' => 'salary-summary',
+            'salary_month' => $this->periodLabel($filters, $config),
+            'issue_date' => now()->format('d/m/Y'),
+            'rows' => $rows,
+            'totals' => ['net' => $total],
+            'in_words' => AmountInWords::taka($total),
+            'meta' => [
+                'row_count' => count($rows),
+                'status' => $config['status'] ?? null,
+            ],
+        ];
     }
 
     /**
@@ -1628,9 +1708,12 @@ class PayrollReportService
             ];
         }
 
-        $employee = Employee::query()
-            ->with(['designation:id,name', 'department:id,name', 'branch:id,name', 'payscale:id,name', 'salaryGrade:id,name'])
-            ->find($filters['employee_id']);
+        if (empty($filters['year']) || empty($filters['month'])) {
+            return ['template' => 'salary-certificate', 'meta' => ['message' => 'Select a salary year and month.']];
+        }
+
+        $employee = $this->findCertificateEmployee((int) $filters['employee_id']);
+        $filters['project_id'] = null;
 
         $payslip = $this->fetchPayslips($config, $filters)->first();
 
@@ -1650,6 +1733,30 @@ class PayrollReportService
         }
 
         $run = $payslip->payrollRun;
+        if ($payslip->is_withheld) {
+            return ['template' => 'salary-certificate', 'meta' => ['message' => 'Salary is withheld for the selected period.']];
+        }
+        $issuedAt = Carbon::parse($filters['certificate_issue_date'] ?? now()->toDateString())->startOfDay();
+        if ($employee->joining_date && $employee->joining_date->greaterThan($issuedAt)) {
+            return ['template' => 'salary-certificate', 'meta' => ['message' => 'Issue date cannot be before the employee joining date.']];
+        }
+        $confirmation = $employee->confirmation_date && $employee->confirmation_date->lessThanOrEqualTo($issuedAt)
+            ? $employee->confirmation_date : null;
+        $end = $issuedAt;
+        foreach ([$employee->resignation_date, $employee->dropout_date] as $leavingDate) {
+            if ($leavingDate && $leavingDate->lessThan($end)) {
+                $end = $leavingDate;
+            }
+        }
+        $serviceLength = static function ($start) use ($end): string {
+            if (! $start || $start->greaterThan($end)) {
+                return '-';
+            }
+            $duration = $start->diff($end);
+
+            return $duration->y.'Y,'.$duration->m.'M,'.$duration->d.'D';
+        };
+        $defaults = isset($filters['certificate_signatory_name']) ? [] : $this->salaryCertificateDefaults();
         $earnings = $payslip->lines->where('type', 'earning')->values();
         $deductions = $payslip->lines->where('type', 'deduction')->values();
 
@@ -1664,6 +1771,22 @@ class PayrollReportService
                 'grade' => $payslip->grade_label,
                 'step' => $payslip->step_number,
                 'payscale' => $employee->payscale?->name,
+                'fathers_name' => $employee->fathers_name,
+                'mothers_name' => $employee->mothers_name,
+                'village' => $employee->village,
+                'post_office' => $employee->post_office,
+                'upazila' => $employee->upazila,
+                'district' => $employee->district,
+                'joining_date' => $employee->joining_date?->format('d-m-Y'),
+                'confirmation_date' => $confirmation?->format('d-m-Y'),
+                'service_from_joining' => $serviceLength($employee->joining_date),
+                'service_from_confirmation' => $serviceLength($confirmation),
+                'pronoun' => strtolower((string) $employee->gender) === 'female' ? 'She' : 'He',
+                'possessive' => strtolower((string) $employee->gender) === 'female' ? 'Her' : 'His',
+                'object_pronoun' => strtolower((string) $employee->gender) === 'female' ? 'her' : 'him',
+                'employment_type' => $confirmation ? 'permanent' : 'probationary',
+                'is_current' => $employee->status === 'active' && $end->equalTo($issuedAt),
+                'service_end_date' => $end->format('d-m-Y'),
             ],
             'period' => sprintf('%s %d', date('F', mktime(0, 0, 0, (int) $run->month, 1)), $run->year),
             'earnings' => $earnings->map(fn ($l) => [
@@ -1677,10 +1800,70 @@ class PayrollReportService
             'basic' => $payslip->displayBasicSalary(),
             'gross' => (float) $payslip->gross_salary,
             'deduction' => (float) $payslip->total_deduction,
+            'certificate_deductions' => $this->salaryCertificateDeductions($payslip),
             'net' => (float) $payslip->net_payable,
-            'issued_at' => Carbon::now()->format('d F Y'),
+            'in_words' => AmountInWords::takaWithPaisa((float) $payslip->net_payable),
+            'issued_at' => $issuedAt->format('d-m-Y'),
+            'reference' => ($config['reference_prefix'] ?? 'Mou/HRD/LoI').'/'.($filters['certificate_reference_year'] ?? $issuedAt->year).'/'.($filters['certificate_reference_number'] ?? ''),
+            'retirement_age' => $config['retirement_age'] ?? 60,
+            'signatory' => [
+                'name' => $filters['certificate_signatory_name'] ?? $defaults['certificate_signatory_name'] ?? '',
+                'designation' => $filters['certificate_signatory_designation'] ?? $defaults['certificate_signatory_designation'] ?? 'Executive Director',
+                'organization' => config('payroll_reports.company_name'),
+            ],
             'meta' => [],
         ];
+    }
+
+    protected function findCertificateEmployee(int $id): ?Employee
+    {
+        return Employee::query()->with(['designation:id,name', 'department:id,name', 'branch:id,name', 'payscale:id,name'])->find($id);
+    }
+
+    public function salaryCertificateDefaults(): array
+    {
+        $signer = Employee::query()->where('status', 'active')->whereHas('designation',
+            fn ($q) => $q->whereRaw('LOWER(TRIM(name)) = ?', ['executive director']))->orderBy('id')->first(['id', 'name_en']);
+
+        return [
+            'certificate_reference_year' => now()->format('Y'),
+            'certificate_reference_number' => app(SalaryCertificateIssueService::class)->nextReferenceNumber((int) now()->year),
+            'certificate_issue_date' => now()->toDateString(), 'certificate_signatory_name' => $signer?->name_en ?? '',
+            'certificate_signatory_designation' => 'Executive Director',
+        ];
+    }
+
+    protected function salaryCertificateDeductions(Payslip $payslip): array
+    {
+        $amounts = array_fill_keys(['PF', 'PF Loan', 'Motorcycle Loan', 'Laptop Loan', 'Staff Welfare Fund', 'Income Tax'], 0.0);
+        $pfLabel = 'PF';
+        foreach ($payslip->lines->where('type', 'deduction') as $line) {
+            $name = strtolower($line->head_name);
+            $loan = $this->resolveLoanHeadType($line);
+            $label = match (true) {
+                $loan === 'pf_loan', (bool) preg_match('/\bpf\s*loan\b/', $name) => 'PF Loan',
+                $loan === 'motorcycle_loan', str_contains($name, 'motorcycle'), str_contains($name, 'm/c loan') => 'Motorcycle Loan',
+                $loan === 'laptop_loan', str_contains($name, 'laptop loan') => 'Laptop Loan',
+                (bool) $line->head?->is_pf_head, str_contains($name, 'provident fund'), (bool) preg_match('/^pf(?:\s|\(|$)/', $name) => 'PF',
+                (bool) $line->head?->is_welfare, str_contains($name, 'welfare') => 'Staff Welfare Fund',
+                (bool) $line->head?->is_income_tax_head, str_contains($name, 'income tax') => 'Income Tax',
+                default => $line->head_name,
+            };
+            $amounts[$label] = ($amounts[$label] ?? 0) + (float) $line->computed_amount;
+            if ($label === 'PF' && $line->amount_type === 'percentage' && (float) $line->input_value > 0) {
+                $pfLabel = 'PF ('.rtrim(rtrim(number_format((float) $line->input_value, 2, '.', ''), '0'), '.').'% on Basic)';
+            }
+        }
+        $difference = round((float) $payslip->total_deduction - array_sum($amounts), 2);
+        if ($difference !== 0.0) {
+            $amounts['Payroll adjustment'] = $difference;
+        }
+        $rows = [];
+        foreach ($amounts as $label => $amount) {
+            $rows[] = ['name' => $label === 'PF' ? $pfLabel : $label, 'amount' => round($amount, 2)];
+        }
+
+        return $rows;
     }
 
     /**

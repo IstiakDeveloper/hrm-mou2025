@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import { useState, useMemo, useEffect } from 'react';
 import { PageSurface } from '@/components/page-surface';
 import { AppraisalEmployeeCombo } from '@/components/appraisal/AppraisalEmployeeCombo';
@@ -39,6 +40,7 @@ import { evalTranslations, getFormName, getInitialScoresForForm, getStructureFor
 import { format } from 'date-fns';
 
 export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promotion-evaluations/employees/lookup', templates = [] }: any) {
+    const listReturnUrl = useListReturnUrl('/promotion-evaluations');
     const { auth } = usePage<SharedData>().props;
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -299,7 +301,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3">
                         <Link 
-                            href="/promotion-evaluations"
+                            href={listReturnUrl}
                             className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
                         >
                             <ArrowLeft className="h-5 w-5" />
@@ -1087,7 +1089,7 @@ export default function PromotionEvaluationCreate({ employeeLookupUrl = '/promot
                                             <Eye className="h-4 w-4 text-emerald-600" />
                                             <span>{t.livePreviewTab}</span>
                                         </Button>
-                                        <Link href="/promotion-evaluations" className="hidden sm:inline-block">
+                                        <Link href={listReturnUrl} className="hidden sm:inline-block">
                                             <Button type="button" variant="ghost" size="sm" className="text-xs h-9 text-slate-600">
                                                 {t.cancel}
                                             </Button>

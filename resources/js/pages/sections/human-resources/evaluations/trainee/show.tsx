@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import React, { useState, useEffect } from 'react';
 import { PageSurface } from '@/components/page-surface';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,7 @@ export default function TraineeEvaluationShow({
     sentBackReason = null,
     currentStageLabel = '',
 }: ShowProps) {
+    const listReturnUrl = useListReturnUrl('/trainee-evaluations');
     const [lang, setLang] = useState<'bn' | 'en'>('bn');
 
     const formType = evaluation.form_type || 'officer_abm';
@@ -205,7 +207,7 @@ export default function TraineeEvaluationShow({
                 {/* Header Action Banner */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                     <div className="flex items-center gap-3">
-                        <Link href="/trainee-evaluations">
+                        <Link href={listReturnUrl}>
                             <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs bg-white border-slate-300">
                                 <ArrowLeft className="w-4 h-4" />
                                 {lang === 'bn' ? 'তালিকায় ফিরে যান' : 'Back'}

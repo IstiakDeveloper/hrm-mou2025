@@ -4,9 +4,11 @@ type Props = {
     title: string;
     companyName?: string;
     companyAddress?: string;
+    salaryMonth?: string;
+    issueDate?: string;
 };
 
-export function PayrollReportDocumentHeader({ title, companyName, companyAddress }: Props) {
+export function PayrollReportDocumentHeader({ title, companyName, companyAddress, salaryMonth, issueDate }: Props) {
     return (
         <div className="relative mb-3 min-h-[52px] border-b border-black px-16 pb-1 pt-1.5 text-black print:mb-2">
             <img
@@ -18,6 +20,11 @@ export function PayrollReportDocumentHeader({ title, companyName, companyAddress
                 {companyName && <p className="text-base font-bold text-slate-900">{companyName}</p>}
                 {companyAddress && <p className="text-[10px] text-slate-800">{companyAddress}</p>}
                 <p className="mt-0.5 text-[11px] font-bold text-slate-900">{title}</p>
+                {(salaryMonth || issueDate) && (
+                    <p className="text-[10px] whitespace-nowrap">
+                        {[salaryMonth ? `Month: ${salaryMonth}` : '', issueDate ? `Issue Date: ${issueDate}` : ''].filter(Boolean).join(' | ')}
+                    </p>
+                )}
             </div>
         </div>
     );

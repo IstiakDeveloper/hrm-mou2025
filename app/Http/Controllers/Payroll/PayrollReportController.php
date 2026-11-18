@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Payroll;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\Payscale;
+use App\Models\SalaryCertificateIssue;
 use App\Services\PayrollReportService;
+use App\Services\SalaryCertificateIssueService;
 use App\Support\PayrollReportPrintPdf;
 use App\Support\PayrollReportXlsxExporter;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use App\Support\ProjectPdf;
 use Mpdf\HTMLParserMode;
@@ -64,6 +67,8 @@ class PayrollReportController extends Controller
 
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+        $certificateOptions = $this->certificateOptions($request, $report);
+        $filters = array_merge($filters, $certificateOptions);
 
         $user = $request->user();
         if ($user && $user->isBranchAccount() && $user->branch_id) {
@@ -84,8 +89,18 @@ class PayrollReportController extends Controller
         $generated = $request->boolean('generate');
         $payload = null;
         $error = null;
+        if ($report === 'salary-certificate') {
+            $generated = $request->filled('certificate_issue_id');
+            if ($generated) {
+                $request->validate(['certificate_issue_id' => 'required|integer|min:1']);
+                $issue = SalaryCertificateIssue::findOrFail($request->input('certificate_issue_id'));
+                $filters = array_merge($filters, $issue->filters);
+                $certificateOptions = array_merge($certificateOptions, array_map(fn ($value) => (string) $value, $issue->filters), ['certificate_issue_id' => (string) $issue->id]);
+                $payload = $issue->payload;
+            }
+        }
 
-        if ($generated) {
+        if ($generated && $payload === null) {
             if (! empty($config['require_employee']) && ! $filters['employee_id']) {
                 $error = 'Please select an employee for this report.';
             } elseif (! empty($config['require_employee']) && ! $filters['month']) {
@@ -122,7 +137,7 @@ class PayrollReportController extends Controller
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),
                 'payment_status' => $request->input('payment_status', 'all'),
-            ]),
+            ], $certificateOptions),
             'generated' => $generated,
             'payload' => $payload,
             'periodLabel' => $this->reports->periodLabel($filters, $config),
@@ -138,6 +153,32 @@ class PayrollReportController extends Controller
     public function print(Request $request, string $report)
     {
         return $this->renderDocument($request, $report, 'print');
+    }
+
+    public function generateCertificate(Request $request)
+    {
+        $this->assertBranchReportAllowed($request, 'salary-certificate');
+        $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'year' => 'required|integer|min:2000|max:2200', 'month' => 'required|integer|min:1|max:12',
+            'certificate_reference_auto' => 'nullable|boolean',
+        ]);
+        $config = $this->reportConfig('salary-certificate');
+        $filters = array_merge($this->reports->filtersFromRequest($request), $this->certificateOptions($request, 'salary-certificate'));
+        $payload = $this->reports->build('salary-certificate', $config, $filters);
+        if (! empty($payload['meta']['message'])) {
+            throw ValidationException::withMessages(['employee_id' => $payload['meta']['message']]);
+        }
+        $issue = app(SalaryCertificateIssueService::class)->issue(
+            $payload, $filters, $request->boolean('certificate_reference_auto', true), $request->user()?->id,
+        );
+
+        return redirect()->route('payroll.reports.show', ['report' => 'salary-certificate', 'certificate_issue_id' => $issue->id]);
+    }
+
+    public function preview(Request $request, string $report)
+    {
+        return $this->renderDocument($request, $report, 'preview');
     }
 
     public function pdf(Request $request, string $report)
@@ -171,6 +212,11 @@ class PayrollReportController extends Controller
 
     protected function downloadPdfViaMpdf(array $data, string $filename): Response
     {
+        if (($data['payload']['template'] ?? '') === 'salary-certificate') {
+            return ProjectPdf::loadView('payroll.reports.document', $data)->setOption('defaultMediaType', 'print')
+                ->setPaper('a4', 'portrait')->download($filename);
+        }
+
         $isLandscape = ($data['orientation'] ?? 'landscape') === 'landscape';
 
         $mpdf = new Mpdf([
@@ -231,8 +277,20 @@ class PayrollReportController extends Controller
     {
         $this->assertBranchReportAllowed($request, $report);
 
+        if ($report === 'salary-certificate') {
+            $request->validate(['certificate_issue_id' => 'required|integer|min:1']);
+            $issue = SalaryCertificateIssue::findOrFail($request->input('certificate_issue_id'));
+
+            return [
+                'companyName' => config('payroll_reports.company_name'), 'companyAddress' => config('payroll_reports.company_address'),
+                'title' => 'Salary Certificate', 'periodLabel' => $issue->payload['period'],
+                'payload' => $issue->payload, 'orientation' => 'portrait',
+            ];
+        }
+
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+        $filters = array_merge($filters, $this->certificateOptions($request, $report));
 
         $user = $request->user();
         if ($user && $user->isBranchAccount() && $user->branch_id) {
@@ -259,13 +317,35 @@ class PayrollReportController extends Controller
             'periodLabel' => $this->reports->periodLabel($filters, $config),
             'generatedAt' => now()->format('d M Y H:i'),
             'payload' => $payload,
-            'orientation' => 'landscape',
+            'orientation' => $config['orientation'] ?? 'landscape',
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
+    protected function certificateOptions(Request $request, string $report): array
+    {
+        if ($report !== 'salary-certificate') {
+            return [];
+        }
+
+        $options = $request->validate([
+            'certificate_reference_year' => 'nullable|digits:4|integer|min:2000|max:2200',
+            'certificate_reference_number' => 'nullable|string|regex:/^\d{1,9}$/',
+            'certificate_issue_date' => 'nullable|date_format:Y-m-d',
+            'certificate_signatory_name' => 'nullable|string|max:200',
+            'certificate_signatory_designation' => 'nullable|string|max:200',
+        ]);
+
+        $defaults = $this->reports->salaryCertificateDefaults();
+        if (! empty($options['certificate_reference_year'])) {
+            $defaults['certificate_reference_number'] = app(SalaryCertificateIssueService::class)->nextReferenceNumber((int) $options['certificate_reference_year']);
+        }
+
+        return array_merge($defaults, array_filter($options, fn ($value) => $value !== null));
+    }
+
     protected function reportConfig(string $report): array
     {
         $config = config("payroll_reports.reports.{$report}");

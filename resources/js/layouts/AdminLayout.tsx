@@ -314,6 +314,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                     path: '/payroll/reports/salary-sheet-designation-wise',
                     permission: 'payroll.view',
                 },
+                { title: 'Salary Summery Sheet', path: '/payroll/reports/salary-summary-sheet', permission: 'payroll.view' },
                 { title: 'Bank Advice Report', path: '/payroll/reports/bank-advice', permission: 'payroll.view' },
                 { title: 'Bank Advice Bonus Report', path: '/payroll/reports/bank-advice-bonus', permission: 'payroll.view' },
                 { title: 'Salary Addition Register', path: '/payroll/reports/addition-register', permission: 'payroll.view' },

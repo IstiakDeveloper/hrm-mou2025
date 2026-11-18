@@ -4,6 +4,10 @@
         ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath))
         : null;
     $address = $companyAddress ?? '';
+    $periodMetadata = implode(' | ', array_filter([
+        !empty($reportMonth) ? 'Month: '.$reportMonth : null,
+        !empty($reportIssueDate) ? 'Issue Date: '.$reportIssueDate : null,
+    ]));
 @endphp
 <header class="payroll-report-header">
     <div class="payroll-report-header-inner">
@@ -18,6 +22,9 @@
                 <div class="payroll-company-address">{{ $address }}</div>
             @endif
             <div class="payroll-report-title">{{ $title }}</div>
+            @if ($periodMetadata !== '')
+                <div class="payroll-company-address" style="white-space: nowrap;">{{ $periodMetadata }}</div>
+            @endif
         </div>
     </div>
 </header>

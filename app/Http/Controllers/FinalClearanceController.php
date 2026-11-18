@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\FinalClearance;
 use App\Models\FinalClearanceSignature;
 use App\Services\FinalClearanceService;
+use App\Support\MonthlyListFilters;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -30,6 +31,7 @@ class FinalClearanceController extends Controller
         }
 
         $scope = $this->clearances->visibleQuery($user);
+        MonthlyListFilters::apply($request, $scope, 'final-clearances.index', ['status', 'search', 'per_page']);
         $metrics = [
             'total' => (clone $scope)->count(),
             'pending' => (clone $scope)->whereNotIn('status', [FinalClearance::STATUS_APPROVED, FinalClearance::STATUS_REJECTED])->count(),
@@ -75,7 +77,8 @@ class FinalClearanceController extends Controller
 
         return Inertia::render('final-clearances/index', [
             'clearances' => $rows,
-            'filters' => ['status' => $status, 'search' => $search, 'per_page' => (string) $perPage],
+            'filters' => ['status' => $status, 'search' => $search, 'per_page' => (string) $perPage, 'month' => $request->query('month')],
+            'currentMonth' => now()->format('Y-m'),
             'metrics' => $metrics,
             'canCreate' => $this->clearances->canOpenCreate($user),
             'userHasSignature' => $user->hasSignature(),
@@ -128,6 +131,7 @@ class FinalClearanceController extends Controller
         }
 
         return Inertia::render('final-clearances/create', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'final-clearances.index'),
             'userHasSignature' => true,
         ]);
     }
@@ -164,6 +168,7 @@ class FinalClearanceController extends Controller
         );
 
         return Inertia::render('final-clearances/show', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'final-clearances.index'),
             'clearance' => $this->payload($finalClearance),
             'canAct' => $this->clearances->canAct($user, $finalClearance),
             'userHasSignature' => $user->hasSignature(),
@@ -462,7 +467,7 @@ class FinalClearanceController extends Controller
 
         $finalClearance->delete();
 
-        return redirect()->route('final-clearances.index')->with('success', 'Final clearance deleted.');
+        return redirect()->to(MonthlyListFilters::returnUrl($request, 'final-clearances.index'))->with('success', 'Final clearance deleted.');
     }
 
     private function requiredMessages(array $labels): array

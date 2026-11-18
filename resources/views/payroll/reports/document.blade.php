@@ -1,3 +1,6 @@
+@if (($payload['template'] ?? '') === 'salary-certificate')
+    @include('payroll.reports.certificate-document')
+@else
 <!DOCTYPE html>
 <html lang="en">
 
@@ -23,6 +26,8 @@
                 'companyName' => $companyName,
                 'companyAddress' => $companyAddress ?? '',
                 'title' => $title,
+                'reportMonth' => $template === 'salary-summary' ? ($payload['salary_month'] ?? '') : '',
+                'reportIssueDate' => $template === 'salary-summary' ? ($payload['issue_date'] ?? '') : '',
             ])
         @endif
 
@@ -46,6 +51,8 @@
                 'companyAddress' => $companyAddress ?? '',
                 'title' => $title,
             ])
+        @elseif ($template === 'salary-summary')
+            @include('payroll.reports.templates.salary-summary', ['payload' => $payload])
         @elseif ($template === 'bank-advice')
             @include('payroll.reports.templates.bank-advice', ['payload' => $payload])
         @elseif ($template === 'head-register')
@@ -74,3 +81,4 @@
 </body>
 
 </html>
+@endif

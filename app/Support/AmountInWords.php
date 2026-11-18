@@ -27,6 +27,18 @@ class AmountInWords
         return $prefix.trim(self::convert(abs($n))).' Taka Only';
     }
 
+    public static function takaWithPaisa(float|int $amount): string
+    {
+        $cents = (int) round(abs($amount) * 100);
+        $words = self::taka(intdiv($cents, 100));
+        if ($cents % 100 !== 0) {
+            $words = str_replace(' Taka Only', ' Taka', $words).' and '
+                .str_replace(' Taka Only', ' Paisa Only', self::taka($cents % 100));
+        }
+
+        return ($amount < 0 ? 'Minus ' : '').$words;
+    }
+
     private static function convert(int $n): string
     {
         if ($n < 20) {

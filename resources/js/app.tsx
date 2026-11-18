@@ -18,7 +18,7 @@ declare global {
     const route: typeof routeFn;
 }
 
-const appName = import.meta.env.VITE_APP_NAME || 'HRM Admin';
+let appName = 'Mousumi';
 
 function AppGlobalChrome() {
     const { component } = usePage();
@@ -67,6 +67,10 @@ createInertiaApp({
         };
     },
     setup({ el, App, props }) {
+        const configuredName = props.initialPage.props.name;
+        if (typeof configuredName === 'string' && configuredName.trim()) {
+            appName = configuredName.trim();
+        }
         const root = createRoot(el);
 
         root.render(

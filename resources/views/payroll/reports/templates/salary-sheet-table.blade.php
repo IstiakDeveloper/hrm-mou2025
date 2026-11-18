@@ -88,8 +88,14 @@
     </thead>
     <tbody>
         @forelse ($payload['rows'] ?? [] as $row)
-            <tr class="data-row">
-                <td class="num col-serial">{{ $serialStart + $loop->iteration }}</td>
+            @php
+                $isSubtotal = !empty($row['is_subtotal']);
+                if (!$isSubtotal) {
+                    $serialStart++;
+                }
+            @endphp
+            <tr class="{{ $isSubtotal ? 'totals-row' : 'data-row' }}">
+                <td class="num col-serial">{{ $isSubtotal ? '' : $serialStart }}</td>
                 <td class="cell-name">{{ $row['name'] ?? '' }}</td>
                 @unless ($topsheet)
                     <td class="num">{{ $row['pin'] ?? '' }}</td>

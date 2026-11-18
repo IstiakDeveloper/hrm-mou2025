@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { PageSurface } from '@/components/page-surface';
 import { AppraisalEmployeeCombo } from '@/components/appraisal/AppraisalEmployeeCombo';
@@ -72,6 +73,7 @@ interface CreateProps {
 }
 
 export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/confirmation-evaluations/employees/lookup', templates = [] }: CreateProps) {
+    const listReturnUrl = useListReturnUrl('/confirmation-evaluations');
     const { auth } = usePage<SharedData>().props;
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -403,7 +405,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                     <div className="flex items-center gap-3">
                         <Link 
-                            href="/confirmation-evaluations"
+                            href={listReturnUrl}
                             className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
                         >
                             <ArrowLeft className="h-5 w-5" />
@@ -1439,7 +1441,7 @@ export default function ConfirmationEvaluationCreate({ employeeLookupUrl = '/con
                                             <Eye className="h-4 w-4 text-blue-600" />
                                             <span>{lang === 'bn' ? 'লাইভ প্রিভিউ দেখুন' : 'Live Preview'}</span>
                                         </Button>
-                                        <Link href="/confirmation-evaluations" className="hidden sm:inline-block">
+                                        <Link href={listReturnUrl} className="hidden sm:inline-block">
                                             <Button type="button" variant="ghost" size="sm" className="text-xs h-9 text-slate-600">
                                                 {lang === 'bn' ? 'বাতিল' : 'Cancel'}
                                             </Button>

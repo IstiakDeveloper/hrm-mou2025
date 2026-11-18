@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import { useState, useEffect } from 'react';
 import { PageSurface } from '@/components/page-surface';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,7 @@ export default function ProbationIncrementEvaluationShow({
     sentBackReason = null,
     currentStageLabel = '',
 }: ShowProps) {
+    const listReturnUrl = useListReturnUrl('/probation-increment-evaluations');
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
             return (localStorage.getItem('prob_inc_eval_lang') as 'bn' | 'en') || 'bn';
@@ -208,7 +210,7 @@ export default function ProbationIncrementEvaluationShow({
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                     <div className="flex items-center gap-3">
                         <Link 
-                            href="/probation-increment-evaluations"
+                            href={listReturnUrl}
                             className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
                         >
                             <ArrowLeft className="h-5 w-5" />

@@ -13,6 +13,7 @@ use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\ConfirmationEvaluationWorkflowService;
 use App\Services\OrganogramAccessService;
 use App\Support\AppraisalRequiredFields;
+use App\Support\MonthlyListFilters;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -59,6 +60,8 @@ class ConfirmationEvaluationController extends Controller
             }
             $query->where('zone_id', $zoneId);
         }
+
+        MonthlyListFilters::apply($request, $query, 'confirmation.evaluations.index', ['search', 'status', 'form_type', 'per_page']);
 
         $metrics = AppraisalListQuery::summarize(clone $query, [
             'pending' => "status NOT IN ('approved', 'rejected')",
@@ -115,7 +118,8 @@ class ConfirmationEvaluationController extends Controller
         return Inertia::render('sections/human-resources/evaluations/confirmation/index', [
             'evaluations' => $evaluations,
             'metrics' => $metrics,
-            'filters' => $request->only(['search', 'status', 'form_type', 'per_page']),
+            'filters' => $request->only(['search', 'status', 'form_type', 'per_page', 'month']),
+            'currentMonth' => now()->format('Y-m'),
             'canCreate' => $user->isSuperAdmin() || $user->hasPermission('confirmation-evaluations.create') || $user->hasPermission('confirmations.create'),
             'isSuperAdmin' => $user->isSuperAdmin(),
             'currentUserId' => $user->id,
@@ -136,7 +140,7 @@ class ConfirmationEvaluationController extends Controller
                          in_array('Director Finance and Accounts', $roleNames, true) || in_array('Director Finance and Account', $roleNames, true);
 
         if (! $isLineManager && ! $user->isSuperAdmin()) {
-            return redirect()->route('confirmation.evaluations.index')->with('error', 'Only Branch Managers, Regional Managers, Zonal Managers, or Directors can create a confirmation evaluation.');
+            return redirect()->to(MonthlyListFilters::returnUrl($request, 'confirmation.evaluations.index'))->with('error', 'Only Branch Managers, Regional Managers, Zonal Managers, or Directors can create a confirmation evaluation.');
         }
 
         if (! $user->hasSignature()) {
@@ -144,10 +148,11 @@ class ConfirmationEvaluationController extends Controller
         }
 
         if (! $user->isSuperAdmin() && $isLineManager && ! $user->employee) {
-            return redirect()->route('confirmation.evaluations.index')->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
+            return redirect()->to(MonthlyListFilters::returnUrl($request, 'confirmation.evaluations.index'))->with('error', 'Your user account must be linked to an employee profile to create an evaluation.');
         }
 
         return Inertia::render('sections/human-resources/evaluations/confirmation/create', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'confirmation.evaluations.index'),
             'employeeLookupUrl' => route('confirmation.evaluations.employees.lookup'),
             'templates' => AppraisalTemplateCache::load('confirmation'),
         ]);
@@ -382,6 +387,7 @@ class ConfirmationEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/confirmation/show', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'confirmation.evaluations.index'),
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
             'currentUserId' => $user->id,
@@ -439,6 +445,7 @@ class ConfirmationEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/confirmation/edit', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'confirmation.evaluations.index'),
             'evaluation' => $evaluation,
             'templates' => $templates,
             'isReviewerEdit' => $evaluation->status !== 'draft',
@@ -703,7 +710,7 @@ class ConfirmationEvaluationController extends Controller
         $evaluation->signatures()->delete();
         $evaluation->delete();
 
-        return redirect()->route('confirmation.evaluations.index')->with('success', 'Confirmation evaluation deleted successfully.');
+        return redirect()->to(MonthlyListFilters::returnUrl($request, 'confirmation.evaluations.index'))->with('success', 'Confirmation evaluation deleted successfully.');
     }
 
     public function print(Request $request, ConfirmationEvaluation $evaluation)

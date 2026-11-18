@@ -15,6 +15,7 @@ use App\Services\Appraisal\AppraisalTemplateCache;
 use App\Services\OrganogramAccessService;
 use App\Services\TraineeWorkflowService;
 use App\Support\AppraisalRequiredFields;
+use App\Support\MonthlyListFilters;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -64,6 +65,8 @@ class TraineeEvaluationController extends Controller
                 $query->where('zone_id', $zoneId);
             }
         }
+
+        MonthlyListFilters::apply($request, $query, 'trainee-evaluations.index', ['status', 'form_type', 'branch_id', 'zone_id', 'search', 'per_page']);
 
         // Filters
         if ($request->filled('status') && $request->input('status') !== 'all') {
@@ -136,7 +139,8 @@ class TraineeEvaluationController extends Controller
 
         return Inertia::render('sections/human-resources/evaluations/trainee/index', [
             'evaluations' => $evaluations,
-            'filters' => $request->only(['status', 'form_type', 'branch_id', 'zone_id', 'search']),
+            'filters' => $request->only(['status', 'form_type', 'branch_id', 'zone_id', 'search', 'per_page', 'month']),
+            'currentMonth' => now()->format('Y-m'),
             'metrics' => $metrics,
             'branches' => Branch::select('id', 'name')->orderBy('name')->get(),
             'zones' => Zone::select('id', 'name')->orderBy('name')->get(),
@@ -170,6 +174,7 @@ class TraineeEvaluationController extends Controller
         ] : null;
 
         return Inertia::render('sections/human-resources/evaluations/trainee/create', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'trainee-evaluations.index'),
             'employeeLookupUrl' => route('trainee-evaluations.employees.lookup'),
             'templates' => AppraisalTemplateCache::load('trainee'),
             'branches' => $this->branchOptions(),
@@ -347,6 +352,7 @@ class TraineeEvaluationController extends Controller
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
         return Inertia::render('sections/human-resources/evaluations/trainee/show', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'trainee-evaluations.index'),
             'evaluation' => $evaluation,
             'isSuperAdmin' => $user->isSuperAdmin(),
             'currentUserId' => $user->id,
@@ -385,6 +391,7 @@ class TraineeEvaluationController extends Controller
         \App\Services\Appraisal\AppraisalSignatureVisibility::apply($user, $evaluation);
 
         return Inertia::render('sections/human-resources/evaluations/trainee/edit', [
+            'listReturnUrl' => MonthlyListFilters::returnUrl($request, 'trainee-evaluations.index'),
             'evaluation' => $evaluation,
             'templates' => $templates,
             'branches' => $this->branchOptions(),
@@ -669,7 +676,7 @@ class TraineeEvaluationController extends Controller
 
         $evaluation->delete();
 
-        return redirect()->route('trainee-evaluations.index')
+        return redirect()->to(MonthlyListFilters::returnUrl($request, 'trainee-evaluations.index'))
             ->with('success', 'মূল্যায়ন রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।');
     }
 

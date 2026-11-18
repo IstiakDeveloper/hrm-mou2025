@@ -316,8 +316,8 @@ function SalarySheetTable({
                 </thead>
                 <tbody>
                     {rows.map((row, i) => (
-                        <tr key={i} className="border-b border-black">
-                            <td className={`${tdClass} text-center`}>{i + 1}</td>
+                        <tr key={i} className={`border-b border-black ${row.is_subtotal ? 'font-bold' : ''}`}>
+                            <td className={`${tdClass} text-center`}>{row.is_subtotal ? '' : rows.slice(0, i + 1).filter((r) => !r.is_subtotal).length}</td>
                             <td className={nameClass}>{String(row.name ?? '')}</td>
                             {!topsheet && <td className={`${tdClass} whitespace-nowrap text-center`}>{String(row.pin ?? '')}</td>}
                             <td className={nowrapClass}>{String(row.designation ?? '')}</td>
@@ -391,14 +391,65 @@ function SalarySheetFooter({
 function ReportPreview({
     payload,
     signatureBlocks = [],
+    previewUrl,
 }: {
     payload: Record<string, unknown>;
     signatureBlocks?: SignatureBlock[];
+    previewUrl?: string;
 }) {
     const template = String(payload.template ?? '');
 
     if (payload.meta && typeof payload.meta === 'object' && (payload.meta as { message?: string }).message) {
         return <p className="text-muted-foreground text-sm">{(payload.meta as { message: string }).message}</p>;
+    }
+
+    if (template === 'salary-summary') {
+        const rows = (payload.rows as Record<string, unknown>[]) ?? [];
+        const totals = (payload.totals as Record<string, unknown>) ?? {};
+        const cellClass = 'border border-black px-2 py-1.5';
+
+        return (
+            <div>
+                <div className="overflow-x-auto print:overflow-visible">
+                    <table className="w-full min-w-[850px] table-fixed border-collapse text-[11px] text-black print:min-w-0 print:text-[9px]">
+                        <colgroup>
+                            {[5, 9, 25, 14, 19, 28].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                {['SL No.', 'PIN', 'Name of Employee', 'Net Salary (Payable)', 'A/C No.', 'Remarks'].map((label) => (
+                                    <th key={label} className={`${cellClass} text-center`}>{label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, index) => (
+                                <tr key={index} className="break-inside-avoid">
+                                    <td className={`${cellClass} text-center`}>{index + 1}</td>
+                                    <td className={`${cellClass} whitespace-nowrap text-center`}>{String(row.pin ?? '')}</td>
+                                    <td className={`${cellClass} break-words`}>{String(row.name ?? '')}</td>
+                                    <td className={`${cellClass} whitespace-nowrap text-right tabular-nums`}>{formatTakaAmount(Number(row.net ?? 0), 0)}</td>
+                                    <td className={`${cellClass} break-words`}>{String(row.account_no ?? '')}</td>
+                                    <td className={`${cellClass} break-words`}>{String(row.remarks ?? '')}</td>
+                                </tr>
+                            ))}
+                            {rows.length === 0 && (
+                                <tr><td colSpan={6} className={`${cellClass} text-center`}>No payslips found for the selected filters.</td></tr>
+                            )}
+                            <tr className="font-bold">
+                                <td colSpan={3} className={`${cellClass} text-right`}>Total</td>
+                                <td className={`${cellClass} whitespace-nowrap text-right tabular-nums`}>{formatTakaAmount(Number(totals.net ?? 0), 0)}</td>
+                                <td colSpan={2} className={cellClass} />
+                            </tr>
+                            <tr className="font-semibold">
+                                <td colSpan={6} className={cellClass}>In Words: {String(payload.in_words ?? '')}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <PayrollReportSignatureSection blocks={signatureBlocks} />
+            </div>
+        );
     }
 
     if (template === 'final-payment') {
@@ -503,6 +554,12 @@ function ReportPreview({
     }
 
     if (template === 'salary-certificate') {
+        if (previewUrl) {
+            return <iframe title="Salary certificate - Letter of Introduction" src={previewUrl} className="min-h-[1130px] w-full border-0 bg-white" onLoad={(event) => {
+                const frame = event.currentTarget;
+                if (frame.contentDocument?.body) frame.style.height = `${frame.contentDocument.body.scrollHeight + 40}px`;
+            }} />;
+        }
         const emp = payload.employee as Record<string, string> | null;
         if (!emp) return <p className="text-sm">No certificate data.</p>;
         return (
@@ -638,6 +695,7 @@ function ReportPreview({
                     rows={rows}
                     totals={totals}
                     topsheet={topsheet}
+                    totalsLabel={String(payload.totals_label ?? 'Total')}
                 />
                 {totals && <SalarySheetFooter net={totals.net} showInWords signatureBlocks={signatureBlocks} />}
             </div>
@@ -690,7 +748,7 @@ export default function PayrollReportShow({
     periodLabel,
     error,
 }: Props) {
-    const { auth } = usePage().props as { auth?: { permissions?: string[] } };
+    const { auth, errors: validationErrors = {} } = usePage().props as { auth?: { permissions?: string[] }; errors?: Record<string, string> };
     const canExport = auth?.permissions?.includes('reports.export') ?? true;
 
     const [filters, setFilters] = useState(initFilters);
@@ -719,6 +777,13 @@ export default function PayrollReportShow({
     const reportBasePath = isFinalPaymentReport ? staffFundPath(`/payroll/reports/${report.slug}`) : `/payroll/reports/${report.slug}`;
 
     const generate = () => {
+        if (report.slug === 'salary-certificate') {
+            router.post('/payroll/reports/salary-certificate/generate', {
+                ...filters,
+                certificate_reference_auto: filters.certificate_reference_number === initFilters.certificate_reference_number,
+            }, { preserveState: false });
+            return;
+        }
         router.get(reportBasePath, { ...filters, generate: '1' }, { preserveState: true });
     };
 
@@ -787,10 +852,10 @@ export default function PayrollReportShow({
             const rows = (payload.rows as Record<string, unknown>[]) ?? [];
             const isTopsheet = Boolean(payload.topsheet);
             if (isTopsheet) {
-                totalBranches = rows.length;
+                totalBranches = rows.filter((row) => !row.is_subtotal).length;
                 totalEmployees = Number(
                     (payload.meta as Record<string, unknown>)?.employee_count ||
-                    rows.reduce((acc, r) => acc + Number(r.employee_count || 1), 0)
+                    rows.filter((row) => !row.is_subtotal).reduce((acc, r) => acc + Number(r.employee_count || 1), 0)
                 );
             } else {
                 totalEmployees = rows.length;
@@ -969,6 +1034,16 @@ export default function PayrollReportShow({
                             />
                         )}
 
+                        {report.slug === 'salary-certificate' && [
+                            ['certificate_reference_year', 'Reference year'],
+                            ['certificate_reference_number', 'Reference number'],
+                            ['certificate_issue_date', 'Issue date'],
+                            ['certificate_signatory_name', 'Signatory name'],
+                            ['certificate_signatory_designation', 'Signatory designation'],
+                        ].map(([key, label]) => <PayrollField key={key} label={label}>
+                            <Input className="h-8.5 bg-white text-xs" type={key === 'certificate_issue_date' ? 'date' : 'text'} value={filters[key] ?? ''} onChange={(event) => setFilter(key, event.target.value)} />
+                        </PayrollField>)}
+
                         {show.dateRange && (
                             <>
                                 <PayrollField label="Date from">
@@ -1096,6 +1171,13 @@ export default function PayrollReportShow({
                     </div>
                 )}
 
+                {report.slug === 'salary-certificate' && Object.keys(validationErrors).length > 0 && (
+                    <Alert variant="destructive" className="mt-4">
+                        <AlertTitle>Cannot generate certificate</AlertTitle>
+                        <AlertDescription>{Object.values(validationErrors).join(' ')}</AlertDescription>
+                    </Alert>
+                )}
+
                 {error && (
                     <Alert variant="destructive" className="mt-4">
                         <AlertTitle>Cannot generate</AlertTitle>
@@ -1128,8 +1210,14 @@ export default function PayrollReportShow({
                                 </>
                             )}
                         </div>
-                        <PayrollReportDocumentHeader companyName={companyName} companyAddress={companyAddress} title={report.title} />
-                        <ReportPreview payload={payload} signatureBlocks={signatureBlocks} />
+                        {payload.template !== 'salary-certificate' && <PayrollReportDocumentHeader
+                            companyName={companyName}
+                            companyAddress={companyAddress}
+                            title={report.title}
+                            salaryMonth={payload.topsheet || payload.template === 'salary-summary' ? String(payload.salary_month ?? '') : undefined}
+                            issueDate={payload.topsheet || payload.template === 'salary-summary' ? String(payload.issue_date ?? '') : undefined}
+                        />}
+                        <ReportPreview payload={payload} signatureBlocks={signatureBlocks} previewUrl={`/payroll/reports/${report.slug}/preview?${query}`} />
                     </PayrollSectionCard>
                 )}
             </PayrollPage>

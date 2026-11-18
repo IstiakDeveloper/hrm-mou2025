@@ -1,3 +1,4 @@
+import { useListReturnUrl } from '@/hooks/use-list-return-url';
 import { AppraisalEmployeeCombo, type AppraisalEmployee } from '@/components/appraisal/AppraisalEmployeeCombo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +11,7 @@ import React, { useState } from 'react';
 const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
 
 export default function FinalClearanceCreate({ userHasSignature = false }: { userHasSignature?: boolean }) {
+    const listReturnUrl = useListReturnUrl('/final-clearances');
     const [employeeId, setEmployeeId] = useState<number | null>(null);
     const [picked, setPicked] = useState<AppraisalEmployee | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -20,14 +22,14 @@ export default function FinalClearanceCreate({ userHasSignature = false }: { use
             <div className="w-full space-y-3.5">
                 <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-2xs sm:flex-row sm:items-center">
                     <div className="flex items-center gap-3">
-                        <Link href="/final-clearances" className="rounded-lg border border-slate-200 p-2 text-slate-600 transition-colors hover:bg-slate-50">
+                        <Link href={listReturnUrl} className="rounded-lg border border-slate-200 p-2 text-slate-600 transition-colors hover:bg-slate-50">
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                         <div>
                             <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                                 <span>HR</span>
                                 <ChevronRight className="h-3 w-3 text-slate-400" />
-                                <Link href="/final-clearances" className="hover:text-emerald-700">Final Payment & Clearance</Link>
+                                <Link href={listReturnUrl} className="hover:text-emerald-700">Final Payment & Clearance</Link>
                                 <ChevronRight className="h-3 w-3 text-slate-400" />
                                 <span className="font-semibold text-emerald-700">New</span>
                             </div>
