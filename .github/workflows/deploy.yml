@@ -3,7 +3,7 @@ name: Build and Deploy to VPS
 on:
   push:
     branches:
-      - feature/flutter-mobile-app
+      - main
 
 jobs:
   build-and-deploy:

@@ -93,6 +93,11 @@ export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
                 path: '/final-payments',
                 description: 'Separation final payment & settlement records',
             },
+            {
+                title: 'Final Payment Waiting List',
+                path: '/staff-fund/reports/final-payment-waiting-list',
+                description: 'Separated staff awaiting final payment with clearance & payment status',
+            },
         ],
     },
     {
@@ -124,13 +129,13 @@ export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
     ],
     finalPayment: [
         { title: 'Final Payment', href: '/final-payments', icon: HandCoins },
-        { title: 'Final Payment Report', href: '/payroll/reports/final-payment', icon: FileBarChart2 },
+        { title: 'Final Payment Waiting List', href: '/staff-fund/reports/final-payment-waiting-list', icon: FileBarChart2 },
     ],
     financialStatement: [
         { title: 'Financial Statement', href: '/employee-financial-statement', icon: FileSpreadsheet },
     ],
     settlement: [
         { title: 'Final Payment', href: '/final-payments', icon: HandCoins },
-        { title: 'Final Payment Report', href: '/payroll/reports/final-payment', icon: FileBarChart2 },
+        { title: 'Final Payment Waiting List', href: '/staff-fund/reports/final-payment-waiting-list', icon: FileBarChart2 },
     ],
 } as const;

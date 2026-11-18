@@ -290,8 +290,8 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                     permission: 'staff-fund.view',
                 })),
                 {
-                    title: 'Final Payment Report',
-                    path: staffFundPath('/payroll/reports/final-payment'),
+                    title: 'Final Payment Waiting List',
+                    path: staffFundPath('/staff-fund/reports/final-payment-waiting-list'),
                     permission: 'staff-fund.view',
                 },
             ];

@@ -107,4 +107,19 @@ class FinalClearance extends Model
     {
         return $this->belongsTo(SeparationFinalPayment::class);
     }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function regionalOffice(): BelongsTo
+    {
+        return $this->belongsTo(RegionalOffice::class);
+    }
+
+    public function zone(): BelongsTo
+    {
+        return $this->belongsTo(Zone::class);
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
@@ -402,6 +403,36 @@ class Employee extends Model
     public function subordinates()
     {
         return $this->hasMany(Employee::class, 'reporting_to');
+    }
+
+    public function finalClearances(): HasMany
+    {
+        return $this->hasMany(FinalClearance::class);
+    }
+
+    public function latestFinalClearance(): HasOne
+    {
+        return $this->hasOne(FinalClearance::class)->latestOfMany();
+    }
+
+    public function separations(): HasMany
+    {
+        return $this->hasMany(Separation::class);
+    }
+
+    public function latestSeparation(): HasOne
+    {
+        return $this->hasOne(Separation::class)->latestOfMany();
+    }
+
+    public function separationFinalPayments(): HasMany
+    {
+        return $this->hasMany(SeparationFinalPayment::class);
+    }
+
+    public function latestSeparationFinalPayment(): HasOne
+    {
+        return $this->hasOne(SeparationFinalPayment::class)->latestOfMany();
     }
 
     public function headOfBranches()

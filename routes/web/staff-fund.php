@@ -156,6 +156,14 @@ use Inertia\Inertia;
         Route::get('/employee-financial-statement/lookup', [\App\Http\Controllers\Payroll\EmployeeFinancialStatementController::class, 'lookup'])->name('employee-financial-statement.lookup');
         Route::get('/employee-financial-statement/print', [\App\Http\Controllers\Payroll\EmployeeFinancialStatementController::class, 'print'])->name('employee-financial-statement.print');
         Route::redirect('/final-payments/statement', '/employee-financial-statement');
+
+        Route::prefix('staff-fund/reports/final-payment-waiting-list')->name('staff-fund.reports.final-payment-waiting-list.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\StaffFund\FinalPaymentReportController::class, 'show'])->name('show');
+            Route::get('/print', [\App\Http\Controllers\StaffFund\FinalPaymentReportController::class, 'print'])->name('print');
+            Route::get('/pdf', [\App\Http\Controllers\StaffFund\FinalPaymentReportController::class, 'pdf'])->name('pdf');
+            Route::get('/excel', [\App\Http\Controllers\StaffFund\FinalPaymentReportController::class, 'excel'])->name('excel');
+        });
+        Route::redirect('/payroll/reports/final-payment', '/staff-fund/reports/final-payment-waiting-list');
     });
 
     Route::middleware(['permission:payroll.view'])->group(function () {
