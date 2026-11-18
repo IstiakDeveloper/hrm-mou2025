@@ -28,7 +28,7 @@ class SectionRegistry
             ],
             'staff-fund' => [
                 'label' => 'Staff Fund',
-                'description' => 'Provident fund, gratuity and settlement access.',
+                'description' => 'Provident fund, gratuity, Security Fund and settlement access.',
             ],
             'payroll' => [
                 'label' => 'Payroll',

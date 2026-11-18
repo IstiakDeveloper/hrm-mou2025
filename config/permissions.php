@@ -252,7 +252,7 @@ return [
         'employee-loan.edit' => ['label' => 'Edit Employee Loan Records', 'category' => 'employee-loan'],
         'employee-loan.delete' => ['label' => 'Delete Employee Loan Records', 'category' => 'employee-loan'],
 
-        'staff-fund.view' => ['label' => 'View Staff Fund (PF & Gratuity)', 'category' => 'staff-fund'],
+        'staff-fund.view' => ['label' => 'View Staff Fund (PF, Gratuity & Security Fund)', 'category' => 'staff-fund'],
         'staff-fund.create' => ['label' => 'Create Staff Fund Records', 'category' => 'staff-fund'],
         'staff-fund.edit' => ['label' => 'Edit Staff Fund Records', 'category' => 'staff-fund'],
         'staff-fund.delete' => ['label' => 'Delete Staff Fund Records', 'category' => 'staff-fund'],

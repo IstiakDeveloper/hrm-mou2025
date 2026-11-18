@@ -38,6 +38,8 @@ class FinalPaymentWaitingListXlsxExporter
             '<b>Payment Status</b>',
             '<b>Payment Date</b>',
             '<b>Payment Amount</b>',
+            '<b>Security Principal</b>',
+            '<b>Security Interest</b>',
         ];
 
         // 3. Data Rows
@@ -55,6 +57,8 @@ class FinalPaymentWaitingListXlsxExporter
                 $r['payment_status'],
                 $r['payment_date'],
                 $r['payment_amount'] !== null ? number_format((float) $r['payment_amount'], 2, '.', '') : '0.00',
+                $r['security_principal'] ?? 'Legacy / unavailable',
+                $r['security_interest'] ?? 'Legacy / unavailable',
             ];
         }
 

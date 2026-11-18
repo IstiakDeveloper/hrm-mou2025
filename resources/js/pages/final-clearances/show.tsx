@@ -105,7 +105,7 @@ export default function FinalClearanceShow({
         gratuity_amount: clearance.gratuity_amount ?? 0,
         gratuity_remarks: clearance.gratuity_remarks ?? '',
         staff_security: clearance.staff_security ?? 0,
-        staff_security_remarks: clearance.staff_security_remarks ?? '',
+        staff_security_remarks: clearance.staff_security_remarks || 'Security Fund ledger',
         other_payable: clearance.other_payable ?? 0,
         other_payable_remarks: clearance.other_payable_remarks ?? '',
         pf_loan: clearance.pf_loan ?? 0,
@@ -137,7 +137,6 @@ export default function FinalClearanceShow({
         { key: 'unpaid_salary', label: 'Unpaid salary and other benefits', remarks: 'unpaid_salary_remarks' },
         { key: 'pf_amount', label: 'Provident fund', remarks: 'pf_remarks' },
         { key: 'gratuity_amount', label: 'Gratuity', remarks: 'gratuity_remarks' },
-        { key: 'staff_security', label: 'Staff security', remarks: 'staff_security_remarks' },
         { key: 'other_payable', label: 'Other payable', remarks: 'other_payable_remarks' },
         { key: 'pf_loan', label: 'PF loan', remarks: 'pf_loan_remarks' },
         { key: 'motorcycle_loan', label: 'Motorcycle loan', remarks: 'motorcycle_loan_remarks' },
@@ -390,6 +389,14 @@ export default function FinalClearanceShow({
                                     accounts.post(`/final-clearances/${clearance.id}/forward`);
                                 }}
                             >
+                                <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm sm:col-span-2">
+                                    <p className="font-semibold">Security Fund · 6% yearly</p>
+                                    <p>Principal: ৳{Number(clearance.staff_security ?? 0).toFixed(2)} · Interest: ৳{Number(clearance.staff_security_interest ?? 0).toFixed(0)}</p>
+                                    <p className="text-xs">Amounts come from the Security Fund ledger and refresh on submit. Manage deposits and corrections in Staff Fund → Security Fund.</p>
+                                    <label className="mt-2 block text-xs font-semibold">Security Fund remarks<Input required value={accounts.data.staff_security_remarks} onChange={e => accounts.setData('staff_security_remarks', e.target.value)} /></label>
+                                    <FieldError message={accounts.errors.staff_security} />
+                                    <FieldError message={accounts.errors.staff_security_remarks} />
+                                </div>
                                 {moneyFields.map((item) => (
                                     <div key={item.key} className="grid gap-2 md:grid-cols-2">
                                         <label className="text-xs font-semibold text-slate-700">{item.label}<Req />
@@ -426,6 +433,7 @@ export default function FinalClearanceShow({
                             <CardTitle className="text-sm">{clearance.status === 'submitted_to_ed' ? 'Executive Director' : 'Director Finance & Accounts'}</CardTitle>
                         </CardHeader>
                         <CardContent>
+                            {Object.entries(decision.errors).filter(([key]) => key !== 'comments').map(([key, message]) => <p key={key} role="alert" className="mb-3 rounded border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{message}</p>)}
                             <form onSubmit={(event) => event.preventDefault()}>
                                 <label className="text-xs font-semibold text-slate-700">Comment<Req />
                                     <Textarea required className="mt-1 font-normal" rows={3} value={decision.data.comments} onChange={(e) => decision.setData('comments', e.target.value)} />

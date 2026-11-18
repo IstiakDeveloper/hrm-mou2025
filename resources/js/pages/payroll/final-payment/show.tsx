@@ -12,6 +12,7 @@ import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-nam
 import { ArrowLeft, HandCoins, RefreshCw, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatTakaWhole } from '@/lib/taka-format';
+import { fundInterest, fundMoney } from '@/lib/security-fund';
 import type { SharedData } from '@/types';
 
 type Employee = EmployeeNameFields & {
@@ -30,6 +31,9 @@ type LoanRow = {
 };
 
 type Breakdown = {
+    security_fund?: { account_id?: number | null; interest_as_of?: string };
+    rounding_adjustment?: number;
+    clearance?: { unpaid_salary?: string; other_payable?: string; advance_received?: string; total_adjustable?: string };
     pf?: { enrolled?: boolean; balance?: number };
     gratuity?: {
         eligible?: boolean;
@@ -51,6 +55,8 @@ type FinalPayment = {
     id: number;
     status: 'pending' | 'paid';
     pf_balance: number;
+    security_principal: string;
+    security_interest: string;
     gratuity_amount: number;
     gratuity_eligible: boolean;
     loan_outstanding: number;
@@ -216,7 +222,7 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
                         {settlementDetails?.applied && (
                             <PayrollSectionCard
                                 title="Settlement records"
-                                description="PF, gratuity, and loan entries created from this final payment. These will no longer appear as pending withdrawal/refund."
+                                description="PF, gratuity, Security Fund and loan entries created from this final payment."
                             >
                                 <ul className="space-y-2 text-sm">
                                     {settlementDetails.items.map((item) => (
@@ -252,6 +258,12 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
                                     <dt>Loan recovery</dt>
                                     <dd className="font-mono">−৳{formatTakaWhole(breakdown.components?.loan_recovery ?? finalPayment.loan_outstanding)}</dd>
                                 </div>
+                                <div className="flex justify-between"><dt>Security principal</dt><dd className="font-mono">+৳{fundMoney(finalPayment.security_principal)}</dd></div>
+                                <div className="flex justify-between"><dt>Security interest (6% yearly)</dt><dd className="font-mono">+৳{fundInterest(finalPayment.security_interest)}</dd></div>
+                                {breakdown.security_fund?.interest_as_of && <p className="text-xs text-slate-500">Security interest through {breakdown.security_fund.interest_as_of}</p>}
+                                {!breakdown.security_fund && <p className="text-xs text-slate-500">Legacy payment: detailed Security Fund breakdown unavailable.</p>}
+                                {breakdown.clearance && <><div className="flex justify-between"><dt>Unpaid salary / other payable</dt><dd>+৳{fundMoney(Number(breakdown.clearance.unpaid_salary ?? 0) + Number(breakdown.clearance.other_payable ?? 0))}</dd></div><div className="flex justify-between"><dt>Advance adjustment</dt><dd>−৳{fundMoney(breakdown.clearance.advance_received)}</dd></div></>}
+                                {!!breakdown.rounding_adjustment && <div className="flex justify-between text-xs"><dt>Final rounding</dt><dd>৳{fundMoney(breakdown.rounding_adjustment)}</dd></div>}
                             </dl>
 
                             {canProcess && finalPayment.status === 'pending' && (

@@ -77,6 +77,18 @@ void openModule(BuildContext context, String sectionIdOrLabel) {
                 'subtitle': '${summary['pf_balance'] ?? '—'}',
               },
               {
+                'title': 'Security Fund principal',
+                'subtitle': '${summary['security_principal'] ?? '0.00'}',
+              },
+              {
+                'title': 'Security Fund interest (6% yearly)',
+                'subtitle': '${summary['security_interest'] ?? '0.00'} · Through ${summary['security_interest_as_of'] ?? ''}',
+              },
+              {
+                'title': 'Security Fund total',
+                'subtitle': '${summary['security_total'] ?? '0.00'}',
+              },
+              {
                 'title': 'Note',
                 'subtitle': '${summary['note'] ?? ''}',
               },

@@ -29,6 +29,8 @@ type FinalPaymentRow = {
     id: number;
     status: 'pending' | 'paid';
     pf_balance: number;
+    security_principal: string;
+    security_interest: string;
     gratuity_amount: number;
     loan_outstanding: number;
     net_payable: number;
@@ -275,6 +277,8 @@ export default function FinalPaymentIndex({ records, pendingCount, filters: init
                                     <TableHead>Separation</TableHead>
                                     <TableHead className="text-right">PF</TableHead>
                                     <TableHead className="text-right">Gratuity</TableHead>
+                                    <TableHead className="text-right">Security principal</TableHead>
+                                    <TableHead className="text-right">Security interest</TableHead>
                                     <TableHead className="text-right">Loan (−)</TableHead>
                                     <TableHead className="text-right">Net payable</TableHead>
                                     <TableHead>Status</TableHead>
@@ -298,6 +302,8 @@ export default function FinalPaymentIndex({ records, pendingCount, filters: init
                                         </TableCell>
                                         <TableCell className="text-right font-mono text-sm">৳{formatTakaWhole(row.pf_balance)}</TableCell>
                                         <TableCell className="text-right font-mono text-sm">৳{formatTakaWhole(row.gratuity_amount)}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">৳{Number(row.security_principal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">৳{Number(row.security_interest ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</TableCell>
                                         <TableCell className="text-right font-mono text-sm text-rose-700">
                                             ৳{formatTakaWhole(row.loan_outstanding)}
                                         </TableCell>

@@ -16,6 +16,10 @@ class SeparationFinalPayment extends Model
         'employee_id',
         'status',
         'pf_balance',
+        'security_fund_account_id',
+        'security_principal',
+        'security_interest',
+        'security_interest_as_of',
         'gratuity_amount',
         'gratuity_eligible',
         'loan_outstanding',
@@ -31,6 +35,9 @@ class SeparationFinalPayment extends Model
 
     protected $casts = [
         'pf_balance' => 'decimal:2',
+        'security_principal' => 'decimal:2',
+        'security_interest' => 'decimal:2',
+        'security_interest_as_of' => 'date',
         'gratuity_amount' => 'decimal:2',
         'gratuity_eligible' => 'boolean',
         'loan_outstanding' => 'decimal:2',

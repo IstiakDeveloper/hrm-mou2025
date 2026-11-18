@@ -60,6 +60,7 @@ class EmployeeV2Controller extends Controller
 
     private function normalizeEmployeeRequestPayload(Request $request): void
     {
+        \App\Support\SecurityFundProfileGuard::check($request);
         $nullableEmptiesToNull = [
             'email',
             'mobile_personal',

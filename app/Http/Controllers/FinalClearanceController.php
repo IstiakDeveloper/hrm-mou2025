@@ -231,6 +231,7 @@ class FinalClearanceController extends Controller
         } elseif ($finalClearance->status === FinalClearance::STATUS_ACCOUNTS) {
             $data = $request->validate($this->moneyRules());
             $finalClearance->fill($data);
+            $this->clearances->refreshSecurityFund($finalClearance);
             $this->clearances->recomputeTotals($finalClearance);
         } else {
             throw ValidationException::withMessages(['status' => 'This stage has no editable fields.']);
@@ -350,6 +351,7 @@ class FinalClearanceController extends Controller
                 'accounts_comments' => 'Accounts comments',
             ]));
             $finalClearance->fill(collect($data)->except('comments')->all());
+            $this->clearances->refreshSecurityFund($finalClearance);
             $this->clearances->recomputeTotals($finalClearance);
             $finalClearance->status = FinalClearance::STATUS_DIRECTOR_FA;
             $finalClearance->save();

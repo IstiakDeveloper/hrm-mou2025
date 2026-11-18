@@ -365,6 +365,8 @@
                     </td>
                     <td class="num"><strong>{{ number_format($statement['gratuity']['amount']) }}</strong></td>
                 </tr>
+                <tr><td colspan="3"><strong>Security Fund Principal</strong></td><td class="num">{{ number_format((float) ($statement['security_fund']['principal'] ?? 0), 2) }}</td></tr>
+                <tr><td colspan="3"><strong>Security Fund Interest — 6% annual simple interest</strong><br>Through {{ $statement['security_fund']['interest_as_of'] ?? '' }}</td><td class="num">{{ number_format((float) ($statement['security_fund']['interest'] ?? 0), 0) }}</td></tr>
                 <tr class="subtotal-row">
                     <td colspan="3" style="text-align: right;"><strong>Total Entitlements (A):</strong></td>
                     <td class="num"><strong>৳{{ number_format($statement['summary']['gross_entitlement']) }}</strong></td>

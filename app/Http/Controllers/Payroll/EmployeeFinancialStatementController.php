@@ -35,6 +35,7 @@ class EmployeeFinancialStatementController extends Controller
                     $sub->where('status', '!=', 'active')
                         ->where(function (Builder $inner) {
                             $inner->where('pf_balance', '>', 0)
+                                ->orWhereHas('securityFundAccount', fn ($q) => $q->where('status', 'open'))
                                 ->orWhereHas('loans', function (Builder $lq) {
                                     $lq->where('status', 'active')->where('outstanding_balance', '>', 0);
                                 })
@@ -263,6 +264,7 @@ class EmployeeFinancialStatementController extends Controller
 
         $grossEntitlement = SalaryStructureCalculator::roundTaka(
             (float) $settlement['pf_balance'] + (float) $settlement['gratuity_amount']
+            + (float) $settlement['security_principal'] + (float) $settlement['security_interest']
         );
         $totalDeductions = SalaryStructureCalculator::roundTaka(
             (float) $settlement['loan_outstanding']
@@ -274,6 +276,7 @@ class EmployeeFinancialStatementController extends Controller
         $branchName = $employee->branch?->name ?: ($employee->lastBranch?->name ?: '—');
 
         return [
+            'security_fund' => $settlement['breakdown']['security_fund'],
             'employee' => [
                 'id' => $employee->id,
                 'pin' => $employee->pin,

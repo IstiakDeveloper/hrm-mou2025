@@ -6,12 +6,15 @@ use App\Models\Employee;
 use App\Models\EmployeeGratuityPayment;
 use App\Models\EmployeeLoan;
 use App\Models\EmployeePfTransaction;
+use App\Models\EmployeeSecurityFundAccount;
+use App\Models\FinalClearance;
 use App\Models\LoanCollectionBatch;
 use App\Models\Separation;
 use App\Models\SeparationFinalPayment;
 use App\Models\SeparationHistory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class FinalPaymentSettlementService
@@ -20,6 +23,7 @@ class FinalPaymentSettlementService
         protected EmployeeGratuityService $gratuityService,
         protected EmployeeProvidentFundService $pfService,
         protected LoanCollectionService $loanCollectionService,
+        protected EmployeeSecurityFundService $securityFundService,
     ) {}
 
     /**
@@ -40,6 +44,7 @@ class FinalPaymentSettlementService
     {
         $asOf = $asOf ?? Carbon::today();
         $employee->loadMissing(['loans']);
+        $security = $this->securityFundService->snapshot($employee, $asOf->toDateString());
 
         $pfEnrolled = (bool) ($employee->pf_enrolled ?? true);
         $pfBalance = $pfEnrolled
@@ -77,10 +82,12 @@ class FinalPaymentSettlementService
         ])->values()->all();
 
         $netPayable = SalaryStructureCalculator::roundTaka(
-            max(0.0, $pfBalance + $gratuityPayable - $loanOutstanding)
+            max(0.0, $pfBalance + $gratuityPayable + (float) $security['total'] - $loanOutstanding)
         );
 
         $breakdown = [
+            'security_fund' => $security,
+            'rounding_adjustment' => round($netPayable - max(0.0, $pfBalance + $gratuityPayable + (float) $security['total'] - $loanOutstanding), 2),
             'pf' => [
                 'enrolled' => $pfEnrolled,
                 'balance' => $pfBalance,
@@ -98,12 +105,18 @@ class FinalPaymentSettlementService
             'components' => [
                 'pf_refund' => $pfBalance,
                 'gratuity_payable' => $gratuityPayable,
+                'security_principal' => $security['principal'],
+                'security_interest' => $security['interest'],
                 'loan_recovery' => $loanOutstanding,
                 'net_payable' => $netPayable,
             ],
         ];
 
         return [
+            'security_fund_account_id' => $security['account_id'],
+            'security_principal' => $security['principal'],
+            'security_interest' => $security['interest'],
+            'security_interest_as_of' => $security['interest_as_of'],
             'pf_balance' => $pfBalance,
             'pf_enrolled' => $pfEnrolled,
             'gratuity_amount' => $gratuityPayable,
@@ -157,6 +170,10 @@ class FinalPaymentSettlementService
             'employee_id' => $employee->id,
             'status' => $status,
             'pf_balance' => $settlement['pf_balance'],
+            'security_fund_account_id' => $settlement['security_fund_account_id'],
+            'security_principal' => $settlement['security_principal'],
+            'security_interest' => $settlement['security_interest'],
+            'security_interest_as_of' => $settlement['security_interest_as_of'],
             'gratuity_amount' => $settlement['gratuity_amount'],
             'gratuity_eligible' => $settlement['gratuity_eligible'],
             'loan_outstanding' => $settlement['loan_outstanding'],
@@ -269,6 +286,10 @@ class FinalPaymentSettlementService
 
         $finalPayment->fill([
             'pf_balance' => $settlement['pf_balance'],
+            'security_fund_account_id' => $settlement['security_fund_account_id'],
+            'security_principal' => $settlement['security_principal'],
+            'security_interest' => $settlement['security_interest'],
+            'security_interest_as_of' => $settlement['security_interest_as_of'],
             'gratuity_amount' => $settlement['gratuity_amount'],
             'gratuity_eligible' => $settlement['gratuity_eligible'],
             'loan_outstanding' => $settlement['loan_outstanding'],
@@ -285,13 +306,56 @@ class FinalPaymentSettlementService
         Carbon $paymentDate,
         ?string $notes,
         int $actorUserId,
+        ?FinalClearance $clearance = null,
     ): SeparationFinalPayment {
-        return DB::transaction(function () use ($finalPayment, $paymentDate, $notes, $actorUserId) {
+        return DB::transaction(function () use ($finalPayment, $paymentDate, $notes, $actorUserId, $clearance) {
+            Employee::query()->whereKey($finalPayment->employee_id)->lockForUpdate()->firstOrFail();
+            $finalPayment = SeparationFinalPayment::query()->whereKey($finalPayment->id)->lockForUpdate()->firstOrFail();
+            if ($finalPayment->isPaid()) {
+                return $finalPayment->fresh(['separation.employee', 'payer']);
+            }
             $finalPayment->loadMissing(['separation.employee']);
             $separation = $finalPayment->separation;
             $employee = $separation->employee;
 
+            EmployeeLoan::query()->where('employee_id', $employee->id)->where('status', 'active')
+                ->orderBy('id')->lockForUpdate()->get();
+
             $this->refreshSnapshot($finalPayment, $employee);
+            if ($paymentDate->toDateString() > \App\Support\BangladeshDate::todayString()
+                || $paymentDate->lt(Carbon::parse($separation->separation_date))) {
+                throw ValidationException::withMessages(['payment_date' => 'Payment date must be on or after separation and no later than today.']);
+            }
+            if ($clearance) {
+                $clearanceLoanTotal = (float) $clearance->pf_loan + (float) $clearance->motorcycle_loan
+                    + (float) $clearance->laptop_loan + (float) $clearance->other_loan;
+                if (abs((float) $clearance->pf_amount - (float) $finalPayment->pf_balance) > 0.001
+                    || abs((float) $clearance->gratuity_amount - (float) $finalPayment->gratuity_amount) > 0.001
+                    || abs($clearanceLoanTotal - (float) $finalPayment->loan_outstanding) > 0.001) {
+                    throw ValidationException::withMessages(['final_payment' => 'Fund or loan balances changed. Return the clearance to Accounts and reconcile the ledger before payment.']);
+                }
+                if (abs((float) $clearance->staff_security - (float) $finalPayment->security_principal) > 0.001
+                    || abs((float) $clearance->staff_security_interest - (float) $finalPayment->security_interest) > 0.001) {
+                    throw ValidationException::withMessages(['staff_security' => 'Security Fund changed. Return the clearance to Accounts for review.']);
+                }
+                $breakdown = $finalPayment->breakdown;
+                $breakdown['clearance'] = $clearance->only([
+                    'id', 'unpaid_salary', 'other_payable', 'advance_received', 'pf_loan', 'motorcycle_loan', 'laptop_loan', 'other_loan',
+                    'total_payable', 'total_adjustable', 'net_payable',
+                ]);
+                $breakdown['components']['pf_refund'] = $clearance->pf_amount;
+                $breakdown['components']['gratuity_payable'] = $clearance->gratuity_amount;
+                $breakdown['components']['net_payable'] = $clearance->net_payable;
+                $rawNet = (float) $clearance->unpaid_salary + (float) $clearance->other_payable
+                    + (float) $clearance->pf_amount + (float) $clearance->gratuity_amount
+                    + (float) $clearance->staff_security + (float) $clearance->staff_security_interest
+                    - $clearanceLoanTotal - (float) $clearance->advance_received;
+                $breakdown['rounding_adjustment'] = round((float) $clearance->net_payable - $rawNet, 2);
+                $finalPayment->fill([
+                    'pf_balance' => $clearance->pf_amount, 'gratuity_amount' => $clearance->gratuity_amount,
+                    'net_payable' => $clearance->net_payable, 'breakdown' => $breakdown,
+                ]);
+            }
 
             $finalPayment->status = SeparationFinalPayment::STATUS_PAID;
             $finalPayment->setAttribute('payment_date', $paymentDate);
@@ -305,6 +369,7 @@ class FinalPaymentSettlementService
             $separation->save();
 
             $employee->final_payment_date = $paymentDate;
+            $employee->final_payment_amount = $finalPayment->net_payable;
             $employee->save();
 
             $this->applySettlements($finalPayment, $actorUserId);
@@ -314,6 +379,18 @@ class FinalPaymentSettlementService
     }
 
     public function applySettlements(SeparationFinalPayment $finalPayment, ?int $actorUserId = null): void
+    {
+        DB::transaction(function () use ($finalPayment, $actorUserId) {
+            Employee::query()->whereKey($finalPayment->employee_id)->lockForUpdate()->firstOrFail();
+            $locked = SeparationFinalPayment::query()->whereKey($finalPayment->id)->lockForUpdate()->firstOrFail();
+            if (! $locked->isPaid()) {
+                throw new InvalidArgumentException('Only paid final payments can apply settlements.');
+            }
+            $this->applyLockedSettlements($locked, $actorUserId);
+        });
+    }
+
+    private function applyLockedSettlements(SeparationFinalPayment $finalPayment, ?int $actorUserId = null): void
     {
         if ($finalPayment->settlementsApplied()) {
             return;
@@ -329,6 +406,16 @@ class FinalPaymentSettlementService
         $note = sprintf('Final payment settlement #%d', $finalPayment->id);
 
         $refs = [];
+
+        if ($finalPayment->security_fund_account_id) {
+            $account = EmployeeSecurityFundAccount::findOrFail($finalPayment->security_fund_account_id);
+            if ((int) $account->employee_id !== (int) $finalPayment->employee_id) {
+                throw new InvalidArgumentException('Security Fund account does not belong to this employee.');
+            }
+            $securityTx = $this->securityFundService->settle($account, $finalPayment, $actorUserId);
+            $refs['security_fund_transaction_id'] = $securityTx->id;
+            $refs['security_fund_account_id'] = $account->id;
+        }
 
         $employee->refresh();
         $pfAmount = SalaryStructureCalculator::roundTaka((float) $finalPayment->pf_balance);
@@ -369,7 +456,7 @@ class FinalPaymentSettlementService
                     'completed_years' => $calc['completed_years'],
                     'basic_salary_used' => $calc['basic_salary'],
                     'basic_multiplier' => $calc['basic_multiplier'],
-                    'gratuity_amount' => $calc['gratuity_amount'],
+                    'gratuity_amount' => $finalPayment->gratuity_amount,
                     'payment_date' => $paymentDate,
                     'payment_reference' => $reference,
                     'status' => 'paid',
@@ -444,6 +531,10 @@ class FinalPaymentSettlementService
         $refs = $finalPayment->settlement_refs ?? [];
         if ($refs === [] && is_array($finalPayment->breakdown['settlement_refs'] ?? null)) {
             $refs = $finalPayment->breakdown['settlement_refs'];
+        }
+
+        if (! empty($refs['security_fund_transaction_id'])) {
+            throw ValidationException::withMessages(['final_payment' => 'This payment contains an audited Security Fund settlement. Reverse it through a reviewed financial correction; deleting it is not allowed.']);
         }
 
         $pfTransactionId = isset($refs['pf_transaction_id']) ? (int) $refs['pf_transaction_id'] : null;

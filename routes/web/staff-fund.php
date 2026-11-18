@@ -101,6 +101,20 @@ use Inertia\Inertia;
     // STAFF FUND (PF & Gratuity)
     // ====================
     Route::middleware(['permission:staff-fund.view'])->group(function () {
+        Route::prefix('security-fund')->name('security-fund.')->controller(\App\Http\Controllers\StaffFund\SecurityFundController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/employees/lookup', 'lookup')->name('employees.lookup')->middleware('permission:staff-fund.create');
+            Route::post('/', 'store')->name('store')->middleware('permission:staff-fund.create');
+            Route::get('/interest', 'interest')->name('interest');
+            Route::post('/interest/preview', 'preview')->name('interest.preview')->middleware('permission:staff-fund.edit');
+            Route::post('/interest', 'post')->name('interest.post')->middleware('permission:staff-fund.edit');
+            Route::get('/reports/{format}', 'report')->name('report');
+            Route::get('/{account}/ledger', 'ledger')->name('ledger');
+            Route::post('/{account}/deposits', 'deposit')->name('deposits')->middleware('permission:staff-fund.edit');
+            Route::post('/{account}/refunds', 'refund')->name('refunds')->middleware('permission:staff-fund.edit');
+            Route::post('/{account}/transactions/{transaction}/reverse', 'reverse')->name('reverse')->middleware('permission:staff-fund.edit');
+        });
+
         Route::prefix('provident-fund')->name('provident-fund.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'index'])->name('index');
             Route::get('/summary', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'summary'])->name('summary');

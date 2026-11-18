@@ -1,12 +1,12 @@
 import React from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ADMIN_SECTIONS, type AdminSectionId, storeSection } from '@/lib/admin-sections';
-import { CheckCircle2, KeyRound, Lock, LogOut, XCircle, Sparkles, LayoutGrid, MapPin } from 'lucide-react';
+import { Building2, CheckCircle2, KeyRound, Lock, LogOut, ShieldCheck, Sparkles, LayoutGrid, MapPin, User, XCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
 import NoticeNewsTicker from '@/components/sections/notice-news-ticker';
-import { hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
+import { getRoleBadgeStyle, getUserRoleNames, hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
 import { canOpenSection } from '@/lib/section-access';
 
 // Curated themes for each module to create a vibrant, professional layout
@@ -196,6 +196,12 @@ export default function SectionsIndex() {
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
     const name = auth?.user?.name || 'User';
     const email = auth?.user?.email || '';
+    const roleNames = getUserRoleNames(auth);
+    const isBranch = isBranchAccount(auth);
+    const branchName = auth?.user?.branch?.name || employee?.branch?.name;
+    const departmentName = employee?.department?.name;
+    const primaryRoleName = auth?.user?.role?.name || (roleNames.length > 0 ? roleNames[0] : null);
+    const branchOrDeptName = [departmentName, branchName].filter(Boolean).join(' • ');
     const getInitials = (fullName: string) =>
         String(fullName || '')
             .trim()
@@ -251,16 +257,72 @@ export default function SectionsIndex() {
                             <TooltipProvider delayDuration={150}>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border border-emerald-200 shadow-inner hover:scale-105 transition-transform duration-200 cursor-pointer">
-                                            <AvatarImage src={photoUrl || ''} alt={name} />
-                                            <AvatarFallback className="bg-emerald-600 text-white text-[10px] sm:text-xs font-semibold">
-                                                {getInitials(name)}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-1.5 py-1 sm:px-2.5 sm:py-1 shadow-2xs transition-all hover:border-emerald-300 hover:bg-emerald-50/30 cursor-pointer">
+                                            <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border border-emerald-200 shadow-inner hover:scale-105 transition-transform duration-200 shrink-0">
+                                                <AvatarImage src={photoUrl || ''} alt={name} />
+                                                <AvatarFallback className="bg-emerald-600 text-white text-[10px] sm:text-xs font-semibold">
+                                                    {getInitials(name)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="hidden text-left sm:block max-w-[140px]">
+                                                <p className="truncate text-xs font-bold leading-tight text-slate-800">{name}</p>
+                                                <div className="mt-0.5 flex items-center gap-1">
+                                                    {isBranch ? (
+                                                        <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.2 text-[9px] font-bold text-amber-700 ring-1 ring-amber-500/20 shrink-0">
+                                                            Branch
+                                                        </span>
+                                                    ) : primaryRoleName ? (
+                                                        <span
+                                                            className={`inline-flex items-center rounded-md px-1.5 py-0.2 text-[9px] font-semibold ring-1 shrink-0 ${getRoleBadgeStyle(primaryRoleName).bg} ${getRoleBadgeStyle(primaryRoleName).text} ${getRoleBadgeStyle(primaryRoleName).ring}`}
+                                                        >
+                                                            {primaryRoleName}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-400">User</span>
+                                                    )}
+                                                    {roleNames.length > 1 && !isBranch && (
+                                                        <span
+                                                            title={roleNames.join(', ')}
+                                                            className="inline-flex items-center rounded-md bg-indigo-50 px-1 py-0.2 text-[9px] font-bold text-indigo-700 ring-1 ring-indigo-500/20 shrink-0"
+                                                        >
+                                                            +{roleNames.length - 1}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </TooltipTrigger>
-                                    <TooltipContent side="bottom" className="bg-slate-900 text-white p-2 rounded-lg shadow-xl border border-slate-800">
-                                        <p className="text-xs font-semibold">{name}</p>
-                                        {email && <p className="text-[10px] text-slate-400 mt-0.5">{email}</p>}
+                                    <TooltipContent side="bottom" className="w-64 bg-slate-900 text-white p-3 rounded-xl shadow-2xl border border-slate-800">
+                                        <p className="text-xs font-bold text-white">{name}</p>
+                                        {email && <p className="text-[11px] text-slate-400">{email}</p>}
+                                        <div className="mt-2.5 pt-2 border-t border-slate-800">
+                                            <p className="text-[9px] font-bold tracking-widest text-slate-400 uppercase mb-1.5">
+                                                {isBranch ? 'Branch Account' : roleNames.length > 1 ? 'Assigned Roles' : 'Role'}
+                                            </p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {isBranch ? (
+                                                    <span className="inline-flex items-center gap-1 rounded bg-amber-950/80 px-2 py-0.5 text-[10px] font-semibold text-amber-300 border border-amber-800">
+                                                        <Building2 className="h-3 w-3" />
+                                                        {branchName || 'Branch Account'}
+                                                    </span>
+                                                ) : roleNames.length > 0 ? (
+                                                    roleNames.map((r) => (
+                                                        <span key={r} className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-emerald-300 border border-slate-700">
+                                                            <ShieldCheck className="h-3 w-3" />
+                                                            {r}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-400">Standard User</span>
+                                                )}
+                                            </div>
+                                            {branchOrDeptName && !isBranch && (
+                                                <p className="mt-2 text-[10px] text-slate-400 flex items-center gap-1">
+                                                    <Building2 className="h-3 w-3 text-slate-500 shrink-0" />
+                                                    <span className="truncate">{branchOrDeptName}</span>
+                                                </p>
+                                            )}
+                                        </div>
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -305,6 +367,47 @@ export default function SectionsIndex() {
                     <h2 className="text-lg sm:text-2xl font-extrabold text-slate-900 tracking-tight">
                         Select an ERP Module
                     </h2>
+
+                    {/* Signed-in Account & Role Identity Bar */}
+                    <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-slate-600">
+                        <span className="text-[11px] sm:text-xs text-slate-500 font-medium">Logged in as</span>
+                        <span className="text-[11px] sm:text-xs font-bold text-slate-800">{name}</span>
+                        <span className="text-slate-300">•</span>
+                        {isBranch ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold text-amber-800 border border-amber-200 shadow-2xs">
+                                <Building2 className="h-3 w-3 text-amber-600" />
+                                Branch Account {branchName ? `(${branchName})` : ''}
+                            </span>
+                        ) : (
+                            <div className="inline-flex flex-wrap items-center justify-center gap-1 sm:gap-1.5">
+                                {roleNames.length > 0 ? (
+                                    roleNames.map((roleName) => {
+                                        const style = getRoleBadgeStyle(roleName);
+                                        return (
+                                            <span
+                                                key={roleName}
+                                                className={`inline-flex items-center gap-1 rounded-full ${style.bg} ${style.text} border ${style.border} px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold shadow-2xs`}
+                                            >
+                                                <ShieldCheck className="h-3 w-3 opacity-70" />
+                                                {roleName}
+                                            </span>
+                                        );
+                                    })
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold shadow-2xs">
+                                        <User className="h-3 w-3 opacity-70" />
+                                        Standard User
+                                    </span>
+                                )}
+                                {branchOrDeptName && (
+                                    <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-0.5 text-[10px] sm:text-xs font-medium text-slate-500 border border-slate-200/60">
+                                        <Building2 className="h-3 w-3 text-slate-400" />
+                                        {branchOrDeptName}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Main Card Grid - Multi-column compact grid fitting on 1 screen */}

@@ -122,6 +122,7 @@ class MobileFinanceService
     public function staffFundSummary(User $user): array
     {
         $employee = $this->requireEmployeeSection($user, 'staff-fund');
+        $security = app(\App\Services\EmployeeSecurityFundService::class)->snapshot($employee);
 
         $pfBalance = null;
         if (class_exists(\App\Models\EmployeePfTransaction::class)) {
@@ -139,7 +140,12 @@ class MobileFinanceService
             'employee_id' => $employee->id,
             'pf_balance' => $pfBalance !== null ? Money::toString($pfBalance) : null,
             'gratuity_balance' => null,
-            'note' => 'Detailed PF/gratuity ledgers remain available on web; mobile shows summary first.',
+            'security_principal' => $security['principal'],
+            'security_interest' => $security['interest'],
+            'security_total' => $security['total'],
+            'security_as_of_date' => $security['as_of_date'],
+            'security_interest_as_of' => $security['interest_as_of'],
+            'note' => 'Detailed PF, gratuity and Security Fund ledgers are available on web; mobile shows summary balances.',
         ];
     }
 

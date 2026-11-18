@@ -137,6 +137,7 @@ Route::prefix('employee/attendance')->name('employee.attendance.')->group(functi
 Route::get('/my-assets', [EmployeeAssetController::class, 'index'])->name('my-assets.index');
 
 Route::prefix('employee/staff-fund')->name('employee.staff-fund.')->group(function () {
+    Route::get('/security-fund', [\App\Http\Controllers\StaffFund\SecurityFundController::class, 'selfLedger'])->name('security-fund');
     Route::get('/pf-ledger', [\App\Http\Controllers\Employee\EmployeeStaffFundController::class, 'pfLedger'])->name('pf-ledger');
     Route::get('/gratuity', [\App\Http\Controllers\Employee\EmployeeStaffFundController::class, 'gratuityLedger'])->name('gratuity');
 });

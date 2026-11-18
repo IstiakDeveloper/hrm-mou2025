@@ -2772,35 +2772,11 @@ export default function EmployeeCreate({
                                             </div>
 
                                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                                                <FormField label="Security Amount">
-                                                    <Input
-                                                        type="number"
-                                                        min={0}
-                                                        value={data.collateral.security_amount}
-                                                        onChange={(e) =>
-                                                            setData('collateral', { ...data.collateral, security_amount: e.target.value })
-                                                        }
-                                                        placeholder="Deposit amount"
-                                                    />
-                                                </FormField>
-                                                <FormField label="Collateral Interest">
-                                                    <Input
-                                                        value={data.collateral.collateral_interest}
-                                                        onChange={(e) =>
-                                                            setData('collateral', { ...data.collateral, collateral_interest: e.target.value })
-                                                        }
-                                                        placeholder="e.g. 5%"
-                                                    />
-                                                </FormField>
-                                                <FormField label="Collateral Date">
-                                                    <Input
-                                                        type="date"
-                                                        value={data.collateral.collateral_date}
-                                                        onChange={(e) =>
-                                                            setData('collateral', { ...data.collateral, collateral_date: e.target.value })
-                                                        }
-                                                    />
-                                                </FormField>
+                                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm sm:col-span-2 lg:col-span-4">
+                                                    <p className="font-semibold text-emerald-900">Security Fund</p>
+                                                    <p className="text-emerald-800">Save the employee, then use Staff Fund ? Security Fund ? Create to record deposits. Principal and 6% yearly interest are maintained in the fund ledger.</p>
+                                                    <a href="/security-fund?section=staff-fund" target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-emerald-700 underline">Open Security Fund</a>
+                                                </div>
                                                 <FormField label="Security Notes" className="sm:col-span-2 lg:col-span-4">
                                                     <Input
                                                         value={data.collateral.notes}

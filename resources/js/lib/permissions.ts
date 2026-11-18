@@ -203,3 +203,72 @@ export function hasAppPermission(
 
   return false;
 }
+
+export function getUserRoleNames(
+  auth: { user?: { role?: { name?: string }; roles?: { name?: string }[] } } | null | undefined,
+): string[] {
+  const set = new Set<string>();
+  if (auth?.user?.role?.name) {
+    const trimmed = auth.user.role.name.trim();
+    if (trimmed) set.add(trimmed);
+  }
+  if (Array.isArray(auth?.user?.roles)) {
+    auth.user.roles.forEach((r) => {
+      if (r?.name) {
+        const trimmed = r.name.trim();
+        if (trimmed) set.add(trimmed);
+      }
+    });
+  }
+  return Array.from(set);
+}
+
+export function getRoleBadgeStyle(roleName: string): { bg: string; text: string; border: string; ring: string } {
+  const lower = (roleName || '').toLowerCase();
+  if (lower.includes('super admin')) {
+    return {
+      bg: 'bg-purple-50',
+      text: 'text-purple-700',
+      border: 'border-purple-200',
+      ring: 'ring-purple-500/20',
+    };
+  }
+  if (lower.includes('admin')) {
+    return {
+      bg: 'bg-indigo-50',
+      text: 'text-indigo-700',
+      border: 'border-indigo-200',
+      ring: 'ring-indigo-500/20',
+    };
+  }
+  if (lower.includes('hr')) {
+    return {
+      bg: 'bg-sky-50',
+      text: 'text-sky-700',
+      border: 'border-sky-200',
+      ring: 'ring-sky-500/20',
+    };
+  }
+  if (lower.includes('account') || lower.includes('audit') || lower.includes('finance')) {
+    return {
+      bg: 'bg-emerald-50',
+      text: 'text-emerald-700',
+      border: 'border-emerald-200',
+      ring: 'ring-emerald-500/20',
+    };
+  }
+  if (lower.includes('branch') || lower.includes('manager') || lower.includes('director')) {
+    return {
+      bg: 'bg-amber-50',
+      text: 'text-amber-800',
+      border: 'border-amber-200',
+      ring: 'ring-amber-500/20',
+    };
+  }
+  return {
+    bg: 'bg-slate-50',
+    text: 'text-slate-700',
+    border: 'border-slate-200',
+    ring: 'ring-slate-400/20',
+  };
+}

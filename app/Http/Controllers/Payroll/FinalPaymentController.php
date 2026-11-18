@@ -227,6 +227,13 @@ class FinalPaymentController extends Controller
 
         $items = [];
 
+        if (! empty($refs['security_fund_account_id'])) {
+            $items[] = [
+                'type' => 'security_fund', 'label' => 'Security Fund principal and interest settled',
+                'href' => route('security-fund.ledger', $refs['security_fund_account_id']),
+            ];
+        }
+
         if (! empty($refs['pf_transaction_id'])) {
             $items[] = [
                 'type' => 'pf',

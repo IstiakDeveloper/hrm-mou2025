@@ -52,6 +52,8 @@ type RowItem = {
     payment_status_label: string;
     payment_date: string;
     payment_amount: number | null;
+    security_principal?: string | null;
+    security_interest?: string | null;
     payment_amount_formatted: string;
 };
 
@@ -540,12 +542,14 @@ export default function FinalPaymentWaitingListPage({
                                     <th className="px-3 py-2 text-center min-w-[110px]">Payment Status</th>
                                     <th className="px-3 py-2 text-center w-24">Payment Date</th>
                                     <th className="px-3 py-2 text-right min-w-[110px]">Payment Amount</th>
+                                    <th className="px-3 py-2 text-right min-w-[110px]">Security Principal</th>
+                                    <th className="px-3 py-2 text-right min-w-[110px]">Security Interest</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-slate-700">
                                 {rows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={12} className="px-4 py-12 text-center text-slate-400 italic">
+                                        <td colSpan={14} className="px-4 py-12 text-center text-slate-400 italic">
                                             No separated staff found matching the selected filters.
                                         </td>
                                     </tr>
@@ -607,6 +611,8 @@ export default function FinalPaymentWaitingListPage({
                                                     ? `৳ ${row.payment_amount_formatted}`
                                                     : '—'}
                                             </td>
+                                            <td className="px-3 py-2 text-right font-mono">{row.security_principal === null || row.security_principal === undefined ? '—' : Number(row.security_principal).toFixed(2)}</td>
+                                            <td className="px-3 py-2 text-right font-mono">{row.security_interest === null || row.security_interest === undefined ? '—' : Number(row.security_interest).toFixed(0)}</td>
                                         </tr>
                                     ))
                                 )}
@@ -624,6 +630,7 @@ export default function FinalPaymentWaitingListPage({
                                         <td className="px-3 py-2.5 text-right font-mono text-sm text-slate-900">
                                             ৳ {summary.total_amount_formatted}
                                         </td>
+                                        <td colSpan={2} className="px-3 py-2.5 text-right text-[10px] font-normal">Included in payment amount</td>
                                     </tr>
                                 </tfoot>
                             )}

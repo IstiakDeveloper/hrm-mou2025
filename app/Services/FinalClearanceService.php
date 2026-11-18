@@ -24,6 +24,7 @@ class FinalClearanceService
     public function __construct(
         private readonly EmployeeGratuityService $gratuityService,
         private readonly FinalPaymentSettlementService $settlements,
+        private readonly EmployeeSecurityFundService $securityFund,
     ) {}
 
     public function canViewModule(User $user): bool
@@ -192,6 +193,7 @@ class FinalClearanceService
      */
     public function snapshot(Employee $employee): array
     {
+        $security = $this->securityFund->snapshot($employee, $employee->getServiceEndDate()->toDateString());
         $employee->loadMissing(['designation', 'department', 'branch.regionalOffice', 'program', 'project']);
 
         $loans = EmployeeLoan::query()
@@ -242,6 +244,11 @@ class FinalClearanceService
                 : null,
             'pf_amount' => SalaryStructureCalculator::roundTaka((float) ($employee->pf_balance ?? 0)),
             'gratuity_amount' => SalaryStructureCalculator::roundTaka($gratuityPayable),
+            'staff_security' => $security['principal'],
+            'staff_security_remarks' => $security['account_id'] ? 'Security Fund ledger #'.$security['account_id'] : 'No Security Fund account',
+            'staff_security_interest' => $security['interest'],
+            'security_interest_as_of' => $security['interest_as_of'],
+            'security_fund_snapshot' => $security,
             'pf_loan' => $loans->get('pf_loan', 0),
             'motorcycle_loan' => $loans->get('motorcycle_loan', 0),
             'laptop_loan' => $loans->get('laptop_loan', 0),
@@ -286,12 +293,28 @@ class FinalClearanceService
         }
     }
 
+    public function refreshSecurityFund(FinalClearance $clearance): void
+    {
+        if ($clearance->status === FinalClearance::STATUS_APPROVED) {
+            return;
+        }
+        $security = $this->securityFund->snapshot(
+            $clearance->employee,
+            $clearance->dropout_date?->toDateString() ?? $clearance->employee->getServiceEndDate()->toDateString(),
+        );
+        $clearance->fill([
+            'staff_security' => $security['principal'], 'staff_security_interest' => $security['interest'],
+            'security_interest_as_of' => $security['interest_as_of'], 'security_fund_snapshot' => $security,
+        ]);
+    }
+
     public function recomputeTotals(FinalClearance $clearance): void
     {
         $payable = (float) $clearance->unpaid_salary
             + (float) $clearance->pf_amount
             + (float) $clearance->gratuity_amount
             + (float) $clearance->staff_security
+            + (float) $clearance->staff_security_interest
             + (float) $clearance->other_payable;
 
         $adjustable = (float) $clearance->pf_loan
@@ -436,6 +459,11 @@ class FinalClearanceService
     public function approve(FinalClearance $clearance, User $user, ?string $comments = null): FinalClearance
     {
         return DB::transaction(function () use ($clearance, $user, $comments) {
+            Employee::query()->whereKey($clearance->employee_id)->lockForUpdate()->firstOrFail();
+            $clearance = FinalClearance::query()->whereKey($clearance->id)->lockForUpdate()->firstOrFail();
+            if ($clearance->status === FinalClearance::STATUS_APPROVED) {
+                return $clearance;
+            }
             $clearance->loadMissing('employee');
             $employee = $clearance->employee;
             if (! $employee) {
@@ -454,17 +482,8 @@ class FinalClearanceService
                 Carbon::today(),
                 'Final clearance #'.$clearance->id,
                 $user->id,
+                $clearance,
             );
-
-            $employee->refresh();
-            $employee->final_payment_date = $employee->final_payment_date ?? Carbon::today()->toDateString();
-            $employee->final_payment_amount = $clearance->net_payable;
-            $employee->save();
-
-            $payment->net_payable = $clearance->net_payable;
-            $note = trim((string) $payment->notes);
-            $payment->notes = trim($note."\nApproved from final clearance #".$clearance->id);
-            $payment->save();
 
             $clearance->status = FinalClearance::STATUS_APPROVED;
             $clearance->separation_final_payment_id = $payment->id;

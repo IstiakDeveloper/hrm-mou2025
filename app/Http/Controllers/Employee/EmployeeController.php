@@ -937,6 +937,7 @@ class EmployeeController extends Controller
 
     private function normalizeEmployeeRequestPayload(Request $request): void
     {
+        \App\Support\SecurityFundProfileGuard::check($request);
         $nullableEmptiesToNull = [
             'nid_number', 'smart_card_number',
             'name_bn', 'gender', 'blood_group', 'date_of_birth',

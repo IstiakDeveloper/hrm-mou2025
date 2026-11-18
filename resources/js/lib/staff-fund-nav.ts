@@ -11,7 +11,7 @@ export type StaffFundNavItem = {
 };
 
 export type StaffFundNavGroup = {
-    id: 'pf' | 'gratuity' | 'final-payment' | 'financial-statement';
+    id: 'pf' | 'gratuity' | 'security-fund' | 'final-payment' | 'financial-statement';
     title: string;
     icon: LucideIcon;
     defaultPath: string;
@@ -33,6 +33,13 @@ export function staffFundEmployeePath(path: string): string {
 }
 
 export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
+    {
+        id: 'security-fund', title: 'Security Fund', icon: Wallet, defaultPath: '/security-fund',
+        items: [
+            { title: 'Security Fund Register', path: '/security-fund', description: 'Employee security deposits with separate 6% annual simple interest' },
+            { title: 'Security Fund Interest', path: '/security-fund/interest', description: 'Preview and post interest on principal only' },
+        ],
+    },
     {
         id: 'pf',
         title: 'PF',
@@ -116,6 +123,10 @@ export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
 ];
 
 export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
+    securityFund: [
+        { title: 'Security Fund Register', href: '/security-fund', icon: Wallet },
+        { title: 'Security Fund Interest', href: '/security-fund/interest', icon: Percent },
+    ],
     pf: [
         { title: 'PF Register', href: '/provident-fund', icon: List },
         { title: 'PF Interest', href: '/provident-fund/interest', icon: Percent },

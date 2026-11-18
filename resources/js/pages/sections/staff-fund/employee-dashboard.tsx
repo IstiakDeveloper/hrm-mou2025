@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { formatPfAmount } from '@/lib/pf-format';
 import { formatTakaWhole } from '@/lib/taka-format';
+import { fundInterest, fundMoney, type FundSnapshot } from '@/lib/security-fund';
 import { staffFundEmployeePath } from '@/lib/staff-fund-nav';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +46,7 @@ export type StaffFundEmployeeDashboardProps = {
         department?: { name?: string } | null;
         branch?: { name?: string } | null;
     };
+    security_fund?: FundSnapshot;
     pf: {
         enrolled: boolean;
         balance: number;
@@ -89,6 +91,7 @@ export function StaffFundEmployeeDashboardView({
     employee,
     pf,
     gratuity,
+    security_fund: securityFund,
     embedded = false,
 }: ViewProps) {
     const { auth } = usePage().props as { auth?: { user?: { name?: string } } };
@@ -96,6 +99,7 @@ export function StaffFundEmployeeDashboardView({
 
     const dashboardBody = (
         <>
+            <Card className="mb-3 border-emerald-200"><CardContent className="p-4"><Link href={staffFundEmployeePath('/employee/staff-fund/security-fund')} className="font-semibold text-emerald-800">My Security Fund →</Link><div className="mt-2 grid gap-2 text-sm sm:grid-cols-3"><p>Principal: ৳{fundMoney(securityFund?.principal)}</p><p>Interest (6% yearly): ৳{fundInterest(securityFund?.interest)}</p><p>Total: ৳{fundMoney(securityFund?.total)}</p></div></CardContent></Card>
             <Card className="overflow-hidden border-zinc-200/90 border-t-3 border-t-cyan-500 bg-gradient-to-b from-white to-cyan-50/20 shadow-xs">
                 <CardContent className="p-3 sm:p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

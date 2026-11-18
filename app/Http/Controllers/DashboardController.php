@@ -595,6 +595,22 @@ class DashboardController extends Controller
             ->whereHas('employee', fn ($e) => $e->forGratuity())
             ->whereIn('status', ['calculated', 'approved']));
 
+        $securityEmployees = Employee::query();
+        \App\Services\OrganogramAccessService::constrainVisibleEmployees($securityEmployees, $user);
+        $securityTotals = ['principal' => 0, 'interest' => 0, 'total' => 0];
+        $securityReviewCount = 0;
+        $securityService = app(\App\Services\EmployeeSecurityFundService::class);
+        foreach (\App\Models\EmployeeSecurityFundAccount::whereIn('employee_id', $securityEmployees->select('id'))->with(['employee', 'transactions'])->get() as $account) {
+            try {
+                $snapshot = $securityService->accountSnapshot($account, \App\Support\BangladeshDate::todayString());
+                foreach ($securityTotals as $key => $value) {
+                    $securityTotals[$key] += \App\Support\SecurityFundMoney::paisa($snapshot[$key]);
+                }
+            } catch (\Illuminate\Validation\ValidationException) {
+                $securityReviewCount++;
+            }
+        }
+
         $employeeDashboard = $this->buildStaffFundEmployeeDashboardProps($user, $gratuityService);
         $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
 
@@ -606,6 +622,10 @@ class DashboardController extends Controller
                 'gratuityEligibleEmployees' => $gratuityEligible,
                 'gratuityPaymentRecords' => $gratuityRecords,
                 'gratuityPendingApproval' => $gratuityPending,
+                'securityPrincipal' => $securityTotals['principal'] / 100,
+                'securityInterest' => $securityTotals['interest'] / 100,
+                'securityTotal' => $securityTotals['total'] / 100,
+                'securityReviewCount' => $securityReviewCount,
             ],
             'userRole' => $role?->name ?? 'User',
             'showEmployeeTab' => $showEmployeeTab,
@@ -1700,6 +1720,7 @@ class DashboardController extends Controller
                 'department' => $employee->department ? ['name' => $employee->department->name] : null,
                 'branch' => $employee->branch ? ['name' => $employee->branch->name] : null,
             ],
+            'security_fund' => app(\App\Services\EmployeeSecurityFundService::class)->snapshot($employee),
             'pf' => [
                 'enrolled' => (bool) ($employee->pf_enrolled ?? true),
                 'balance' => SalaryStructureCalculator::roundTaka((float) $employee->pf_balance),

@@ -515,6 +515,11 @@ class Employee extends Model
         return $this->hasMany(EmployeePfTransaction::class);
     }
 
+    public function securityFundAccount(): HasOne
+    {
+        return $this->hasOne(EmployeeSecurityFundAccount::class);
+    }
+
     public function loans()
     {
         return $this->hasMany(EmployeeLoan::class);

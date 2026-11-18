@@ -9,6 +9,7 @@ import { PayrollPage } from '@/components/payroll/PayrollPageShell';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { employeeDisplayName } from '@/lib/employee-name';
 import { formatTakaWhole } from '@/lib/taka-format';
+import { fundInterest, fundMoney, type FundSnapshot } from '@/lib/security-fund';
 import {
     CheckCircle2,
     FileSpreadsheet,
@@ -34,6 +35,7 @@ type EmployeeOption = {
 };
 
 type StatementData = {
+    security_fund: FundSnapshot;
     employee: {
         id: number;
         pin: string;
@@ -373,6 +375,11 @@ export default function EmployeeFinancialStatementPage({
                         </div>
 
                         {/* Three Pillars: PF, Gratuity, Loans */}
+                        <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-xs">
+                            <h3 className="font-semibold text-emerald-900">Security Fund · 6% annual simple interest</h3>
+                            <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><p>Principal: <strong>৳{fundMoney(statement.security_fund.principal)}</strong></p><p>Interest: <strong>৳{fundInterest(statement.security_fund.interest)}</strong></p><p>Total: <strong>৳{fundMoney(statement.security_fund.total)}</strong></p></div>
+                            <p className="mt-2 text-xs text-slate-500">Interest through {statement.security_fund.interest_as_of}. Interest remains separate from principal.</p>
+                        </div>
                         <div className="grid gap-4 md:grid-cols-3">
                             {/* PF Card */}
                             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between">

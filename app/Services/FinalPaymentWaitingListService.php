@@ -192,6 +192,10 @@ class FinalPaymentWaitingListService
                 'payment_badge' => $payment['badge'],
                 'payment_date' => $paymentDate ? $paymentDate->format('d-m-Y') : '—',
                 'payment_amount' => $paymentAmount,
+                'security_principal' => $employee->latestSeparationFinalPayment?->breakdown['security_fund']['principal']
+                    ?? $employee->latestFinalClearance?->security_fund_snapshot['principal'] ?? null,
+                'security_interest' => $employee->latestSeparationFinalPayment?->breakdown['security_fund']['interest']
+                    ?? $employee->latestFinalClearance?->security_fund_snapshot['interest'] ?? null,
                 'payment_amount_formatted' => $paymentAmount !== null ? number_format($paymentAmount, 2) : '—',
             ];
         }

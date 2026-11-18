@@ -18,6 +18,8 @@
             <th style="width: 8.5%;">Payment Status</th>
             <th style="width: 7%;">Payment Date</th>
             <th style="width: 7%;">Payment Amount</th>
+            <th>Security Principal</th>
+            <th>Security Interest</th>
         </tr>
     </thead>
     <tbody>
@@ -59,10 +61,12 @@
                 <td class="text-right" style="font-weight: bold;">
                     {{ $row['payment_amount_formatted'] ?? '—' }}
                 </td>
+                <td class="text-right">{{ isset($row['security_principal']) ? number_format((float) $row['security_principal'], 2) : '—' }}</td>
+                <td class="text-right">{{ isset($row['security_interest']) ? number_format((float) $row['security_interest'], 0) : '—' }}</td>
             </tr>
         @empty
             <tr>
-                <td colspan="12" class="text-center" style="padding: 16px; color: #666; font-style: italic;">
+                <td colspan="14" class="text-center" style="padding: 16px; color: #666; font-style: italic;">
                     No separated staff found matching the selected filters.
                 </td>
             </tr>
@@ -79,6 +83,7 @@
                 <td class="text-right" style="font-weight: bold;">
                     {{ $summary['total_amount_formatted'] ?? '0.00' }}
                 </td>
+                <td colspan="2" class="text-right">Included in payment amount</td>
             </tr>
         </tfoot>
     @endif

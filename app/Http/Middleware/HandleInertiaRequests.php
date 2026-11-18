@@ -94,7 +94,7 @@ class HandleInertiaRequests extends Middleware
             $roleColumns[] = 'block_payroll_module';
         }
         $roleColumnList = implode(',', $roleColumns);
-        $user?->loadMissing(["role:{$roleColumnList}", "roles:{$roleColumnList}"]);
+        $user?->loadMissing(["role:{$roleColumnList}", "roles:{$roleColumnList}", 'branch:id,name,branch_code']);
 
         $employee = null;
         $activeMovement = null;
@@ -196,6 +196,11 @@ class HandleInertiaRequests extends Middleware
                     'employee_id' => $user->employee_id,
                     'account_type' => $user->account_type,
                     'branch_id' => $user->branch_id,
+                    'branch' => $user->branch ? [
+                        'id' => $user->branch->id,
+                        'name' => $user->branch->name,
+                        'branch_code' => $user->branch->branch_code,
+                    ] : null,
                     'is_department_head' => $user->isDepartmentHead(),
                     'blocked_sections' => $user->effectiveBlockedSections(),
                     'role' => $this->rolePayload($primaryRole),

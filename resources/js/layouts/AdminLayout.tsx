@@ -31,6 +31,7 @@ import {
     Package,
     PanelLeft,
     Settings,
+    ShieldCheck,
     SlidersHorizontal,
     User,
     Users,
@@ -129,7 +130,7 @@ import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { HR_REPORT_NAV, hrReportPath } from '@/lib/hr-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
-import { hasAppPermission, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
+import { getRoleBadgeStyle, hasAppPermission, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { useNavLayout } from '@/lib/nav-layout';
@@ -418,6 +419,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         return Array.from(set);
     }, [auth?.user?.role, auth?.user?.roles]);
 
+    const primaryRoleName = auth?.user?.role?.name || (allRoleNames.length > 0 ? allRoleNames[0] : null);
+    const branchName = auth?.user?.branch?.name || employee?.branch?.name;
+    const departmentName = employee?.department?.name;
+    const branchOrDeptName = [departmentName, branchName].filter(Boolean).join(' • ');
+
     // Check if user has multiple roles (ekadhik role)
     const hasMultipleRoles = allRoleNames.length > 1;
 
@@ -541,6 +547,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 employeeOnly: true,
                 submenu: [
                     { title: 'PF Ledger', path: '/employee/staff-fund/pf-ledger' },
+                    { title: 'Security Fund', path: '/employee/staff-fund/security-fund' },
                     { title: 'Gratuity', path: '/employee/staff-fund/gratuity' },
                 ],
             },
@@ -1072,7 +1079,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     }
 
                     // Staff-fund register links must not highlight on sibling sub-routes.
-                    const staffFundExactPaths = ['/provident-fund', '/gratuity'];
+                    const staffFundExactPaths = ['/provident-fund', '/gratuity', '/security-fund'];
                     if (staffFundExactPaths.includes(pathBase)) {
                         return currentPath === pathBase;
                     }
@@ -1788,15 +1795,32 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </nav>
                     </div>
 
-                    {/* Sidebar Footer - Logout */}
-                    <div className="shrink-0 border-t border-slate-200 p-4">
+                    {/* Sidebar Footer - User summary & Logout */}
+                    <div className="shrink-0 border-t border-slate-200 p-3">
+                        {isSidebarOpen && (
+                            <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50/80 p-2 border border-slate-100">
+                                <Avatar className="h-7 w-7 border border-slate-200 shrink-0">
+                                    <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
+                                    <AvatarFallback className="bg-emerald-600 text-[10px] font-bold text-white">
+                                        {getInitials(auth.user.name)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-1 leading-tight">
+                                    <p className="truncate text-xs font-bold text-slate-700">{auth.user.name}</p>
+                                    <p className="truncate text-[10px] font-semibold text-emerald-700">
+                                        {branchAccount ? 'Branch Account' : (primaryRoleName || 'User')}
+                                        {allRoleNames.length > 1 && !branchAccount && ` (+${allRoleNames.length - 1})`}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                         <Link
                             href="/logout"
                             method="post"
                             as="button"
                             title={!isSidebarOpen ? 'Sign Out' : undefined}
                             className={`flex items-center text-[13px] font-medium tracking-wide text-red-600 transition-all duration-200 hover:bg-red-50 hover:text-red-700 ${
-                                isSidebarOpen ? 'w-full gap-3 rounded-lg px-3 py-2.5' : 'mx-auto h-11 w-11 justify-center rounded-xl'
+                                isSidebarOpen ? 'w-full gap-3 rounded-lg px-3 py-2' : 'mx-auto h-11 w-11 justify-center rounded-xl'
                             }`}
                         >
                             <LogOut className="h-[18px] w-[18px]" />
@@ -1861,6 +1885,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </div>
 
                         <div className="shrink-0 border-t border-slate-200 p-4 md:hidden">
+                            <div className="mb-3 flex items-center gap-2.5 rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                                <Avatar className="h-8 w-8 border border-slate-200 shrink-0">
+                                    <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
+                                    <AvatarFallback className="bg-emerald-600 text-xs font-bold text-white">
+                                        {getInitials(auth.user.name)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-1 leading-tight">
+                                    <p className="truncate text-xs font-bold text-slate-800">{auth.user.name}</p>
+                                    <p className="truncate text-[11px] font-semibold text-emerald-700">
+                                        {branchAccount ? 'Branch Account' : (primaryRoleName || 'User')}
+                                        {allRoleNames.length > 1 && !branchAccount && ` (+${allRoleNames.length - 1})`}
+                                    </p>
+                                </div>
+                            </div>
                             <Link
                                 href="/logout"
                                 method="post"
@@ -1992,15 +2031,100 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                     {getInitials(auth.user.name)}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <div className="hidden pr-1 text-left leading-tight sm:block">
-                                                <p className="text-[13px] font-bold tracking-wide text-slate-700">{auth.user.name}</p>
-                                                <p className="text-[11px] font-medium text-slate-500">{auth.user.email}</p>
+                                            <div className="hidden pr-1 text-left leading-tight sm:block max-w-[190px]">
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="truncate text-[13px] font-bold tracking-wide text-slate-800">{auth.user.name}</p>
+                                                    {branchAccount ? (
+                                                        <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.2 text-[9px] font-bold text-amber-700 ring-1 ring-amber-500/20 shrink-0">
+                                                            Branch
+                                                        </span>
+                                                    ) : primaryRoleName ? (
+                                                        <span
+                                                            className={cn(
+                                                                "inline-flex items-center rounded-md px-1.5 py-0.2 text-[9px] font-semibold ring-1 shrink-0",
+                                                                getRoleBadgeStyle(primaryRoleName).bg,
+                                                                getRoleBadgeStyle(primaryRoleName).text,
+                                                                getRoleBadgeStyle(primaryRoleName).ring,
+                                                            )}
+                                                        >
+                                                            {primaryRoleName}
+                                                        </span>
+                                                    ) : null}
+                                                    {allRoleNames.length > 1 && !branchAccount && (
+                                                        <span
+                                                            title={allRoleNames.join(', ')}
+                                                            className="inline-flex items-center rounded-md bg-indigo-50 px-1 py-0.2 text-[9px] font-bold text-indigo-700 ring-1 ring-indigo-500/20 shrink-0"
+                                                        >
+                                                            +{allRoleNames.length - 1}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="truncate text-[11px] font-medium text-slate-500">{auth.user.email}</p>
                                             </div>
                                             <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-xl shadow-slate-200/50">
-                                        <DropdownMenuLabel className="text-[13px] font-bold text-slate-700">My Account</DropdownMenuLabel>
+                                    <DropdownMenuContent align="end" className="w-72 rounded-xl border-slate-200 shadow-xl shadow-slate-200/50 p-1">
+                                        {/* User Identity Header Card */}
+                                        <div className="rounded-lg bg-slate-50/90 p-3 border border-slate-100/80 mb-1">
+                                            <div className="flex items-center gap-2.5">
+                                                <Avatar className="h-9 w-9 border-2 border-white shadow-xs ring-1 ring-slate-200 shrink-0">
+                                                    <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
+                                                    <AvatarFallback className="bg-emerald-600 text-xs font-bold text-white">
+                                                        {getInitials(auth.user.name)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-xs font-bold text-slate-800">{auth.user.name}</p>
+                                                    <p className="truncate text-[11px] text-slate-500">{auth.user.email}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-2.5 pt-2 border-t border-slate-200/60">
+                                                <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase mb-1.5">
+                                                    {branchAccount ? 'Account Type' : allRoleNames.length > 1 ? 'Assigned Roles' : 'Role'}
+                                                </p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {branchAccount ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-500/20">
+                                                            <Building2 className="h-3 w-3 text-amber-600" />
+                                                            Branch Account {branchName ? `(${branchName})` : ''}
+                                                        </span>
+                                                    ) : allRoleNames.length > 0 ? (
+                                                        allRoleNames.map((roleName) => {
+                                                            const style = getRoleBadgeStyle(roleName);
+                                                            return (
+                                                                <span
+                                                                    key={roleName}
+                                                                    className={cn(
+                                                                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold border shadow-2xs",
+                                                                        style.bg,
+                                                                        style.text,
+                                                                        style.border
+                                                                    )}
+                                                                >
+                                                                    <ShieldCheck className="h-2.5 w-2.5 opacity-70" />
+                                                                    {roleName}
+                                                                </span>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                                            Standard User
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {branchOrDeptName && !branchAccount && (
+                                                    <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-500">
+                                                        <Building2 className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                                                        <span className="truncate">{branchOrDeptName}</span>
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <DropdownMenuSeparator className="bg-slate-100 my-1" />
                                         <DropdownMenuItem
                                             asChild
                                             className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"

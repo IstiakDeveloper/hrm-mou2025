@@ -52,6 +52,9 @@ export type ClearanceRecord = {
     gratuity_amount?: string | number | null;
     gratuity_remarks?: string | null;
     staff_security?: string | number | null;
+    staff_security_interest?: string | number | null;
+    security_interest_as_of?: string | null;
+    security_fund_snapshot?: { account_id?: number | null } | null;
     staff_security_remarks?: string | null;
     other_payable?: string | number | null;
     other_payable_remarks?: string | null;
@@ -178,7 +181,11 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
         ['Unpaid Salary and other admissible benefits amount (TK)', clearance.unpaid_salary, clearance.unpaid_salary_remarks],
         ['Provident Fund Amount (TK)', clearance.pf_amount, clearance.pf_remarks],
         ['Gratuity Fund Amount (TK)', clearance.gratuity_amount, clearance.gratuity_remarks],
-        ['Staff Security Amount (TK)', clearance.staff_security, clearance.staff_security_remarks],
+        [clearance.security_fund_snapshot ? 'Staff Security Principal (TK)' : 'Staff Security Amount (TK)', clearance.staff_security, clearance.staff_security_remarks],
+        ...(clearance.security_fund_snapshot || Number(clearance.staff_security_interest ?? 0) > 0 ? [[
+            'Staff Security Interest — 6% yearly (TK)', clearance.staff_security_interest,
+            clearance.security_interest_as_of ? `Through ${dateText(clearance.security_interest_as_of)}` : '',
+        ] as [string, unknown, string | null | undefined]] : []),
         ['Others Amount or If Any (TK)', clearance.other_payable, clearance.other_payable_remarks],
     ];
 
@@ -347,7 +354,7 @@ export default function ClearanceFormDocument({ clearance }: { clearance: Cleara
                                 <tr key={rowLabel}>
                                     <td className={td} colSpan={2}>{rowLabel} :</td>
                                     <td className={td} />
-                                    <td className={`${td} ${shade} text-right font-mono`}>{money(amount)}</td>
+                                    <td className={`${td} ${shade} text-right font-mono`}>{rowLabel.startsWith('Staff Security Interest') ? Number(amount ?? 0).toLocaleString('en-BD', { maximumFractionDigits: 0 }) : money(amount)}</td>
                                     <td className={td}>{text(remarks)}</td>
                                 </tr>
                             ))}

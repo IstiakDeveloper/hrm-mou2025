@@ -1017,10 +1017,11 @@ export default function EmployeeShow({
                             </Section>
 
                             <Section title="Security & Collateral" icon={<ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />}>
+                                <a href="/security-fund?section=staff-fund" className="mb-2 block text-sm font-semibold text-emerald-700 underline">Open Security Fund for current principal and 6% yearly interest</a>
                                 {employee.collateral ? (
                                     <div className="space-y-0.5">
                                         <DataItem label="Certificate" value={employee.collateral.has_certificate ? <span className="text-emerald-800 font-bold">Submitted</span> : 'No'} />
-                                        <DataItem label="Security Amount" value={employee.collateral.security_amount ? formatCurrency(employee.collateral.security_amount) : ''} />
+                                        <DataItem label="Legacy Security Amount" value={employee.collateral.security_amount ? formatCurrency(employee.collateral.security_amount) : ''} />
                                         <DataItem label="Interest Rate" value={employee.collateral.collateral_interest ? `${employee.collateral.collateral_interest}%` : ''} />
                                         <DataItem label="Collateral Date" value={employee.collateral.collateral_date ? formatOptionalDate(employee.collateral.collateral_date) : ''} />
                                     </div>

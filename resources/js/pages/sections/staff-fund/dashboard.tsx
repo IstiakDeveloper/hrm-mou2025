@@ -43,6 +43,10 @@ type Props = {
         gratuityEligibleEmployees: number;
         gratuityPaymentRecords: number;
         gratuityPendingApproval: number;
+        securityPrincipal: number;
+        securityInterest: number;
+        securityTotal: number;
+        securityReviewCount: number;
     };
     userRole: string;
     showEmployeeTab?: boolean;
@@ -137,6 +141,11 @@ export default function StaffFundDashboard({ stats, userRole, showEmployeeTab: s
 
     const adminDashboardBody = (
         <>
+                <section className="mb-4 grid gap-3 rounded-lg border border-emerald-200 bg-white p-4 sm:grid-cols-3">
+                    <Link href={staffFundPath('/security-fund')}><p className="text-xs text-slate-500">Security Fund principal</p><p className="text-lg font-bold text-emerald-800">৳{Number(stats.securityPrincipal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p></Link>
+                    <Link href={staffFundPath('/security-fund/interest')}><p className="text-xs text-slate-500">Security Fund interest · 6% yearly</p><p className="text-lg font-bold text-emerald-800">৳{Number(stats.securityInterest).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p></Link>
+                    <div><p className="text-xs text-slate-500">Security Fund total payable</p><p className="text-lg font-bold text-emerald-800">৳{Number(stats.securityTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>{stats.securityReviewCount > 0 && <p className="text-xs text-amber-700">{stats.securityReviewCount} account(s) excluded pending date review</p>}</div>
+                </section>
                 {/* Stat Summaries Grid - Highly compact, organized */}
                 <section className="mb-5">
                     <div className="flex items-center gap-1 mb-2">

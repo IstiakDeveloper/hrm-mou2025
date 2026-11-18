@@ -15,6 +15,13 @@ interface StaffFundLayoutProps {
 export default function StaffFundLayout({ children, title, description, activeTab }: StaffFundLayoutProps) {
     const navItems = [
         {
+            group: 'Security Fund', icon: Coins,
+            items: [
+                { id: 'security-register', label: 'Register', href: '/security-fund' },
+                { id: 'security-interest', label: 'Interest', href: '/security-fund/interest' },
+            ],
+        },
+        {
             group: 'PF',
             icon: Landmark,
             items: [
