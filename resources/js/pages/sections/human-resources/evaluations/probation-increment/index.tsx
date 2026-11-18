@@ -34,7 +34,7 @@ import {
     UserCheck,
     TrendingUp
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDisplayDate } from '@/lib/display-date';
 
 interface ProbationIncrementEvaluationIndexProps {
     evaluations: any;
@@ -521,7 +521,7 @@ export default function ProbationIncrementEvaluationIndex({
                                                         {getFormTypeBadge(item.form_type)}
                                                     </TableCell>
                                                     <TableCell className="text-xs text-slate-600 font-medium">
-                                                        {item.probation_3m_completion_date ? formatNum(item.probation_3m_completion_date) : '-'}
+                                                        {item.probation_3m_completion_date ? formatNum(formatDisplayDate(item.probation_3m_completion_date)) : '-'}
                                                     </TableCell>
                                                     <TableCell className="text-center">
                                                         <span className="text-xs font-extrabold text-slate-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
@@ -664,7 +664,7 @@ export default function ProbationIncrementEvaluationIndex({
                                                         {lang === 'bn' ? '০৩ মাস পূর্তির তারিখ' : '03M Completion'}
                                                     </span>
                                                     <span className="font-semibold text-slate-700">
-                                                        {item.probation_3m_completion_date ? formatNum(item.probation_3m_completion_date) : '-'}
+                                                        {item.probation_3m_completion_date ? formatNum(formatDisplayDate(item.probation_3m_completion_date)) : '-'}
                                                     </span>
                                                 </div>
                                                 <div className="text-center">
