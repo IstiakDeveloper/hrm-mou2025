@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import StaffFundLayout from '@/layouts/StaffFundLayout';
 import { Button } from '@/components/ui/button';
@@ -79,6 +79,7 @@ export default function SecurityFundLedger({
 }: Props) {
     const [mode, setMode] = useState<'deposit' | 'refund' | null>(null);
     const [reverseId, setReverseId] = useState<number | null>(null);
+    const [page, setPage] = useState(1);
 
     const form = useForm({
         amount: '',
@@ -92,9 +93,21 @@ export default function SecurityFundLedger({
 
     const reversal = useForm({ reason: '' });
 
-    let principalPaisa = 0;
-    let interestPaisa = 0;
-    const reversed = new Set(transactions.map((tx) => tx.reversal_of_id).filter(Boolean));
+    const reversed = useMemo(() => new Set(transactions.map((tx) => tx.reversal_of_id).filter(Boolean)), [transactions]);
+    const ledgerRows = useMemo(() => {
+        let principalPaisa = 0;
+        let interestPaisa = 0;
+        return transactions.map((transaction) => {
+            principalPaisa += Math.round(Number(transaction.principal_credit) * 100) - Math.round(Number(transaction.principal_debit) * 100);
+            interestPaisa += Math.round(Number(transaction.interest_credit) * 100) - Math.round(Number(transaction.interest_debit) * 100);
+            return { transaction, principalPaisa, interestPaisa };
+        });
+    }, [transactions]);
+    useEffect(() => setPage(1), [transactions]);
+    const pageSize = 30;
+    const pageCount = Math.max(1, Math.ceil(ledgerRows.length / pageSize));
+    const currentPage = Math.min(page, pageCount);
+    const visibleRows = ledgerRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     const handleAsOfChange = (dateVal: string) => {
         router.get(
@@ -264,7 +277,13 @@ export default function SecurityFundLedger({
                         )}
                     </div>
 
-                    {snapshot.eligibility_stopped && Number(snapshot.pending_principal) > 0 && (
+                    {snapshot.review_required && (
+                        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                            {snapshot.review_required}
+                        </div>
+                    )}
+
+                    {!snapshot.interest_calculation_deferred && snapshot.eligibility_stopped && Number(snapshot.pending_principal) > 0 && (
                         <div
                             role="alert"
                             className="flex items-start gap-2.5 rounded-lg border border-amber-250 bg-amber-50 p-2.5 text-xs text-amber-900 shadow-2xs"
@@ -322,14 +341,7 @@ export default function SecurityFundLedger({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {transactions.map((tx) => {
-                                        principalPaisa +=
-                                            Math.round(Number(tx.principal_credit) * 100) -
-                                            Math.round(Number(tx.principal_debit) * 100);
-                                        interestPaisa +=
-                                            Math.round(Number(tx.interest_credit) * 100) -
-                                            Math.round(Number(tx.interest_debit) * 100);
-
+                                    {visibleRows.map(({ transaction: tx, principalPaisa, interestPaisa }) => {
                                         const isReversed = reversed.has(tx.id);
 
                                         return (
@@ -432,6 +444,14 @@ export default function SecurityFundLedger({
                                     )}
                                 </TableBody>
                             </Table>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t px-3 py-2 text-xs text-zinc-600">
+                            <span>{transactions.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, transactions.length)} of {transactions.length} transactions</span>
+                            <div className="flex items-center gap-2">
+                                <Button type="button" variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</Button>
+                                <span>Page {currentPage} of {pageCount}</span>
+                                <Button type="button" variant="outline" size="sm" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Next</Button>
+                            </div>
                         </div>
                     </Card>
 

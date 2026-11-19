@@ -68,7 +68,9 @@ class EmployeeSecurityFundService
             $employee->resignation_date?->toDateString(),
         ]);
         if ($employee->status !== 'active' && $cutoffs === []) {
-            $separated = $employee->separations()->where('status', 'completed')->orderByDesc('separation_date')->value('separation_date');
+            $separated = $employee->relationLoaded('separations')
+                ? $employee->separations->where('status', 'completed')->sortByDesc('separation_date')->first()?->separation_date
+                : $employee->separations()->where('status', 'completed')->orderByDesc('separation_date')->value('separation_date');
             if (! $separated) {
                 return $this->deferredSnapshot($account, $asOf, $projectedTransactions);
             }

@@ -40,6 +40,7 @@ beforeEach(function () {
         $table->string('employee_id')->nullable();
         $table->string('pin')->nullable();
         $table->string('name_en')->nullable();
+        $table->string('name_bn')->nullable();
         $table->string('status')->default('active');
         $table->unsignedBigInteger('current_branch_id')->nullable();
         $table->unsignedBigInteger('department_id')->nullable();
@@ -879,4 +880,58 @@ test('unexpected import exceptions become visible file errors and preserve finan
         ->assertUnprocessable()->assertJsonValidationErrors('file');
     expect($response->json('errors.file.0'))->toContain('Reference:')->not->toContain('Simulated unreadable');
     expect(EmployeeSecurityFundTransaction::count())->toBe(0);
+});
+
+test('list calculations batch inactive separation lookups and omit per-deposit audit detail', function () {
+    $fund = app(EmployeeSecurityFundService::class);
+    for ($i = 0; $i < 15; $i++) {
+        $employee = securityImportEmployee('PERF-'.$i);
+        $account = securityAccount($employee, '2025-01-01');
+        $employee->update(['status' => 'inactive']);
+        Separation::create(['employee_id' => $employee->id, 'status' => 'completed', 'separation_date' => '2027-06-30']);
+    }
+    securityWebUser(['staff-fund.view']);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $response = test()->withHeader('X-Inertia', 'true')->get('/security-fund/interest?cutoff_date=2027-06-30')->assertOk()
+        ->assertJsonCount(15, 'props.rows')->assertJsonPath('props.summary.principal', '300000.00')
+        ->assertJsonPath('props.summary.unposted_interest', '18000.00');
+    $separationQueries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'from "separations"'));
+    DB::disableQueryLog();
+    expect($separationQueries)->toHaveCount(1)->and($response->json('props.rows.0'))->not->toHaveKey('segments');
+    expect($fund->accountSnapshot($account->fresh(), '2027-06-30')['segments'])->not->toBeEmpty();
+});
+
+test('ledger reuses dated transactions for its snapshot and creator details', function () {
+    $employee = securityEmployee();
+    $account = securityAccount($employee);
+    app(EmployeeSecurityFundService::class)->deposit($account, ['amount' => '10000', 'transaction_date' => '2027-07-01', 'idempotency_key' => 'later-ledger-deposit'], 1);
+    securityWebUser(['staff-fund.view']);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    test()->withHeader('X-Inertia', 'true')->get('/security-fund/'.$account->id.'/ledger?as_of=2027-06-30')->assertOk()
+        ->assertJsonCount(1, 'props.transactions')->assertJsonPath('props.snapshot.principal', '20000.00')
+        ->assertJsonPath('props.snapshot.interest', '1200.00')->assertJsonPath('props.transactions.0.creator.name', 'Accounts');
+    $transactionQueries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'from "employee_security_fund_transactions"'));
+    DB::disableQueryLog();
+    expect($transactionQueries)->toHaveCount(1)->and(EmployeeSecurityFundTransaction::count())->toBe(2);
+});
+
+test('bulk PDF download includes every account and uses compact A4 portrait pages', function () {
+    for ($i = 0; $i < 65; $i++) {
+        securityAccount(securityImportEmployee('PDF-'.$i));
+    }
+    securityWebUser(['staff-fund.view', 'reports.export']);
+    $response = test()->get('/security-fund/reports/pdf?as_of=2027-06-30')->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf')->assertHeader('Content-Disposition', 'attachment; filename="security-fund.pdf"');
+    $pdf = $response->getContent();
+    preg_match_all('/\/Type\s*\/Page\b/', $pdf, $pages);
+    preg_match('/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/', $pdf, $pageSize);
+    expect(substr($pdf, 0, 4))->toBe('%PDF')->and(count($pages[0]))->toBeGreaterThan(1)->toBeLessThan(20);
+    expect((float) $pageSize[1])->toEqualWithDelta(595.28, 1)
+        ->and((float) $pageSize[2])->toEqualWithDelta(841.89, 1);
+    expect(EmployeeSecurityFundTransaction::count())->toBe(65);
+    test()->withHeader('X-Inertia', 'true')->get('/security-fund/interest?cutoff_date=2027-06-30')->assertOk()
+        ->assertJsonCount(65, 'props.rows')->assertJsonPath('props.summary.principal', '1300000.00')
+        ->assertJsonPath('props.summary.unposted_interest', '78000.00');
 });

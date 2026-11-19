@@ -10,12 +10,12 @@ use App\Services\EmployeeSecurityFundService;
 use App\Services\OrganogramAccessService;
 use App\Support\BangladeshDate;
 use App\Support\SecurityFundMoney as Money;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Mpdf\Mpdf;
 use Shuchkin\SimpleXLSXGen;
 
 class SecurityFundController extends Controller
@@ -45,8 +45,13 @@ class SecurityFundController extends Controller
     private function rows(Request $request, string $asOf): array
     {
         $query = Account::query()->whereIn('employee_id', $this->employees($request)->select('id'))
-            ->with(['employee.branch', 'employee.department', 'transactions'])
-            ->whereDate('opened_on', '<=', $asOf);
+            ->with([
+                'employee:id,pin,name_en,name_bn,status,current_branch_id,department_id,dropout_date,resignation_date',
+                'employee.branch:id,name', 'employee.department:id,name',
+                'employee.separations' => fn ($query) => $query->where('status', 'completed')->select('id', 'employee_id', 'status', 'separation_date'),
+                'transactions:id,account_id,type,transaction_date,principal_credit,principal_debit,interest_credit,interest_debit,accrual_amount,reversal_of_id',
+            ])
+            ->where('opened_on', '<=', $asOf);
         if ($request->filled('account_id')) {
             $query->whereKey($request->integer('account_id'));
         }
@@ -72,7 +77,11 @@ class SecurityFundController extends Controller
                 'ledger_version' => $account->transactions->max('id'),
             ];
             try {
-                return array_merge($row, $this->fund->accountSnapshot($account, $asOf));
+                $snapshot = $this->fund->accountSnapshot($account, $asOf);
+                // Calculation details belong to the individual ledger/posting audit, not every list row.
+                unset($snapshot['segments']);
+
+                return array_merge($row, $snapshot);
             } catch (ValidationException $exception) {
                 return array_merge($row, ['status' => $account->status, 'review_required' => collect($exception->errors())->flatten()->first()]);
             }
@@ -169,12 +178,15 @@ class SecurityFundController extends Controller
     private function renderLedger(Request $request, Account $account, bool $selfService)
     {
         $asOf = $this->asOf($request);
-        $account->load(['employee.branch', 'transactions']);
+        $account->load([
+            'employee.branch',
+            'transactions' => fn ($query) => $query->with('creator:id,name')->where('transaction_date', '<=', $asOf)->orderBy('transaction_date')->orderBy('id'),
+        ]);
 
         return Inertia::render('staff-fund/security-fund/ledger', [
             'account' => ['id' => $account->id, 'status' => $account->status, 'pin' => $account->employee->pin, 'name' => $account->employee->name_en ?: $account->employee->name_bn, 'branch' => $account->employee->branch?->name],
             'snapshot' => $this->fund->accountSnapshot($account, $asOf),
-            'transactions' => $account->transactions()->with('creator:id,name')->whereDate('transaction_date', '<=', $asOf)->orderBy('transaction_date')->orderBy('id')->get(),
+            'transactions' => $account->transactions,
             'asOf' => $asOf, 'selfService' => $selfService,
             'canEdit' => ! $selfService && $request->user()->hasPermission('staff-fund.edit'),
             'canExport' => ! $selfService && $request->user()->hasPermission('reports.export'),
@@ -289,7 +301,22 @@ class SecurityFundController extends Controller
             return response($xlsx->__toString(), 200, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition' => 'attachment; filename="security-fund.xlsx"']);
         }
         if ($format === 'pdf') {
-            return Pdf::loadView('staff-fund.security-fund-report', $data)->setPaper('a4', 'landscape')->download('security-fund.pdf');
+            $tempDir = storage_path('app/private/security-fund/pdf-temp');
+            \Illuminate\Support\Facades\File::ensureDirectoryExists($tempDir);
+            $pdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'A4', 'orientation' => 'P', 'default_font' => 'dejavusans',
+                'default_font_size' => 7,
+                'margin_left' => 8, 'margin_right' => 8, 'margin_top' => 8, 'margin_bottom' => 12,
+                'tempDir' => $tempDir, 'simpleTables' => true, 'packTableData' => true,
+            ]);
+            $pdf->SetTitle('Security Fund Register');
+            $pdf->WriteHTML(view('staff-fund.security-fund-report', $data + ['pdfMode' => true])->render());
+
+            return response($pdf->Output('', 'S'), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="security-fund.pdf"',
+                'Cache-Control' => 'private, no-store',
+            ]);
         }
 
         return view('staff-fund.security-fund-report', $data);

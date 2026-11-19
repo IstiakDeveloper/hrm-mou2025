@@ -30,6 +30,7 @@ import {
     RotateCcw,
     Calendar,
     Sparkles,
+    X,
 } from 'lucide-react';
 import {
     fundDisplayDate,
@@ -51,6 +52,7 @@ type Props = {
         pin: string;
         name: string;
         branch?: string;
+        opened_on?: string;
         review_required?: string;
     })[];
     summary: FundSnapshot & { review_count: number; account_count?: number };
@@ -62,6 +64,7 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
     const [searchQuery, setSearchQuery] = useState('');
     const [filterTab, setFilterTab] = useState<'all' | 'eligible' | 'ineligible'>('all');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [page, setPage] = useState(1);
 
     const form = useForm({
         cutoff_date: cutoffDate,
@@ -118,6 +121,12 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
         });
     }, [rows, searchQuery, filterTab]);
 
+    useEffect(() => setPage(1), [searchQuery, filterTab, rows]);
+    const pageSize = 30;
+    const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+    const currentPage = Math.min(page, pageCount);
+    const visibleRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
     const handlePreviewSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         router.get(
@@ -155,7 +164,6 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
         canEdit &&
         !isCutoffChanged &&
         Number(summary.unposted_interest) > 0 &&
-        summary.review_count === 0 &&
         !form.processing;
 
     return (
@@ -205,7 +213,7 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
                                 {summary.review_count} Account(s) Require Date Correction Before Posting Interest
                             </p>
                             <p className="text-rose-700 text-[11px]">
-                                Accounts flagged with conflicting or unverified dates must be reviewed and resolved before interest can be posted to the ledger.
+                                Flagged accounts will be skipped. You can post interest for the other verified accounts; recorded principal remains included in totals.
                             </p>
                         </div>
                     </div>
@@ -414,7 +422,7 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredRows.map((row) => {
+                                {visibleRows.map((row) => {
                                     const hasNewInterest = Number(row.unposted_interest || 0) > 0;
                                     const projectedTotal =
                                         Number(row.principal || 0) +
@@ -526,6 +534,14 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
                                 )}
                             </TableBody>
                         </Table>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-t px-3 py-2 text-xs text-zinc-600">
+                        <span>{filteredRows.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, filteredRows.length)} of {filteredRows.length} accounts</span>
+                        <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</Button>
+                            <span>Page {currentPage} of {pageCount}</span>
+                            <Button type="button" variant="outline" size="sm" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Next</Button>
+                        </div>
                     </div>
                 </Card>
             </div>
