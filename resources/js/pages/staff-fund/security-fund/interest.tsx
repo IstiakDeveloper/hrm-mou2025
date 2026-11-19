@@ -30,7 +30,6 @@ import {
     RotateCcw,
     Calendar,
     Sparkles,
-    X,
 } from 'lucide-react';
 import {
     fundDisplayDate,
@@ -52,7 +51,6 @@ type Props = {
         pin: string;
         name: string;
         branch?: string;
-        opened_on?: string;
         review_required?: string;
     })[];
     summary: FundSnapshot & { review_count: number; account_count?: number };
@@ -157,6 +155,7 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
         canEdit &&
         !isCutoffChanged &&
         Number(summary.unposted_interest) > 0 &&
+        summary.review_count === 0 &&
         !form.processing;
 
     return (
@@ -206,7 +205,7 @@ export default function SecurityFundInterest({ cutoffDate, rows, summary, finger
                                 {summary.review_count} Account(s) Require Date Correction Before Posting Interest
                             </p>
                             <p className="text-rose-700 text-[11px]">
-                                Flagged accounts will be skipped. You can post interest for the other verified accounts; recorded principal remains included in totals.
+                                Accounts flagged with conflicting or unverified dates must be reviewed and resolved before interest can be posted to the ledger.
                             </p>
                         </div>
                     </div>

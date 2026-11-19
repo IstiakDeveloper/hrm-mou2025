@@ -229,7 +229,7 @@ export default function SecurityFundRegister({
                                 {summary.review_count} Account(s) Require Date Verification (তারিখ যাচাই প্রয়োজন)
                             </p>
                             <p className="text-amber-800 text-[11px]">
-                                Recorded principal is included where available. Interest awaiting date verification has not been added.
+                                These accounts have missing or invalid historical dates. Their amounts are excluded from fund totals until dates are corrected.
                             </p>
                         </div>
                     </div>
@@ -584,9 +584,7 @@ export default function SecurityFundRegister({
                                                 <span className="font-mono text-zinc-700">
                                                     {fundDisplayDate(fundInterestStart(row.opened_on))}
                                                 </span>
-                                                {row.review_required ? (
-                                                    <span className="text-[10px] text-amber-700">{row.review_required}</span>
-                                                ) : row.next_eligibility_date ? (
+                                                {row.next_eligibility_date ? (
                                                     <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded px-1.5 py-0.5 w-fit">
                                                         <Clock className="h-2.5 w-2.5" />
                                                         Qualifies {fundDisplayDate(row.next_eligibility_date)}
@@ -601,7 +599,7 @@ export default function SecurityFundRegister({
                                         </TableCell>
 
                                         {/* Financial Columns */}
-                                        {row.review_required && row.principal === undefined ? (
+                                        {row.review_required ? (
                                             <TableCell colSpan={4} className="py-2 px-3 text-amber-700 bg-amber-50/50">
                                                 <div className="flex items-center gap-1.5">
                                                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />

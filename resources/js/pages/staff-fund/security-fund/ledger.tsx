@@ -264,13 +264,7 @@ export default function SecurityFundLedger({
                         )}
                     </div>
 
-                    {snapshot.review_required && (
-                        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                            {snapshot.review_required}
-                        </div>
-                    )}
-
-                    {!snapshot.interest_calculation_deferred && snapshot.eligibility_stopped && Number(snapshot.pending_principal) > 0 && (
+                    {snapshot.eligibility_stopped && Number(snapshot.pending_principal) > 0 && (
                         <div
                             role="alert"
                             className="flex items-start gap-2.5 rounded-lg border border-amber-250 bg-amber-50 p-2.5 text-xs text-amber-900 shadow-2xs"
