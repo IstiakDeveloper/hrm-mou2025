@@ -26,6 +26,10 @@ class CheckPermission
             }
         }
 
+        if ($request->expectsJson() && $request->routeIs('security-fund.import.*')) {
+            return response()->json(['message' => 'You do not have permission to import Security Fund deposits. Contact your administrator.'], 403);
+        }
+
         return redirect()->route('error.403', [
             'permission' => $keys[0] ?? $permission,
             'reason' => 'missing_permission'

@@ -31,8 +31,8 @@ class EmployeeSecurityFundService
             if (! $legacy && $employee->status !== 'active') {
                 $this->fail('employee_id', 'Use the reviewed legacy import for inactive employees.');
             }
-            if ($employee->final_payment_date || SeparationFinalPayment::where('employee_id', $employee->id)->where('status', 'paid')->exists()) {
-                $this->fail('employee_id', 'This employee has a paid final payment. Reconcile the historical deposit first.');
+            if ($this->hasSettledSecurityFund($employee)) {
+                $this->fail('employee_id', 'This employee already has a paid Security Fund settlement.');
             }
             $date = $this->validDate($data['transaction_date']);
             $amount = $this->positive($data['amount']);
@@ -70,7 +70,7 @@ class EmployeeSecurityFundService
         if ($employee->status !== 'active' && $cutoffs === []) {
             $separated = $employee->separations()->where('status', 'completed')->orderByDesc('separation_date')->value('separation_date');
             if (! $separated) {
-                $this->fail('employee_id', 'Set a verified separation date before calculating this inactive employee’s Security Fund.');
+                return $this->deferredSnapshot($account, $asOf, $projectedTransactions);
             }
             $cutoffs[] = substr((string) $separated, 0, 10);
         }
@@ -91,9 +91,9 @@ class EmployeeSecurityFundService
         return array_merge($snapshot, ['account_id' => $account->id, 'status' => $account->status, 'eligibility_stopped' => $stopped]);
     }
 
-    public function deposit(Account $account, array $data, ?int $actor = null): Transaction
+    public function deposit(Account $account, array $data, ?int $actor = null, bool $legacy = false): Transaction
     {
-        return $this->withLockedAccount($account, function (Account $locked) use ($data, $actor) {
+        return $this->withLockedAccount($account, function (Account $locked) use ($data, $actor, $legacy) {
             if ($existing = $locked->transactions()->where('idempotency_key', $data['idempotency_key'])->first()) {
                 return $existing;
             }
@@ -102,8 +102,8 @@ class EmployeeSecurityFundService
             $this->assertUnpostedDate($locked, $date);
             $this->assertChronological($locked, $date);
             $employee = $locked->employee;
-            if ($employee->status !== 'active' || $employee->final_payment_date) {
-                $this->fail('amount', 'Deposits require an active employee without a paid final payment.');
+            if ((! $legacy && $employee->status !== 'active') || $this->hasSettledSecurityFund($employee)) {
+                $this->fail('amount', 'Use Excel import for inactive employees. An already settled Security Fund cannot receive deposits.');
             }
             $amount = $this->positive($data['amount']);
             $principal = Money::paisa($this->accountSnapshot($locked, $date)['principal']);
@@ -327,5 +327,41 @@ class EmployeeSecurityFundService
         $reversedIds = Transaction::where('account_id', $account->id)->whereNotNull('reversal_of_id')->select('reversal_of_id');
 
         return $account->transactions()->where('type', '!=', 'reversal')->whereNotIn('id', $reversedIds);
+    }
+
+    private function hasSettledSecurityFund(Employee $employee): bool
+    {
+        // A legacy employee date or a paid PF/Gratuity record does not prove Security Fund payment.
+        return SeparationFinalPayment::where('employee_id', $employee->id)->where('status', 'paid')
+            ->whereNotNull('security_fund_account_id')->exists();
+    }
+
+    private function deferredSnapshot(Account $account, string $asOf, array $projectedTransactions): array
+    {
+        $transactions = $account->relationLoaded('transactions') ? $account->transactions : $account->transactions()->get();
+        $principal = $interest = $accrual = 0;
+        foreach (array_merge($transactions->all(), $projectedTransactions) as $transaction) {
+            $row = is_array($transaction) ? $transaction : $transaction->getAttributes();
+            if (substr((string) $row['transaction_date'], 0, 10) > $asOf) {
+                continue;
+            }
+            $principal += Money::paisa($row['principal_credit'] ?? 0) - Money::paisa($row['principal_debit'] ?? 0);
+            $interest += Money::paisa($row['interest_credit'] ?? 0) - Money::paisa($row['interest_debit'] ?? 0);
+            $accrual += Money::paisa($row['accrual_amount'] ?? 0);
+        }
+        if ($principal < 0 || $interest < 0) {
+            $this->fail('account', 'Security Fund ledger needs reconciliation.');
+        }
+
+        return [
+            'account_id' => $account->id, 'status' => $account->status,
+            'principal' => Money::decimal($principal), 'posted_interest' => Money::decimal($interest),
+            'unposted_interest' => '0.00', 'interest' => Money::decimal($interest), 'total' => Money::decimal($principal + $interest),
+            'earned_interest' => Money::decimal($accrual), 'posted_accrual' => Money::decimal($accrual),
+            'eligible_principal' => '0.00', 'pending_principal' => Money::decimal($principal), 'next_eligibility_date' => null,
+            'as_of_date' => $asOf, 'eligibility_as_of' => null, 'interest_as_of' => null, 'eligibility_stopped' => true,
+            'annual_rate' => config('security_fund.annual_rate'), 'policy_version' => config('security_fund.policy_version'), 'segments' => [],
+            'interest_calculation_deferred' => true, 'review_required' => 'Deposit recorded. Confirm the separation date to calculate interest; no unverified interest has been added.',
+        ];
     }
 }

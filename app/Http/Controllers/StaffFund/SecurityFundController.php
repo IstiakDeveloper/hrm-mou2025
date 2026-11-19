@@ -115,8 +115,8 @@ class SecurityFundController extends Controller
     {
         $request->validate(['search' => 'nullable|string|max:100']);
         $search = trim((string) $request->input('search', ''));
-        $rows = $this->employees($request)->where('status', 'active')->whereNull('final_payment_date')
-            ->whereDoesntHave('securityFundAccount')->whereDoesntHave('separationFinalPayments', fn ($q) => $q->where('status', 'paid'))
+        $rows = $this->employees($request)->where('status', 'active')
+            ->whereDoesntHave('securityFundAccount')->whereDoesntHave('separationFinalPayments', fn ($q) => $q->where('status', 'paid')->whereNotNull('security_fund_account_id'))
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('pin', 'like', "%{$search}%")->orWhere('name_en', 'like', "%{$search}%")->orWhere('name_bn', 'like', "%{$search}%")->orWhere('employee_id', 'like', "%{$search}%")))
             ->with(['branch:id,name', 'designation:id,name'])->orderBy('pin')->limit(30)->get();
 
@@ -244,15 +244,15 @@ class SecurityFundController extends Controller
             if (! hash_equals($data['fingerprint'], $preview['fingerprint'])) {
                 throw ValidationException::withMessages(['fingerprint' => 'The fund changed. Preview again before posting.']);
             }
-            if ($preview['summary']['review_count'] > 0) {
-                throw ValidationException::withMessages(['cutoff_date' => 'Resolve the flagged account dates before posting.']);
-            }
             foreach ($preview['rows'] as $row) {
+                if (isset($row['review_required'])) {
+                    continue;
+                }
                 $this->fund->postInterest(Account::findOrFail($row['id']), $preview['cutoffDate'], 'batch-'.$data['idempotency_key'].'-'.$row['id'], $request->user()->id);
             }
         });
 
-        return back()->with('success', 'Security Fund interest posted. Previously posted interest was excluded.');
+        return back()->with('success', 'Security Fund interest posted for verified accounts. Accounts awaiting date verification were skipped. Previously posted interest was excluded.');
     }
 
     public function report(Request $request, string $format)

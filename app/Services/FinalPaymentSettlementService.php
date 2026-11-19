@@ -232,6 +232,11 @@ class FinalPaymentSettlementService
                     );
                 }
 
+                if (! $employee->getRawOriginal('dropout_date') && ! $employee->getRawOriginal('resignation_date')
+                    && $employee->securityFundAccount()->exists()) {
+                    throw ValidationException::withMessages(['separation_date' => 'Confirm the employee separation date before calculating and paying the Security Fund. The imported deposit is already recorded.']);
+                }
+
                 $separationDate = trim((string) (
                     $employee->getRawOriginal('dropout_date')
                     ?: $employee->getRawOriginal('resignation_date')
@@ -322,6 +327,9 @@ class FinalPaymentSettlementService
                 ->orderBy('id')->lockForUpdate()->get();
 
             $this->refreshSnapshot($finalPayment, $employee);
+            if ($finalPayment->breakdown['security_fund']['interest_calculation_deferred'] ?? false) {
+                throw ValidationException::withMessages(['separation_date' => 'Confirm the employee separation date before paying the Security Fund.']);
+            }
             if ($paymentDate->toDateString() > \App\Support\BangladeshDate::todayString()
                 || $paymentDate->lt(Carbon::parse($separation->separation_date))) {
                 throw ValidationException::withMessages(['payment_date' => 'Payment date must be on or after separation and no later than today.']);

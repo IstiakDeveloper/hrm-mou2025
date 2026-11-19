@@ -102,6 +102,13 @@ use Inertia\Inertia;
     // ====================
     Route::middleware(['permission:staff-fund.view'])->group(function () {
         Route::prefix('security-fund')->name('security-fund.')->controller(\App\Http\Controllers\StaffFund\SecurityFundController::class)->group(function () {
+            Route::prefix('import')->name('import.')->middleware('permission:staff-fund.create,staff-fund.edit')->controller(\App\Http\Controllers\StaffFund\SecurityFundImportController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/template', 'template')->name('template');
+                Route::post('/', 'store')->name('store');
+                Route::get('/{id}/failures', 'failures')->name('failures');
+                Route::get('/{id}', 'results')->name('results');
+            });
             Route::get('/', 'index')->name('index');
             Route::get('/employees/lookup', 'lookup')->name('employees.lookup')->middleware('permission:staff-fund.create');
             Route::post('/', 'store')->name('store')->middleware('permission:staff-fund.create');

@@ -489,3 +489,394 @@ test('a later settlement failure rolls back the Security Fund debit and interest
         expect(EmployeeSecurityFundTransaction::count())->toBe(1);
     }
 });
+
+function securityImportFile(array $rows, array $headers = ['PIN', 'Name', 'Deposit Date', 'Amount']): \Illuminate\Http\UploadedFile
+{
+    $values = array_map(fn ($row) => array_map(fn ($cell) => "\0".(string) $cell, $row), array_merge([$headers], $rows));
+
+    return \Illuminate\Http\UploadedFile::fake()->createWithContent('security-deposits.xlsx', (string) \Shuchkin\SimpleXLSXGen::fromArray($values));
+}
+
+function securityImportEmployee(string $pin): Employee
+{
+    $employee = securityEmployee();
+    $employee->update(['pin' => $pin, 'employee_id' => 'EMP-'.$pin, 'name_en' => 'Saved Employee '.$pin]);
+
+    return $employee;
+}
+
+function securityModifyImportFile(\Illuminate\Http\UploadedFile $file, callable $modify): \Illuminate\Http\UploadedFile
+{
+    $path = tempnam(sys_get_temp_dir(), 'sf-xlsx-test-');
+    copy($file->getRealPath(), $path);
+    try {
+        $zip = new ZipArchive;
+        $zip->open($path);
+        $modify($zip);
+        $zip->close();
+
+        return \Illuminate\Http\UploadedFile::fake()->createWithContent('modified.xlsx', file_get_contents($path));
+    } finally {
+        unlink($path);
+    }
+}
+
+test('Excel upload links by PIN, preserves employee names and reports unmatched rows', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $employee = securityImportEmployee('00123');
+    securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $response = test()->post('/security-fund/import', ['file' => securityImportFile([
+        ['00123', 'Name from Excel', '2026-05-20', '20,000.00'],
+        ['99999', 'Unmatched Name', '2026-05-20', '5000'],
+    ])])->assertRedirect();
+    $url = $response->headers->get('Location');
+    test()->withHeader('X-Inertia', 'true')->get($url.'&status=all')->assertOk()
+        ->assertJsonPath('props.result.imported', 1)->assertJsonPath('props.result.failed', 1)->assertJsonPath('props.result.skipped', 0)
+        ->assertJsonPath('props.rows.data.0.pin', '00123')->assertJsonPath('props.rows.data.0.employee_name', 'Saved Employee 00123')
+        ->assertJsonPath('props.rows.data.1.status', 'failed');
+    expect($employee->fresh()->name_en)->toBe('Saved Employee 00123');
+    expect(EmployeeSecurityFundAccount::first()->employee_id)->toBe($employee->id);
+    expect(EmployeeSecurityFundTransaction::first()->principal_credit)->toBe('20000.00');
+    expect(app(EmployeeSecurityFundService::class)->snapshot($employee, '2027-06-30')['interest'])->toBe('1200.00');
+    $path = parse_url($url, PHP_URL_PATH);
+    $failed = test()->get($path.'/failures')->assertOk();
+    $download = \Illuminate\Http\UploadedFile::fake()->createWithContent('failures.xlsx', $failed->getContent());
+    $rows = \App\Support\SimpleXlsxReader::sheetRows($download->getRealPath());
+    expect($rows[1][0])->toBe('99999')->and($rows[1][4])->toContain('PIN');
+});
+
+test('Excel template and upload permission are available only to fund writers', function () {
+    securityWebUser();
+    test()->get('/security-fund/import')->assertRedirect();
+    test()->post('/security-fund/import', ['file' => securityImportFile([['123', 'Name', '2026-05-20', '100']])])->assertRedirect();
+    expect(EmployeeSecurityFundAccount::count())->toBe(0);
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $template = test()->get('/security-fund/import/template')->assertOk();
+    $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('template.xlsx', $template->getContent());
+    expect(\App\Support\SimpleXlsxReader::sheetRows($file->getRealPath())[0])->toBe(['PIN', 'Name', 'Deposit Date', 'Amount']);
+});
+
+test('reuploading or repeating the same deposit cannot credit the fund twice', function () {
+    $employee = securityImportEmployee('PIN1');
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([
+        ['PIN1', 'Name A', '2026-05-20', '20000'],
+        ['pin1', 'Name B', '20/05/2026', '20,000.00'],
+    ]);
+    $service = app(\App\Services\SecurityFundExcelImportService::class);
+    $first = $service->import($file->getRealPath(), 'first.xlsx', $user);
+    $again = $service->import($file->getRealPath(), 'renamed.xlsx', $user);
+    expect($first['imported'])->toBe(1)->and($first['skipped'])->toBe(1);
+    expect($again['imported'])->toBe(0)->and($again['skipped'])->toBe(2);
+    expect(EmployeeSecurityFundTransaction::count())->toBe(1)
+        ->and(app(EmployeeSecurityFundService::class)->snapshot($employee)['principal'])->toBe('20000.00');
+});
+
+test('existing manual deposits are skipped and new imported top ups use edit permission', function () {
+    $employee = securityImportEmployee('PIN1');
+    securityAccount($employee);
+    $file = securityImportFile([['PIN1', 'Name', '2026-05-20', '20000'], ['PIN1', 'Name', '2026-08-01', '10000']]);
+    $service = app(\App\Services\SecurityFundExcelImportService::class);
+    $creator = securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $result = $service->import($file->getRealPath(), 'deposits.xlsx', $creator);
+    expect($result['skipped'])->toBe(1)->and($result['failed'])->toBe(1)->and($result['rows'][1]['message'])->toContain('edit permission');
+    $editor = securityWebUser(['staff-fund.view', 'staff-fund.edit']);
+    $result = $service->import($file->getRealPath(), 'deposits.xlsx', $editor);
+    expect($result['skipped'])->toBe(1)->and($result['imported'])->toBe(1);
+    expect(EmployeeSecurityFundTransaction::count())->toBe(2);
+});
+
+test('deposits in any Excel order are posted chronologically and results retain original row numbers', function () {
+    $employee = securityImportEmployee('PIN1');
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([['PIN1', 'Name', '2026-08-01', '10000'], ['PIN1', 'Name', '2026-05-20', '20000']]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'deposits.xlsx', $user);
+    expect($result['imported'])->toBe(2)->and($result['rows'][0]['row'])->toBe(2)->and($result['rows'][0]['deposit_date'])->toBe('2026-08-01');
+    expect(EmployeeSecurityFundTransaction::orderBy('id')->first()->transaction_date->toDateString())->toBe('2026-05-20');
+    expect(app(EmployeeSecurityFundService::class)->snapshot($employee, '2027-06-30')['interest'])->toBe('1200.00');
+});
+
+test('ambiguous PIN, employee ID substitutes and lost leading zeros are failed without guessing', function () {
+    securityImportEmployee('DUP');
+    securityImportEmployee('DUP');
+    securityImportEmployee('00123');
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([['DUP', 'Name', '2026-05-20', '100'], ['EMP-00123', 'Name', '2026-05-20', '100'], ['123', 'Name', '2026-05-20', '100']]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'deposits.xlsx', $user);
+    expect($result['failed'])->toBe(3)->and($result['rows'][0]['message'])->toContain('Multiple employees');
+    expect(EmployeeSecurityFundAccount::count())->toBe(0);
+});
+
+test('invalid Excel dates and amounts fail row by row while valid rows are retained', function () {
+    securityImportEmployee('PIN1');
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([
+        ['PIN1', 'Name', '2026-02-30', '100'], ['PIN1', 'Name', '31/02/2026', '100'],
+        ['PIN1', 'Name', '2099-01-01', '100'], ['PIN1', 'Name', '2026-05-20', '0'],
+        ['PIN1', 'Name', '2026-05-20', '-1'], ['PIN1', 'Name', '2026-05-20', '1.234'],
+        ['PIN1', '', '2026-05-20', '100'], ['PIN1', 'Name', '2026-05-20', '100.55'],
+    ]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'deposits.xlsx', $user);
+    expect($result['failed'])->toBe(7)->and($result['imported'])->toBe(1);
+    expect(EmployeeSecurityFundTransaction::first()->principal_credit)->toBe('100.55');
+});
+
+test('Excel serial dates and the 1904 workbook calendar are parsed correctly', function (bool $date1904) {
+    securityImportEmployee('PIN1');
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $base = $date1904 ? '1904-01-01' : '1899-12-30';
+    $serial = (int) Carbon::parse($base)->diffInDays(Carbon::parse('2026-05-20'));
+    $file = securityImportFile([['PIN1', 'Name', $serial, '100']]);
+    $file = securityModifyImportFile($file, function (ZipArchive $zip) use ($date1904, $serial) {
+        if ($date1904) {
+            $workbook = $zip->getFromName('xl/workbook.xml');
+            $workbook = preg_replace('/<workbookPr\b[^>]*\/?\s*>/', '<workbookPr date1904="1"/>', $workbook, 1, $count);
+            if (! $count) {
+                $workbook = str_replace('<sheets>', '<workbookPr date1904="1"/><sheets>', $workbook);
+            }
+            $zip->addFromString('xl/workbook.xml', $workbook);
+        }
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $sheet = preg_replace('/<c r="C2"[^>]*>.*?<\/c>/s', '<c r="C2"><v>'.$serial.'</v></c>', $sheet);
+        $zip->addFromString('xl/worksheets/sheet1.xml', $sheet);
+    });
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'dates.xlsx', $user);
+    expect($result['imported'])->toBe(1)->and($result['rows'][0]['deposit_date'])->toBe('2026-05-20');
+})->with([false, true]);
+
+test('formula cells fail and sparse worksheets retain the actual Excel row number', function () {
+    securityImportEmployee('PIN1');
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $file = securityImportFile([['PIN1', 'Name', '2026-05-20', '100']]);
+    $file = securityModifyImportFile($file, function (ZipArchive $zip) {
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $sheet = preg_replace('/<c r="D2"[^>]*>.*?<\/c>/s', '<c r="D2"><f>50+50</f><v>100</v></c>', $sheet);
+        $sheet = preg_replace('/r="([A-Z]*)2"/', 'r="${1}10"', $sheet);
+        $zip->addFromString('xl/worksheets/sheet1.xml', $sheet);
+    });
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'formula.xlsx', $user);
+    expect($result['failed'])->toBe(1)->and($result['rows'][0]['row'])->toBe(10)->and($result['rows'][0]['message'])->toContain('Formula');
+});
+
+test('invalid workbook headers reject the file before writing any deposits', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityImportEmployee('PIN1');
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    test()->post('/security-fund/import', ['file' => securityImportFile([['PIN1', 'Name', '2026-05-20', '100']], ['PIN', 'Name', 'Date', 'Amount'])])->assertSessionHasErrors('file');
+    expect(EmployeeSecurityFundTransaction::count())->toBe(0);
+    expect(\Illuminate\Support\Facades\Storage::disk('local')->allFiles())->toBe([]);
+});
+
+test('import result files are private to the uploading user', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityImportEmployee('PIN1');
+    $owner = securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $response = test()->post('/security-fund/import', ['file' => securityImportFile([['PIN1', 'Name', '2026-05-20', '100']])])->assertRedirect();
+    $url = parse_url($response->headers->get('Location'), PHP_URL_PATH);
+    $other = clone $owner;
+    $other->forceFill(['id' => 2]);
+    test()->actingAs($other);
+    test()->get($url)->assertNotFound();
+    test()->get($url.'/failures')->assertNotFound();
+});
+
+test('legacy payment dates allow import while closed accounts and posted periods remain protected', function () {
+    $closed = securityImportEmployee('CLOSED');
+    $closedAccount = securityAccount($closed);
+    $closedAccount->update(['status' => 'closed']);
+    $paid = securityImportEmployee('PAID');
+    $paid->update(['final_payment_date' => '2027-06-30']);
+    $posted = securityImportEmployee('POSTED');
+    $postedAccount = securityAccount($posted);
+    app(EmployeeSecurityFundService::class)->postInterest($postedAccount, '2027-05-31', 'import-test-interest', 1);
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([['CLOSED', 'Name', '2027-06-01', '100'], ['PAID', 'Name', '2026-05-20', '100'], ['POSTED', 'Name', '2027-05-01', '100']]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'protected.xlsx', $user);
+    expect($result['failed'])->toBe(2)->and($result['imported'])->toBe(1);
+    expect(EmployeeSecurityFundTransaction::count())->toBe(4);
+    expect($paid->fresh()->final_payment_date->toDateString())->toBe('2027-06-30');
+});
+
+test('inactive employees with no separation date import principal and top ups without inventing dates or interest', function () {
+    $employee = securityImportEmployee('1057');
+    $employee->update(['status' => 'inactive']);
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit', 'reports.export']);
+    $file = securityImportFile([
+        ['1057', 'Md. Hafizur Rahman', '11/10/2025', '20000'],
+        ['1057', 'Md. Hafizur Rahman', '11/11/2025', '5000'],
+    ]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'inactive.xlsx', $user);
+    expect($result['imported'])->toBe(2)->and($result['failed'])->toBe(0)
+        ->and($result['rows'][0]['message'])->toContain('Confirm the separation date');
+    $account = $employee->securityFundAccount()->firstOrFail();
+    $snapshot = app(EmployeeSecurityFundService::class)->accountSnapshot($account, '2027-06-30');
+    expect($snapshot['principal'])->toBe('25000.00')->and($snapshot['total'])->toBe('25000.00')
+        ->and($snapshot['interest'])->toBe('0.00')->and($snapshot['interest_as_of'])->toBeNull()
+        ->and($snapshot['interest_calculation_deferred'])->toBeTrue();
+    expect($employee->fresh()->dropout_date)->toBeNull()->and($employee->fresh()->resignation_date)->toBeNull()
+        ->and(Separation::count())->toBe(0)->and(SeparationFinalPayment::count())->toBe(0);
+    expect(app(EmployeeSecurityFundService::class)->postInterest($account, '2027-06-30', 'pending-date', 1))->toBeNull();
+    test()->withHeader('X-Inertia', 'true')->get('/security-fund?as_of=2027-06-30')->assertOk()
+        ->assertJsonPath('props.accounts.data.0.principal', '25000.00')->assertJsonPath('props.summary.principal', '25000.00')
+        ->assertJsonPath('props.summary.review_count', 1);
+    test()->get('/security-fund/'.$account->id.'/ledger?as_of=2027-06-30')->assertOk()
+        ->assertJsonPath('props.snapshot.interest_calculation_deferred', true);
+    test()->withHeader('X-Inertia', 'false')->get('/security-fund/reports/print?as_of=2027-06-30')->assertOk()
+        ->assertSee('25,000.00')->assertSee('unverified interest has not been added');
+    $employee->update(['dropout_date' => '2027-06-30']);
+    $verified = app(EmployeeSecurityFundService::class)->accountSnapshot($account->fresh(), '2027-06-30');
+    expect($verified['principal'])->toBe('25000.00')->and($verified['interest'])->toBe('1500.00')
+        ->and($verified)->not->toHaveKey('interest_calculation_deferred');
+});
+
+test('generic paid final payment does not block a separate Security Fund deposit', function () {
+    $employee = securityImportEmployee('0742');
+    $employee->update(['final_payment_date' => '2023-11-09']);
+    $separation = Separation::create(['employee_id' => $employee->id, 'separation_date' => '2023-11-08', 'status' => 'completed']);
+    $payment = SeparationFinalPayment::create(['employee_id' => $employee->id, 'separation_id' => $separation->id, 'status' => 'paid', 'net_payable' => 10000]);
+    $before = $payment->fresh()->getRawOriginal();
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $file = securityImportFile([['0742', 'Md. Firoz Islam', '02/07/2023', '20000']]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import(
+        $file->getRealPath(), 'legacy-date.xlsx', $user,
+    );
+    expect($result['imported'])->toBe(1)->and($employee->securityFundAccount()->first()->transactions()->first()->principal_credit)->toBe('20000.00')
+        ->and($payment->fresh()->getRawOriginal())->toBe($before)->and($employee->fresh()->status)->toBe('active');
+});
+
+test('active employee with a legacy final payment date remains selectable for manual creation', function () {
+    $employee = securityImportEmployee('0742');
+    $employee->update(['final_payment_date' => '2023-11-09']);
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    test()->getJson('/security-fund/employees/lookup')->assertOk()->assertJsonPath('0.pin', '0742');
+    test()->post('/security-fund', [
+        'employee_id' => $employee->id, 'amount' => '20000', 'transaction_date' => '2023-07-02',
+        'reference_no' => 'LEGACY-DATE-RECEIPT', 'notes' => 'Deposit independently verified by Accounts',
+        'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    expect($employee->securityFundAccount()->first()->transactions()->first()->principal_credit)->toBe('20000.00');
+});
+
+test('a paid Security Fund settlement still prevents another imported deposit', function () {
+    $employee = securityImportEmployee('SETTLED');
+    $account = securityAccount($employee);
+    $separation = Separation::create(['employee_id' => $employee->id, 'separation_date' => '2027-06-30', 'status' => 'completed']);
+    SeparationFinalPayment::create(['employee_id' => $employee->id, 'separation_id' => $separation->id, 'status' => 'paid', 'security_fund_account_id' => $account->id]);
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([['SETTLED', 'Name', '2027-07-01', '100']]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import(
+        $file->getRealPath(), 'settled.xlsx', $user,
+    );
+    expect($result['failed'])->toBe(1)->and($result['rows'][0]['message'])->toContain('settled Security Fund')
+        ->and(EmployeeSecurityFundTransaction::count())->toBe(1);
+});
+
+test('interest batches skip an undated inactive employee and post verified accounts', function () {
+    $verified = securityImportEmployee('VERIFIED');
+    securityAccount($verified);
+    $inactive = securityImportEmployee('INACTIVE');
+    $inactive->update(['status' => 'inactive']);
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create', 'staff-fund.edit']);
+    $file = securityImportFile([['INACTIVE', 'Name', '2025-01-01', '20000']]);
+    app(\App\Services\SecurityFundExcelImportService::class)->import(
+        $file->getRealPath(), 'inactive.xlsx', $user,
+    );
+    $preview = test()->postJson('/security-fund/interest/preview', ['cutoff_date' => '2027-06-30'])->assertOk()->json();
+    expect($preview['summary']['principal'])->toBe('40000.00')->and($preview['summary']['review_count'])->toBe(1);
+    test()->post('/security-fund/interest', ['cutoff_date' => '2027-06-30', 'fingerprint' => $preview['fingerprint'], 'idempotency_key' => (string) \Illuminate\Support\Str::uuid()])->assertRedirect()->assertSessionHasNoErrors();
+    expect(EmployeeSecurityFundTransaction::where('type', 'interest')->count())->toBe(1)
+        ->and($verified->securityFundAccount()->first()->transactions()->where('type', 'interest')->first()->interest_credit)->toBe('1200.00')
+        ->and($inactive->securityFundAccount()->first()->transactions()->count())->toBe(1);
+});
+
+test('imported Security Fund cannot create a final payment using an invented separation date', function () {
+    $employee = securityImportEmployee('UNDATED');
+    $employee->update(['status' => 'inactive', 'final_payment_date' => '2026-11-01']);
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $file = securityImportFile([['UNDATED', 'Name', '2025-01-01', '20000']]);
+    app(\App\Services\SecurityFundExcelImportService::class)->import(
+        $file->getRealPath(), 'inactive.xlsx', $user,
+    );
+    try {
+        app(FinalPaymentSettlementService::class)->generateForEmployee($employee, 1);
+        test()->fail('A verified separation date must be required.');
+    } catch (ValidationException $error) {
+        expect($error->getMessage())->toContain('Confirm the employee separation date');
+    }
+    expect(Separation::count())->toBe(0)->and(SeparationFinalPayment::count())->toBe(0)
+        ->and($employee->securityFundAccount()->first()->transactions()->count())->toBe(1);
+});
+
+test('Excel PIN matching respects the uploading users branch scope', function () {
+    $inside = securityImportEmployee('INSIDE');
+    $inside->update(['current_branch_id' => 10]);
+    $outside = securityImportEmployee('OUTSIDE');
+    $outside->update(['current_branch_id' => 20]);
+    $user = securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $user->forceFill(['account_type' => 'branch', 'branch_id' => 10]);
+    $file = securityImportFile([['INSIDE', 'Name', '2026-05-20', '100'], ['OUTSIDE', 'Name', '2026-05-20', '100']]);
+    $result = app(\App\Services\SecurityFundExcelImportService::class)->import($file->getRealPath(), 'branches.xlsx', $user);
+    expect($result['imported'])->toBe(1)->and($result['failed'])->toBe(1)
+        ->and(EmployeeSecurityFundAccount::first()->employee_id)->toBe($inside->id);
+});
+
+test('empty or malformed Excel files cannot create deposits', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    test()->post('/security-fund/import', ['file' => securityImportFile([])])->assertSessionHasErrors('file');
+    test()->post('/security-fund/import', ['file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('broken.xlsx', 'not a workbook')])->assertSessionHasErrors('file');
+    expect(EmployeeSecurityFundTransaction::count())->toBe(0);
+});
+
+test('JSON upload returns a complete receipt immediately and refresh restores failed reasons', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityImportEmployee('PIN1');
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $response = test()->post('/security-fund/import', ['file' => securityImportFile([
+        ['PIN1', 'Name', '2026-05-20', '100'], ['MISSING', 'Name', '2026-05-20', '100'],
+    ])], ['Accept' => 'application/json'])->assertCreated()
+        ->assertJsonPath('result.total', 2)->assertJsonPath('result.imported', 1)->assertJsonPath('result.failed', 1)
+        ->assertJsonPath('result.state', 'complete')->assertJsonCount(2, 'result.rows');
+    expect($response->json('result.rows.1.message'))->toContain('PIN');
+    expect($response->json('result'))->not->toHaveKey('user_id');
+    test()->withHeader('X-Inertia', 'true')->get('/security-fund/import')->assertOk()
+        ->assertJsonPath('props.result.id', $response->json('result.id'))
+        ->assertJsonPath('props.status', 'failed')->assertJsonPath('props.rows.data.0.pin', 'MISSING');
+});
+
+test('zero-match JSON upload returns all failed rows instead of an empty success', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    test()->post('/security-fund/import', ['file' => securityImportFile([['MISSING', 'Name', '2026-05-20', '100']])], ['Accept' => 'application/json'])
+        ->assertCreated()->assertJsonPath('result.imported', 0)->assertJsonPath('result.failed', 1)
+        ->assertJsonPath('result.rows.0.status', 'failed');
+    expect(EmployeeSecurityFundTransaction::count())->toBe(0);
+});
+
+test('file errors are delivered as JSON with the actual missing columns', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $response = test()->post('/security-fund/import', ['file' => securityImportFile([
+        ['PIN1', 'Name', '2026-05-20', '100'],
+    ], ['PIN', 'Name', 'Date', 'Amount'])], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('file');
+    expect($response->json('errors.file.0'))->toContain('Missing columns: Deposit Date')->toContain('Found: PIN, Name, Date, Amount');
+    expect(EmployeeSecurityFundTransaction::count())->toBe(0);
+});
+
+test('JSON imports report permission failures instead of redirecting without a result', function () {
+    securityWebUser(['staff-fund.view']);
+    test()->post('/security-fund/import', [], ['Accept' => 'application/json'])->assertForbidden()
+        ->assertJsonPath('message', 'You do not have permission to import Security Fund deposits. Contact your administrator.');
+});
+
+test('unexpected import exceptions become visible file errors and preserve financial records', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $importer = Mockery::mock(\App\Services\SecurityFundExcelImportService::class);
+    $importer->shouldReceive('import')->once()->andThrow(new RuntimeException('Simulated unreadable server state'));
+    app()->instance(\App\Services\SecurityFundExcelImportService::class, $importer);
+    $response = test()->post('/security-fund/import', ['file' => securityImportFile([['PIN1', 'Name', '2026-05-20', '100']])], ['Accept' => 'application/json'])
+        ->assertUnprocessable()->assertJsonValidationErrors('file');
+    expect($response->json('errors.file.0'))->toContain('Reference:')->not->toContain('Simulated unreadable');
+    expect(EmployeeSecurityFundTransaction::count())->toBe(0);
+});

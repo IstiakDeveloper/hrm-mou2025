@@ -117,10 +117,9 @@ class SecurityFundInterestCalculator
         if ($heldUntil->lt($lot['maturity'])) {
             return 0;
         }
-        $start = $lot['date']->copy()->max(BangladeshDate::parseStartOfDay(config('security_fund.effective_date')));
-        if ($start->day !== 1) {
-            $start->startOfMonth()->addMonth();
-        }
+        // The entire deposit month is excluded, including deposits made on its first day.
+        $start = $lot['date']->copy()->startOfMonth()->addMonth()
+            ->max(BangladeshDate::parseStartOfDay(config('security_fund.effective_date')));
         // Returned portions must have remained deposited for the whole earning month.
         $end = $endExclusive->copy()->startOfMonth();
         $months = max(0, ($end->year - $start->year) * 12 + $end->month - $start->month);

@@ -7,8 +7,8 @@ Implemented on 18 November 2026 in this workspace and its configured MySQL datab
 - Staff Fund now contains Security Fund Register and Interest screens.
 - Create selects an existing active employee and records the deposit, receipt/reference and notes. One account per employee; retries cannot duplicate deposits.
 - Only Security Fund principal earns **6% annual simple interest from 1 July 2026**. PF contribution/interest rules and Gratuity eligibility tiers are unchanged.
-- **Current policy (v2): each deposit must be held for one calendar year from its original deposit date.** Before that anniversary, its payable/postable interest is zero. After qualification, eligible complete months are counted retrospectively, starting no earlier than 1 July 2026. Top-ups have their own original dates and anniversaries.
-- Only **complete calendar months** earn interest, at `principal × 6% ÷ 12 × full months`. A partial initial deposit month is excluded. A departure on **30 December** counts through **30 November**; 31 December includes December. Leap years do not change the monthly rate. The actual departure date determines one-year eligibility separately from the last completed interest month.
+- **Current policy (v3): each deposit must be held for one calendar year from its original deposit date.** Before that anniversary, its payable/postable interest is zero. After qualification, eligible complete months are counted retrospectively from the first day of the month following the deposit, starting no earlier than 1 July 2026. The deposit month is always excluded, including deposits made on its first day. Top-ups have their own original dates and anniversaries.
+- Only **complete calendar months** earn interest, at `principal × 6% ÷ 12 × full months`. For example, a 15 September 2026 deposit qualifies on 15 September 2027 and receives interest from 1 October 2026 through 31 August 2027 at that time. A departure on **30 December** counts through **30 November**; 31 December includes December. Leap years do not change the monthly rate. The actual departure date determines one-year eligibility separately from the last completed interest month.
 - Interest never becomes interest-bearing principal. Cash held as posted or accrued interest earns no further interest.
 - Register, ledger, dashboard, Financial Statement, Final Payment and Clearance show principal and interest separately. Register supports employee, status, branch, department and as-of filters.
 - Interest preview/posting excludes previously posted accrual. Posting, reversals, refunds and final settlement use employee/account locks and unique request/source keys.
@@ -26,12 +26,39 @@ Implemented on 18 November 2026 in this workspace and its configured MySQL datab
 | `/security-fund?section=staff-fund` | Register, Create, filters, totals and print/PDF/Excel |
 | `/security-fund/{account}/ledger?section=staff-fund` | Deposits, refunds, transaction history, actor, reversal, balances and ledger exports |
 | `/security-fund/interest?section=staff-fund` | Preview and post interest through a selected cutoff |
+| `/security-fund/import?section=staff-fund` | Download template, upload Excel deposits, view row results and download failed rows |
 | `/employee/staff-fund/security-fund?section=staff-fund` | Authenticated employee's own read-only ledger |
 | Existing Final Payment / Clearance | Principal, interest, cutoff and linked settlement |
 | Existing Financial Statement / Waiting List | Security Fund components in screen/print/export |
 | Existing mobile Staff Fund summary | Separate Security Fund principal, interest, total and cutoff |
 
 Existing `staff-fund.view/create/edit` permissions and organizational employee scope are enforced. PDF/Excel export requires `reports.export`. Ordinary employee self-service cannot choose another employee's ledger. Profile Create/Edit directs money changes to the fund ledger; profile/V2 requests cannot bypass that ledger by changing legacy money fields.
+
+## Excel deposit import
+
+The Register's **Excel Import** button opens the upload screen. Download the template, fill the first worksheet with **PIN, Name, Deposit Date, Amount**, then upload the `.xlsx` file (maximum 2,000 deposit rows / 10 MB).
+
+- Matching uses only the employee PIN, within the user's organizational scope. Names are reference data; importing never changes employee names. Keep PIN as Excel Text to preserve leading zeros. Multiple employees sharing a PIN fail rather than selecting one arbitrarily.
+- Valid rows are recorded while invalid/unmatched rows receive individual failed reasons. An empty or malformed workbook or missing required header rejects the file before deposits are written.
+- A new account needs `staff-fund.create`; adding to an existing account needs `staff-fund.edit`. A matched employee can receive an Excel deposit regardless of active/inactive status or a legacy final-payment date. A generic paid PF/Gratuity record does not prove Security Fund payment. Closed accounts, actual paid Security Fund settlements and already posted periods remain protected by the ledger service.
+- Inactive employees without a verified separation date can import principal. Their ledger, register and reports include that principal, mark interest as awaiting date verification, and add no unverified interest. Correcting the separation date automatically restores the normal calculation. Interest batches skip flagged accounts and post other verified accounts. Final payment cannot invent a separation date for these accounts.
+- Multiple rows for one employee are processed in date order. Existing or repeated employee/date/amount deposits are **Skipped**, including repeated uploads under another filename. This four-column format cannot distinguish two separate receipts with identical employee/date/amount; record such an exceptional second receipt through the normal deposit screen with its own reference.
+- Accepted dates are YYYY-MM-DD, DD/MM/YYYY (also day-first dash/dot separators), or native Excel serial dates, including 1904-calendar workbooks. Impossible/future dates, nonpositive amounts, excess decimal places and formula cells fail with a reason. Paste formula results as values first.
+- The result screen provides total/imported/failed/skipped counts, physical Excel row numbers, matched employee names, ledger links, pagination and result filters. **Download Failed Rows** produces a retryable `.xlsx` file with the four original columns plus Failed Reason; successful rows are excluded.
+- Results are stored privately under the uploading user's ID and a UUID. Another user cannot open or download the report. The upload itself is temporary; no new schema or database migration is required.
+- Imported deposits use the existing ledger service and retain the confirmed 6% annual, one-year, full-month and whole-taka interest rules.
+
+Import verification: **99 tests / 464 assertions** passed across Security Fund and existing PF/Gratuity/Clearance/Waiting List regression suites, including real `.xlsx` uploads, failures export, duplicate retries, date systems, strict PIN matching, authorization and report privacy.
+
+### Import feedback fix — 19 November 2026
+
+Upload now requests a JSON receipt directly instead of treating an Inertia redirect as proof of success. The file is cleared only after a complete receipt (counts plus row results) is received. File validation errors, missing headers (including the actual found/missing columns), permission/session failures, oversized requests, server errors, malformed responses and connection timeouts produce visible feedback. A timeout does not claim that no rows were written; users can check their last saved result before retrying.
+
+Zero-import, all-duplicate and partial-success results have explicit summary banners. Failed rows are selected first when failures exist, and new receipts scroll into view. The latest completed import ID is retained in the user's session so refreshing the import screen restores the saved result. Saved reports remain private to their uploader. Unexpected server-side exceptions include a logged reference ID and a visible recovery message.
+
+Updated backend regression verification: **104 tests / 506 assertions passed**. Production build passed; TypeScript comparison found no new diagnostics.
+
+Headless Chrome verified 11 feedback scenarios: missing file, missing headers, all failed, all skipped, partial success, forbidden permission, expired session, oversized request, server failure, invalid response and lost connection. Each displayed an explicit message; partial results selected failed rows first and the All filter restored the other rows. Browser testing used simulated responses with zero financial writes and no page errors.
 
 ## Database and legacy data
 
@@ -63,6 +90,9 @@ Import is idempotent. It quarantines missing dates, ambiguous legacy interest, d
 Posted transactions are corrected with linked reversals in reverse order. Closed final settlements cannot be deleted through the legacy delete path. Rehiring/reopening a closed account or reconstructing unknown historical deposits requires reviewed accounting evidence; no balance or deposit is invented automatically.
 
 ## Verification
+
+- 19 November 2026 import correction: PIN `0742` had a legacy profile final-payment date but no actual Final Payment record; PIN `1057` was inactive without a departure date. Both user-supplied deposits (BDT 20,000 each; 2 July 2023 and 11 October 2025 respectively) were imported through the normal PIN-matching service. The latter retains principal with interest deferred pending a verified departure date. Whole-table fingerprints confirmed employees, collaterals, PF transactions/runs, Gratuity payments, separations, Final Payments and Clearances were unchanged. Evidence: ignored `storage/app/security-fund-import-status-repair-verification.json`.
+- The import correction passed **116 tests / 576 assertions**, the production build and a headless Chrome check of principal visibility, deferred-date messaging, eligibility labels, interest posting availability for verified accounts and the mobile register. Browser checks made no financial writes and had zero page errors.
 
 - **84 automated tests / 366 assertions passed**, using an isolated in-memory SQLite database. Coverage includes one-year deposit anniversaries, December 30/31 departures, partial initial/final months, separate top-up maturity, early-refund forfeiture, exact-anniversary refunds, same-day month-end final settlement, whole-taka cumulative rounding, no compounding, duplicate posting/payment, stale previews, legacy import/paid protection, permissions, employee isolation, controller routes, PDF/Excel, full Clearance approval and transaction rollback after a later recovery failure.
 - Existing PF interest distribution, PF correction/transfer, Gratuity, Clearance and Waiting List regression suites passed.

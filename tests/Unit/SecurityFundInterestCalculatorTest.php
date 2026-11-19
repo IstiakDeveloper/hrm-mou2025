@@ -28,7 +28,7 @@ test('the day before the first anniversary is ineligible even at a financial yea
     $calculator = app(SecurityFundInterestCalculator::class);
     $transactions = [securityPrincipal('2026-07-01', '20000')];
     expect($calculator->calculate($transactions, '2027-06-30')['interest'])->toBe('0.00');
-    expect($calculator->calculate($transactions, '2027-07-01')['interest'])->toBe('1200.00');
+    expect($calculator->calculate($transactions, '2027-07-01')['interest'])->toBe('1100.00');
 });
 
 test('partial deposit months are excluded and top ups mature independently', function () {
@@ -39,7 +39,7 @@ test('partial deposit months are excluded and top ups mature independently', fun
     $result = $calculator->calculate($rows, '2027-06-30');
     expect($result['interest'])->toBe('1200.00')->and($result['pending_principal'])->toBe('10000.00')
         ->and($result['next_eligibility_date'])->toBe('2028-01-01');
-    expect($calculator->calculate($rows, '2028-01-01')['interest'])->toBe('2400.00');
+    expect($calculator->calculate($rows, '2028-01-01')['interest'])->toBe('2350.00');
 });
 
 test('returned portions held under a year forfeit interest but remaining principal can mature', function () {
@@ -96,7 +96,21 @@ test('leap years use calendar anniversaries and the same monthly rate', function
     $rows = [securityPrincipal('2028-02-29', '20000')];
     expect($calculator->calculate($rows, '2029-02-27')['interest'])->toBe('0.00');
     expect($calculator->calculate($rows, '2029-02-28')['interest'])->toBe('1200.00');
-    expect($calculator->calculate([securityPrincipal('2027-07-01', '20000')], '2028-07-01')['interest'])->toBe('1200.00');
+    expect($calculator->calculate([securityPrincipal('2027-07-01', '20000')], '2028-07-01')['interest'])->toBe('1100.00');
+});
+
+test('every deposit starts earning next month including deposits on day one', function (string $deposit, string $expectedStart) {
+    $result = app(SecurityFundInterestCalculator::class)->calculate([securityPrincipal($deposit, '20000')], '2028-01-31');
+    expect($result['segments'][0]['start'])->toBe($expectedStart);
+})->with([
+    ['2026-06-01', '2026-07-01'], ['2026-07-01', '2026-08-01'], ['2026-07-15', '2026-08-01'],
+    ['2026-07-31', '2026-08-01'], ['2026-12-01', '2027-01-01'],
+]);
+
+test('September deposit receives retrospective October interest when it qualifies next September', function () {
+    $result = app(SecurityFundInterestCalculator::class)->calculate([securityPrincipal('2026-09-15', '20000')], '2027-09-15');
+    expect($result['interest'])->toBe('1100.00')->and($result['segments'][0]['start'])->toBe('2026-10-01')
+        ->and($result['interest_as_of'])->toBe('2027-08-31');
 });
 
 test('reversing a deposit does not reset the maturity date of other deposits', function () {
