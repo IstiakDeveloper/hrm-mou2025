@@ -33,6 +33,7 @@ interface ShowProps {
     reasonCategoryLabels: Record<string, string>;
     currentUserId: number;
     isSuperAdmin: boolean;
+    isExecutiveDirector?: boolean;
 }
 
 export default function ResignationApplicationShow({
@@ -46,9 +47,13 @@ export default function ResignationApplicationShow({
     currentStageLabel,
     reasonCategoryLabels,
     isSuperAdmin,
+    isExecutiveDirector,
 }: ShowProps) {
     const [approvalModalOpen, setApprovalModalOpen] = useState(false);
     const employee = application.employee || {};
+
+    const isEdStage = application.status === 'submitted_to_ed';
+    const canDirectApprove = Boolean(isExecutiveDirector || isSuperAdmin) && !['approved', 'rejected', 'draft'].includes(application.status);
 
     const handleDelete = () => {
         if (confirm('আপনি কি নিশ্চিত যে এই অব্যাহতির আবেদনটি মুছে ফেলতে চান?')) {
@@ -136,18 +141,18 @@ export default function ResignationApplicationShow({
                         )}
 
                         {/* Review / Approve Action Button */}
-                        {canReview && (
+                        {(canReview || canDirectApprove) && (
                             <Button
                                 size="sm"
                                 onClick={() => setApprovalModalOpen(true)}
                                 className={`h-9 gap-1.5 text-xs shadow-sm ${
-                                    isEdStage 
+                                    isEdStage || canDirectApprove
                                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
                                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                                 }`}
                             >
                                 <UserCheck className="h-4 w-4" />
-                                {isEdStage ? 'চূড়ান্ত সিদ্ধান্ত গ্রহণ (ED)' : 'সুপারিশ ও স্বাক্ষর করুন'}
+                                {isEdStage || canDirectApprove ? 'চূড়ান্ত সিদ্ধান্ত গ্রহণ (ED)' : 'সুপারিশ ও স্বাক্ষর করুন'}
                             </Button>
                         )}
 
@@ -203,6 +208,7 @@ export default function ResignationApplicationShow({
                 open={approvalModalOpen}
                 onClose={() => setApprovalModalOpen(false)}
                 isEd={isEdStage}
+                canDirectApprove={canDirectApprove}
                 userHasSignature={userHasSignature}
             />
         </AdminLayout>

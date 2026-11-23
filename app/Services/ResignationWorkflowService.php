@@ -152,8 +152,12 @@ class ResignationWorkflowService
 
     public function isExecutiveDirector(User $user): bool
     {
-        $roleNames = OrganogramAccessService::mergedRoleNames($user);
-        if (in_array('Executive Director', $roleNames, true) || OrganogramAccessService::isExecutiveDirector($user)) {
+        $roleNames = array_map(fn ($r) => strtolower(trim((string) $r)), OrganogramAccessService::mergedRoleNames($user));
+        if (in_array('executive director', $roleNames, true) || OrganogramAccessService::isExecutiveDirector($user)) {
+            return true;
+        }
+
+        if ($user->hasPermission('organogram.executive_director') || $user->hasDirectPermission('organogram.executive_director')) {
             return true;
         }
 
@@ -186,12 +190,24 @@ class ResignationWorkflowService
             return false;
         }
 
-        // User who already signed cannot review again in the same cycle
+        // Check if user already signed ED decision stage
+        $alreadySignedEd = $application->signatures
+            ->where('user_id', $user->id)
+            ->where('stage', 'ed')
+            ->whereIn('action', ['approved', 'rejected'])
+            ->isNotEmpty();
+
+        // User who already signed cannot review again in the same cycle (unless Super Admin or ED at ED stage)
         $alreadySigned = $application->signatures
             ->where('user_id', $user->id)
             ->whereIn('action', ['submitted', 'forwarded', 'approved'])
             ->isNotEmpty();
-        if ($alreadySigned && ! $user->isSuperAdmin()) {
+
+        if ($status === 'submitted_to_ed' && ($this->isExecutiveDirector($user) || $user->isSuperAdmin())) {
+            if ($alreadySignedEd) {
+                return false;
+            }
+        } elseif ($alreadySigned && ! $user->isSuperAdmin()) {
             return false;
         }
 
@@ -424,7 +440,9 @@ class ResignationWorkflowService
     public function edApprove(ResignationApplication $application, User $user, string $comments, bool $isApproved, ?string $effectiveDate = null): void
     {
         DB::transaction(function () use ($application, $user, $comments, $isApproved, $effectiveDate) {
-            $finalEffectiveDate = $effectiveDate ? Carbon::parse($effectiveDate) : $application->effective_date;
+            $finalEffectiveDate = $effectiveDate 
+                ? Carbon::parse($effectiveDate)->toDateString() 
+                : ($application->effective_date ? Carbon::parse($application->effective_date)->toDateString() : now()->toDateString());
 
             $application->signatures()->create([
                 'user_id' => $user->id,
@@ -454,21 +472,43 @@ class ResignationWorkflowService
     public function syncToSeparation(ResignationApplication $application, User $actorUser): ?Separation
     {
         if ($application->separation_id) {
-            return $application->separation;
+            $sep = Separation::find($application->separation_id);
+            if ($sep) {
+                return $sep;
+            }
         }
 
-        $effectiveDate = $application->approved_effective_date ?? $application->effective_date;
-        $categoryLabel = ResignationApplication::reasonCategoryLabels()[$application->reason_category] ?? $application->reason_category;
+        $effectiveDate = $application->approved_effective_date 
+            ?? $application->effective_date 
+            ?? now()->toDateString();
+            
+        $categoryLabel = ResignationApplication::reasonCategoryLabels()[$application->reason_category] ?? $application->reason_category ?? 'Resignation';
 
-        $separation = Separation::create([
-            'employee_id' => $application->employee_id,
-            'separation_date' => $effectiveDate,
-            'type_of_separation' => 'Resignation',
-            'cause_of_separation' => $categoryLabel,
-            'reason' => $application->reason_detail ?? 'Employee resignation application approved by Executive Director (App: '.$application->application_no.')',
-            'status' => 'approved',
-            'approved_by' => $actorUser->id,
-        ]);
+        // Check if an existing separation record already exists for this employee
+        $separation = Separation::where('employee_id', $application->employee_id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->latest()
+            ->first();
+
+        if ($separation) {
+            $separation->update([
+                'separation_date' => $effectiveDate,
+                'type_of_separation' => 'Resignation',
+                'cause_of_separation' => $categoryLabel,
+                'status' => 'approved',
+                'approved_by' => $actorUser->id,
+            ]);
+        } else {
+            $separation = Separation::create([
+                'employee_id' => $application->employee_id,
+                'separation_date' => $effectiveDate,
+                'type_of_separation' => 'Resignation',
+                'cause_of_separation' => $categoryLabel,
+                'reason' => $application->reason_detail ?? 'Employee resignation application approved by Executive Director (App: '.$application->application_no.')',
+                'status' => 'approved',
+                'approved_by' => $actorUser->id,
+            ]);
+        }
 
         $application->separation_id = $separation->id;
         $application->save();

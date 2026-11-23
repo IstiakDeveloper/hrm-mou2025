@@ -111,14 +111,23 @@ class ResignationApplicationController extends Controller
 
         $applications = $query->latest()->paginate($perPage)->withQueryString();
 
-        $applications->getCollection()->transform(function (ResignationApplication $app) use ($user) {
+        $isEdUser = $user->isSuperAdmin() || $this->workflowService->isExecutiveDirector($user);
+
+        $applications->getCollection()->transform(function (ResignationApplication $app) use ($user, $isEdUser) {
             $hasSigned = $app->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-            $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $app);
+            $hasSignedEd = $app->signatures->where('user_id', $user->id)->where('stage', 'ed')->whereIn('action', ['approved', 'rejected'])->isNotEmpty();
+
+            if ($isEdUser && ! in_array($app->status, ['approved', 'rejected', 'draft'], true)) {
+                $canReview = ! $hasSignedEd;
+            } else {
+                $canReview = (! $hasSigned || $user->isSuperAdmin()) && $this->workflowService->canUserReview($user, $app);
+            }
+
             $sentBackSig = $app->signatures->where('action', 'sent_back')->last();
             $isInitiator = (int) $app->initiator_id === (int) $user->id || ((int) $app->employee_id === (int) $user->employee_id);
 
             $app->can_review = $canReview;
-            $app->can_approve = $canReview && $app->status === 'submitted_to_ed';
+            $app->can_approve = $canReview && ($app->status === 'submitted_to_ed' || $isEdUser);
             $app->can_edit = in_array($app->status, ['draft', 'sent_back'], true) && ($isInitiator || $user->isSuperAdmin());
             $app->can_delete = $app->status === 'draft' && ($isInitiator || $user->isSuperAdmin());
             $app->has_user_signed = $hasSigned;
@@ -322,15 +331,31 @@ class ResignationApplicationController extends Controller
             'signatures.user.employee.designation',
         ]);
 
-        $hasSigned = $resignationApplication->signatures->where('user_id', $user->id)->whereIn('action', ['forwarded', 'submitted', 'approved'])->isNotEmpty();
-        $canReview = ! $hasSigned && $this->workflowService->canUserReview($user, $resignationApplication);
+        $isEdUser = $user->isSuperAdmin() || $this->workflowService->isExecutiveDirector($user);
+        $hasSignedEd = $resignationApplication->signatures
+            ->where('user_id', $user->id)
+            ->where('stage', 'ed')
+            ->whereIn('action', ['approved', 'rejected'])
+            ->isNotEmpty();
+
+        $hasSigned = $resignationApplication->signatures
+            ->where('user_id', $user->id)
+            ->whereIn('action', ['forwarded', 'submitted', 'approved'])
+            ->isNotEmpty();
+
+        if ($isEdUser && ! in_array($resignationApplication->status, ['approved', 'rejected', 'draft'], true)) {
+            $canReview = ! $hasSignedEd;
+        } else {
+            $canReview = (! $hasSigned || $user->isSuperAdmin()) && $this->workflowService->canUserReview($user, $resignationApplication);
+        }
+
         $isInitiator = (int) $resignationApplication->initiator_id === (int) $user->id
             || ((int) $resignationApplication->employee_id === (int) $user->employee_id);
 
         return Inertia::render('sections/human-resources/resignation/show', [
             'application' => $resignationApplication,
             'canReview' => $canReview,
-            'canApprove' => $canReview && $resignationApplication->status === 'submitted_to_ed',
+            'canApprove' => $canReview && ($resignationApplication->status === 'submitted_to_ed' || $isEdUser),
             'canEdit' => in_array($resignationApplication->status, ['draft', 'sent_back'], true) && ($isInitiator || $user->isSuperAdmin()),
             'canDelete' => $resignationApplication->status === 'draft' && ($isInitiator || $user->isSuperAdmin()),
             'hasUserSigned' => $hasSigned,
@@ -339,6 +364,7 @@ class ResignationApplicationController extends Controller
             'reasonCategoryLabels' => ResignationApplication::reasonCategoryLabels(),
             'currentUserId' => $user->id,
             'isSuperAdmin' => $user->isSuperAdmin(),
+            'isExecutiveDirector' => $isEdUser,
         ]);
     }
 
@@ -439,25 +465,37 @@ class ResignationApplicationController extends Controller
     {
         $user = $request->user();
 
+        if (in_array($resignationApplication->status, ['approved', 'rejected'], true)) {
+            return back()->with('error', 'আবেদনটি ইতিমধ্যে ' . ($resignationApplication->status === 'approved' ? 'অনুমোদিত' : 'বাতিল') . ' করা হয়েছে।');
+        }
+
         if (! $user->hasSignature()) {
             return back()->with('error', 'অনুমোদন প্রক্রিয়া সম্পন্ন করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর আপলোড করা আবশ্যক।');
         }
 
-        if (! $this->workflowService->canUserReview($user, $resignationApplication)) {
+        $canReview = $user->isSuperAdmin() || $this->workflowService->isExecutiveDirector($user) || $this->workflowService->canUserReview($user, $resignationApplication);
+        if (! $canReview) {
             return back()->with('error', 'আপনি এই আবেদনটি পর্যালোচনা বা অগ্রায়নের অনুমতিপ্রাপ্ত নন।');
         }
 
         $validated = $request->validate([
             'comments' => 'required|string|max:3000',
             'recommended_date' => 'nullable|date',
+        ], [
+            'comments.required' => 'মন্তব্য বা সুপারিশ প্রদান করা আবশ্যক।',
         ]);
 
-        $this->workflowService->forward(
-            $resignationApplication,
-            $user,
-            $validated['comments'],
-            $validated['recommended_date'] ?? null
-        );
+        try {
+            $this->workflowService->forward(
+                $resignationApplication,
+                $user,
+                $validated['comments'],
+                $validated['recommended_date'] ?? null
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Resignation forward failed: ' . $e->getMessage());
+            return back()->with('error', 'অগ্রায়ন সম্পন্ন করা সম্ভব হয়নি: ' . $e->getMessage());
+        }
 
         return back()->with('success', 'আবেদনটি সফলভাবে পরবর্তী পর্যালোচকের নিকট অগ্রায়ন করা হয়েছে।');
     }
@@ -466,15 +504,27 @@ class ResignationApplicationController extends Controller
     {
         $user = $request->user();
 
-        if (! $this->workflowService->canUserReview($user, $resignationApplication)) {
+        if (in_array($resignationApplication->status, ['approved', 'rejected'], true)) {
+            return back()->with('error', 'আবেদনটি ইতিমধ্যে চূড়ান্ত নিষ্পত্তি করা হয়েছে।');
+        }
+
+        $canReview = $user->isSuperAdmin() || $this->workflowService->isExecutiveDirector($user) || $this->workflowService->canUserReview($user, $resignationApplication);
+        if (! $canReview) {
             return back()->with('error', 'আপনি এই আবেদনটি ফেরত পাঠানোর অনুমতিপ্রাপ্ত নন।');
         }
 
         $validated = $request->validate([
             'comments' => 'required|string|max:3000',
+        ], [
+            'comments.required' => 'ফেরত পাঠানোর কারণ বা প্রয়োজনীয় সংশোধনের বিবরণ প্রদান করা আবশ্যক।',
         ]);
 
-        $this->workflowService->sendBack($resignationApplication, $user, $validated['comments']);
+        try {
+            $this->workflowService->sendBack($resignationApplication, $user, $validated['comments']);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Resignation sendBack failed: ' . $e->getMessage());
+            return back()->with('error', 'ফেরত পাঠানো সম্ভব হয়নি: ' . $e->getMessage());
+        }
 
         return back()->with('success', 'আবেদনটি সংশোধনের জন্য ফেরত পাঠানো হয়েছে।');
     }
@@ -483,27 +533,42 @@ class ResignationApplicationController extends Controller
     {
         $user = $request->user();
 
+        if (in_array($resignationApplication->status, ['approved', 'rejected'], true)) {
+            return back()->with('error', 'আবেদনটি ইতিমধ্যে ' . ($resignationApplication->status === 'approved' ? 'অনুমোদিত' : 'বাতিল') . ' করা হয়েছে।');
+        }
+
         if (! $this->workflowService->isExecutiveDirector($user) && ! $user->isSuperAdmin()) {
             return back()->with('error', 'শুধুমাত্র নির্বাহী পরিচালক চূড়ান্ত অনুমোদন বা বাতিল করতে পারেন।');
         }
 
         if (! $user->hasSignature()) {
-            return back()->with('error', 'আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর আপলোড করা আবশ্যক।');
+            return back()->with('error', 'অনুমোদন প্রক্রিয়া সম্পন্ন করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর আপলোড করা আবশ্যক। অনুগ্রহ করে প্রোফাইল সেটিংসে স্বাক্ষর যুক্ত করুন।');
         }
 
         $validated = $request->validate([
             'is_approved' => 'required|boolean',
             'comments' => 'required|string|max:3000',
             'effective_date' => 'nullable|date',
+        ], [
+            'comments.required' => 'মন্তব্য বা সুপারিশ প্রদান করা আবশ্যক।',
+            'effective_date.date' => 'কার্যকরের তারিখটি সঠিক ফরম্যাটে প্রদান করুন।',
         ]);
 
-        $this->workflowService->edApprove(
-            $resignationApplication,
-            $user,
-            $validated['comments'],
-            (bool) $validated['is_approved'],
-            $validated['effective_date'] ?? null
-        );
+        try {
+            $this->workflowService->edApprove(
+                $resignationApplication,
+                $user,
+                $validated['comments'],
+                (bool) $validated['is_approved'],
+                $validated['effective_date'] ?? null
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Resignation edApprove failed: ' . $e->getMessage(), [
+                'exception' => $e,
+                'application_id' => $resignationApplication->id,
+            ]);
+            return back()->with('error', 'অনুমোদন প্রক্রিয়া সম্পন্ন করতে ত্রুটি হয়েছে: ' . $e->getMessage());
+        }
 
         $msg = $validated['is_approved']
             ? 'চাকরি হতে অব্যাহতির আবেদন চূড়ান্তভাবে অনুমোদিত হয়েছে এবং সেপারেশন প্রক্রিয়ায় যুক্ত হয়েছে।'
