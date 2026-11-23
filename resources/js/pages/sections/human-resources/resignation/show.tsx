@@ -76,8 +76,6 @@ export default function ResignationApplicationShow({
         }
     };
 
-    const isEdStage = application.status === 'submitted_to_ed';
-
     return (
         <AdminLayout>
             <Head title={`অব্যাহতির আবেদন - ${application.application_no}`} />
