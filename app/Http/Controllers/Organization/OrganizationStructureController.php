@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\RegionalOffice;
 use App\Models\Zone;
+use App\Services\OrganogramHierarchySyncService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -135,6 +136,8 @@ class OrganizationStructureController extends Controller
             'regional_office_id' => $validated['regional_office_id'] ?? null,
         ]);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('branch_regional_assignment_updated');
+
         return back()->with('success', 'Branch regional assignment updated.');
     }
 
@@ -148,6 +151,23 @@ class OrganizationStructureController extends Controller
             'zone_id' => $validated['zone_id'],
         ]);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('regional_office_zone_assignment_updated');
+
         return back()->with('success', 'Regional office zone assignment updated.');
+    }
+
+    public function syncHierarchy(Request $request, OrganogramHierarchySyncService $syncService)
+    {
+        $res = $syncService->syncAll(dryRun: false);
+
+        $msg = sprintf(
+            'Hierarchy synchronized: %d branches, %d regional offices, %d zones, %d reporting lines updated, and synchronized with MIS Loan.',
+            $res['branches']['updated'],
+            $res['regional_offices']['updated'],
+            $res['zones']['updated'],
+            $res['reporting_to']['updated']
+        );
+
+        return back()->with('success', $msg);
     }
 }

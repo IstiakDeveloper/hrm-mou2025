@@ -70,6 +70,8 @@ class RegionalOfficeController extends Controller
 
         RegionalOffice::create($validated);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('regional_office_created');
+
         return redirect()->route('regional-offices.index')->with('success', 'Regional Office created successfully.');
     }
 
@@ -101,12 +103,16 @@ class RegionalOfficeController extends Controller
 
         $regionalOffice->update($validated);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('regional_office_updated');
+
         return redirect()->route('regional-offices.index')->with('success', 'Regional Office updated successfully.');
     }
 
     public function destroy(RegionalOffice $regionalOffice)
     {
         $regionalOffice->delete();
+
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('regional_office_deleted');
 
         return redirect()->route('regional-offices.index')->with('success', 'Regional Office deleted successfully.');
     }

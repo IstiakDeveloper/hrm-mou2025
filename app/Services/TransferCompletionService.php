@@ -82,6 +82,12 @@ class TransferCompletionService
 
         app(EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($employee);
 
+        app(OrganogramHierarchySyncService::class)->handleEmployeeTransfer(
+            $employee,
+            $transfer->from_branch_id ?? $previousBranchId,
+            (int) $transfer->to_branch_id
+        );
+
         $employeeUser = $employee->user;
         if ($employeeUser) {
             $fromName = $transfer->fromBranch?->name ?? '—';

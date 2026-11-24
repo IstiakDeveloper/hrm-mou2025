@@ -271,7 +271,14 @@ class EmployeeReportingToService
 
         $this->cachedMicrofinanceDirector = Employee::query()
             ->where('status', 'active')
-            ->whereHas('designation', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%director (microfinance)%']))
+            ->whereHas('designation', function ($q) {
+                $q->where(function ($inner) {
+                    $inner->whereRaw('LOWER(name) LIKE ?', ['%director (microfinance)%'])
+                        ->orWhereRaw('LOWER(name) LIKE ?', ['%director (mf)%'])
+                        ->orWhereRaw('LOWER(name) = ?', ['director (microfinance)'])
+                        ->orWhereRaw('LOWER(name) = ?', ['director (mf)']);
+                });
+            })
             ->first()
             ?? Department::query()->where('name', 'like', '%Microfinance%')->first()?->headEmployee;
 

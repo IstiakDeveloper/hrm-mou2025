@@ -148,10 +148,22 @@ class LeaveApplicationController extends Controller
             return $ids;
         }
 
+        $aliases = [];
+        $lowerBase = mb_strtolower($base);
+        if ($lowerBase === 'director (microfinance)' || $lowerBase === 'director (mf)') {
+            $aliases = ['Director (Microfinance)', 'Director (MF)'];
+        } elseif ($lowerBase === 'assistant director (microfinance)' || $lowerBase === 'assistant director (mf)') {
+            $aliases = ['Assistant Director (Microfinance)', 'Assistant Director (MF)'];
+        }
+
         $family = Designation::query()
-            ->where(function ($q) use ($base) {
+            ->where(function ($q) use ($base, $aliases) {
                 $q->where('name', $base)
                     ->orWhere('name', 'like', $base.'-%');
+                foreach ($aliases as $alias) {
+                    $q->orWhere('name', $alias)
+                        ->orWhere('name', 'like', $alias.'-%');
+                }
             })
             ->pluck('id')
             ->map(fn ($id) => (int) $id);

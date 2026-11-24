@@ -109,6 +109,9 @@ use Inertia\Inertia;
         Route::patch('/regional-offices/{regionalOffice}/zone', [OrganizationStructureController::class, 'updateRegionalOfficeZone'])
             ->name('regional-offices.zone')
             ->middleware('permission:regional-offices.edit');
+        Route::post('/sync-hierarchy', [OrganizationStructureController::class, 'syncHierarchy'])
+            ->name('sync-hierarchy')
+            ->middleware('permission:branches.edit');
     });
 
     // Branch Management

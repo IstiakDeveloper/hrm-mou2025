@@ -57,6 +57,8 @@ class ZoneController extends Controller
 
         Zone::create($validated);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('zone_created');
+
         return redirect()->route('zones.index')->with('success', 'Zone created successfully.');
     }
 
@@ -85,12 +87,16 @@ class ZoneController extends Controller
 
         $zone->update($validated);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('zone_updated');
+
         return redirect()->route('zones.index')->with('success', 'Zone updated successfully.');
     }
 
     public function destroy(Zone $zone)
     {
         $zone->delete();
+
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('zone_deleted');
 
         return redirect()->route('zones.index')->with('success', 'Zone deleted successfully.');
     }

@@ -26,6 +26,7 @@ import {
     Map as MapIcon,
     MapPin,
     Plus,
+    RefreshCw,
     Search,
     List,
 } from 'lucide-react';
@@ -119,10 +120,26 @@ export default function OrganizationStructureIndex({
     can,
 }: Props) {
     const [search, setSearch] = useState(filters.search || '');
+    const [isSyncing, setIsSyncing] = useState(false);
     const [expandedZones, setExpandedZones] = useState<Record<number, boolean>>(() =>
         Object.fromEntries(zones.map((z) => [z.id, true])),
     );
     const [expandedRegions, setExpandedRegions] = useState<Record<number, boolean>>({});
+
+    const onSyncHierarchy = () => {
+        if (!confirm('Are you sure you want to automatically sync all Zone, Region, Branch heads, and employee reporting relationships based on current postings?')) {
+            return;
+        }
+        setIsSyncing(true);
+        router.post(
+            route('organization-structure.sync-hierarchy'),
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setIsSyncing(false),
+            }
+        );
+    };
 
     const regionalOfficesByZone = useMemo(() => {
         const map = new Map<number, RegionalOfficeOption[]>();
@@ -204,6 +221,18 @@ export default function OrganizationStructureIndex({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        {can.editBranches && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                onClick={onSyncHierarchy}
+                                disabled={isSyncing}
+                            >
+                                <RefreshCw className={`mr-1.5 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                                {isSyncing ? 'Syncing...' : 'Auto-Sync Hierarchy'}
+                            </Button>
+                        )}
                         {can.createZone && (
                             <Button asChild size="sm" variant="outline" className="h-9">
                                 <Link href={route('zones.create')}>

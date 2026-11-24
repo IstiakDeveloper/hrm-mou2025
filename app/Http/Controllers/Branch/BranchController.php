@@ -119,6 +119,8 @@ class BranchController extends Controller
 
         Branch::create($validated);
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('branch_created');
+
         return redirect()->route('branches.index')
             ->with('success', 'Branch created successfully.');
     }
@@ -193,6 +195,8 @@ class BranchController extends Controller
             $this->branchAccounts->ensureForBranch($branch);
         }
 
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('branch_updated');
+
         return redirect()->route('branches.index')
             ->with('success', 'Branch updated successfully.');
     }
@@ -210,6 +214,8 @@ class BranchController extends Controller
         }
 
         $branch->delete();
+
+        app(\App\Services\MisLoanOrganizationSyncService::class)->pushOrganization('branch_deleted');
 
         return redirect()->route('branches.index')
             ->with('success', 'Branch deleted successfully.');
