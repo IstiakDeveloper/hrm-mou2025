@@ -81,16 +81,6 @@ export default function SecurityFundLedger({
     const [reverseId, setReverseId] = useState<number | null>(null);
     const [page, setPage] = useState(1);
 
-    const form = useForm({
-        amount: '',
-        principal: '0',
-        interest: '0',
-        transaction_date: fundToday(),
-        reference_no: '',
-        notes: '',
-        idempotency_key: fundRequestKey(),
-    });
-
     const reversal = useForm({ reason: '' });
 
     const reversed = useMemo(() => new Set(transactions.map((tx) => tx.reversal_of_id).filter(Boolean)), [transactions]);
@@ -456,159 +446,11 @@ export default function SecurityFundLedger({
                     </Card>
 
                     {/* Deposit & Refund Modal */}
-                    <Dialog open={mode !== null} onOpenChange={(open) => !open && setMode(null)}>
-                        <DialogContent className="max-w-md">
-                            <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2 text-sm font-bold text-zinc-800">
-                                    <span className="flex h-6 w-6 items-center justify-center rounded bg-emerald-50 text-emerald-600">
-                                        <Plus className="h-4 w-4" />
-                                    </span>
-                                    {mode === 'deposit' ? 'Add Security Deposit' : 'Refund Security Deposit'}
-                                </DialogTitle>
-                                <DialogDescription className="text-xs text-zinc-500">
-                                    {mode === 'deposit'
-                                        ? 'Record an additional principal deposit for this employee.'
-                                        : 'Process principal and interest refund. Returned principal stops earning interest.'}
-                                </DialogDescription>
-                            </DialogHeader>
-
-                            <form
-                                className="space-y-3"
-                                onSubmit={(event) => {
-                                    event.preventDefault();
-                                    form.post(
-                                        staffFundPath(`/security-fund/${account.id}/${mode === 'deposit' ? 'deposits' : 'refunds'}`),
-                                        {
-                                            onSuccess: () => {
-                                                setMode(null);
-                                                form.reset();
-                                                form.setData('idempotency_key', fundRequestKey());
-                                            },
-                                        }
-                                    );
-                                }}
-                            >
-                                <Errors errors={form.errors} />
-
-                                {mode === 'deposit' ? (
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-semibold text-zinc-700 block">
-                                            Deposit Amount (৳) <span className="text-rose-500">*</span>
-                                        </label>
-                                        <Input
-                                            type="number"
-                                            min="0.01"
-                                            step="0.01"
-                                            required
-                                            placeholder="e.g. 10000.00"
-                                            value={form.data.amount}
-                                            onChange={(e) => form.setData('amount', e.target.value)}
-                                            className="h-8.5 text-xs font-mono font-semibold border-zinc-200 rounded"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-zinc-700 block">
-                                                Principal Refund (৳) <span className="text-rose-500">*</span>
-                                            </label>
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                required
-                                                value={form.data.principal}
-                                                onChange={(e) => form.setData('principal', e.target.value)}
-                                                className="h-8.5 text-xs font-mono font-semibold border-zinc-200 rounded"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-zinc-700 block">
-                                                Interest Refund (৳) <span className="text-rose-500">*</span>
-                                            </label>
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                required
-                                                value={form.data.interest}
-                                                onChange={(e) => form.setData('interest', e.target.value)}
-                                                className="h-8.5 text-xs font-mono font-semibold border-zinc-200 rounded"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-xs font-semibold text-zinc-700 block">
-                                            Transaction Date <span className="text-rose-500">*</span>
-                                        </label>
-                                        <span className="text-[11px] font-mono text-zinc-500">
-                                            BD Format: {fundDisplayDate(form.data.transaction_date)}
-                                        </span>
-                                    </div>
-                                    <Input
-                                        type="date"
-                                        required
-                                        max={fundToday()}
-                                        value={form.data.transaction_date}
-                                        onChange={(e) => form.setData('transaction_date', e.target.value)}
-                                        className="h-8.5 text-xs border-zinc-200 rounded"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-zinc-700 block">
-                                        Receipt / Voucher Reference <span className="text-rose-500">*</span>
-                                    </label>
-                                    <Input
-                                        required
-                                        maxLength={120}
-                                        placeholder="e.g. MR-2026-99"
-                                        value={form.data.reference_no}
-                                        onChange={(e) => form.setData('reference_no', e.target.value)}
-                                        className="h-8.5 text-xs border-zinc-200 rounded"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-zinc-700 block">
-                                        Notes / Memo <span className="text-rose-500">*</span>
-                                    </label>
-                                    <textarea
-                                        required
-                                        rows={2}
-                                        maxLength={2000}
-                                        placeholder="Add transaction notes..."
-                                        value={form.data.notes}
-                                        onChange={(e) => form.setData('notes', e.target.value)}
-                                        className="w-full rounded border border-zinc-200 bg-white p-2 text-xs text-zinc-800 shadow-2xs focus:border-emerald-500 focus:outline-none"
-                                    />
-                                </div>
-
-                                <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-zinc-100">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setMode(null)}
-                                        className="h-8 text-xs border-zinc-200"
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        size="sm"
-                                        disabled={form.processing}
-                                        className="h-8 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white px-4"
-                                    >
-                                        {form.processing ? 'Saving...' : `Save ${mode === 'deposit' ? 'Deposit' : 'Refund'}`}
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
+                    <LedgerTransactionModal
+                        accountId={account.id}
+                        mode={mode}
+                        onClose={() => setMode(null)}
+                    />
 
                     {/* Reversal Modal */}
                     <Dialog open={reverseId !== null} onOpenChange={(open) => !open && setReverseId(null)}>
@@ -682,5 +524,195 @@ export default function SecurityFundLedger({
                 </div>
             )}
         </StaffFundLayout>
+    );
+}
+
+type LedgerTransactionModalProps = {
+    accountId: number;
+    mode: 'deposit' | 'refund' | null;
+    onClose: () => void;
+};
+
+function LedgerTransactionModal({ accountId, mode, onClose }: LedgerTransactionModalProps) {
+    const form = useForm({
+        amount: '',
+        principal: '0',
+        interest: '0',
+        transaction_date: fundToday(),
+        reference_no: '',
+        notes: '',
+        idempotency_key: fundRequestKey(),
+    });
+
+    const displayTransactionDate = useMemo(() => {
+        const dt = form.data.transaction_date;
+        if (!dt) return '';
+        return fundDisplayDate(dt);
+    }, [form.data.transaction_date]);
+
+    return (
+        <Dialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-sm font-bold text-zinc-800">
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-emerald-50 text-emerald-600">
+                            <Plus className="h-4 w-4" />
+                        </span>
+                        {mode === 'deposit' ? 'Add Security Deposit' : 'Refund Security Deposit'}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-zinc-500">
+                        {mode === 'deposit'
+                            ? 'Record an additional principal deposit for this employee.'
+                            : 'Process principal and interest refund. Returned principal stops earning interest.'}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        form.post(
+                            staffFundPath(`/security-fund/${accountId}/${mode === 'deposit' ? 'deposits' : 'refunds'}`),
+                            {
+                                onSuccess: () => {
+                                    onClose();
+                                    form.reset();
+                                    form.setData('idempotency_key', fundRequestKey());
+                                },
+                            }
+                        );
+                    }}
+                >
+                    <Errors errors={form.errors} />
+
+                    {mode === 'deposit' ? (
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-zinc-700 block">
+                                Deposit Amount (৳) <span className="text-rose-500">*</span>
+                            </label>
+                            <Input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                required
+                                placeholder="e.g. 10000.00"
+                                value={form.data.amount}
+                                onChange={(e) => form.setData('amount', e.target.value)}
+                                className="h-8.5 text-xs font-mono font-semibold border-zinc-200 rounded"
+                            />
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-zinc-700 block">
+                                    Principal Refund (৳) <span className="text-rose-500">*</span>
+                                </label>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    required
+                                    value={form.data.principal}
+                                    onChange={(e) => form.setData('principal', e.target.value)}
+                                    className="h-8.5 text-xs font-mono font-semibold border-zinc-200 rounded"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-zinc-700 block">
+                                    Interest Refund (৳) <span className="text-rose-500">*</span>
+                                </label>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    required
+                                    value={form.data.interest}
+                                    onChange={(e) => form.setData('interest', e.target.value)}
+                                    className="h-8.5 text-xs font-mono font-semibold border-zinc-200 rounded"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-zinc-700 block">
+                                Transaction Date <span className="text-rose-500">*</span>
+                            </label>
+                            {displayTransactionDate && (
+                                <span className="text-[11px] font-mono text-zinc-500">
+                                    BD Format: {displayTransactionDate}
+                                </span>
+                            )}
+                        </div>
+                        <Input
+                            type="date"
+                            required
+                            max={fundToday()}
+                            value={form.data.transaction_date}
+                            onChange={(e) => form.setData('transaction_date', e.target.value)}
+                            className="h-8.5 text-xs border-zinc-200 rounded"
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-zinc-700 block">
+                                Receipt / Voucher Reference
+                            </label>
+                            <span className="text-[11px] text-zinc-400 font-normal">
+                                Optional (Auto-generated if blank)
+                            </span>
+                        </div>
+                        <Input
+                            maxLength={120}
+                            placeholder="e.g. MR-2026-99 (Leave blank to auto-generate)"
+                            value={form.data.reference_no}
+                            onChange={(e) => form.setData('reference_no', e.target.value)}
+                            className="h-8.5 text-xs border-zinc-200 rounded"
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-zinc-700 block">
+                                Notes / Memo
+                            </label>
+                            <span className="text-[11px] text-zinc-400 font-normal">
+                                Optional
+                            </span>
+                        </div>
+                        <textarea
+                            rows={2}
+                            maxLength={2000}
+                            placeholder="Add transaction notes (Optional)..."
+                            value={form.data.notes}
+                            onChange={(e) => form.setData('notes', e.target.value)}
+                            className="w-full rounded border border-zinc-200 bg-white p-2 text-xs text-zinc-800 shadow-2xs focus:border-emerald-500 focus:outline-none"
+                        />
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-zinc-100">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={onClose}
+                            className="h-8 text-xs border-zinc-200"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={form.processing}
+                            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white px-4"
+                        >
+                            {form.processing ? 'Saving...' : `Save ${mode === 'deposit' ? 'Deposit' : 'Refund'}`}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }

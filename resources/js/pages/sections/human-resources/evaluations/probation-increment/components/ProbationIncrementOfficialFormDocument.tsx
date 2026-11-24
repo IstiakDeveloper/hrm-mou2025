@@ -1,4 +1,5 @@
 import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
@@ -278,7 +279,7 @@ export default function ProbationIncrementOfficialFormDocument({
         if (!sigPath) return null;
         return (
             <div className="flex justify-end mb-0.5">
-                <img src={`/storage/${sigPath}`} alt="Signature" className="h-7 max-h-7 max-w-[120px] object-contain" />
+                <DocumentSignatureImage src={sigPath} size="md" />
             </div>
         );
     };

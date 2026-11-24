@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
 import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 import {
     TRAINEE_FORM_CONFIGS,
     QUALITATIVE_RATING_OPTIONS,
@@ -78,11 +79,11 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
         const signedDate = sig?.signed_at ? formatDateVal(sig.signed_at) : null;
 
         return (
-            <div className="flex flex-col items-center justify-end text-center h-20 pt-1">
+            <div className="flex flex-col items-center justify-end text-center min-h-[5.5rem] pt-1">
                 {sigPath ? (
-                    <img src={`/storage/${sigPath}`} alt="Signature" className="h-8 max-h-8 max-w-[120px] object-contain mb-0.5" />
+                    <DocumentSignatureImage src={sigPath} size="md" className="mb-0.5" />
                 ) : (
-                    <div className="h-7 w-24 border-b border-dashed border-slate-300 mb-0.5 flex items-center justify-center text-[10px] text-slate-400">
+                    <div className="h-10 w-24 border-b border-dashed border-slate-300 mb-0.5 flex items-center justify-center text-[10px] text-slate-400">
                         {sig ? '(স্বাক্ষরিত)' : ''}
                     </div>
                 )}

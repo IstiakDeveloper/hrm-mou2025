@@ -46,6 +46,7 @@ import {
 } from '@/lib/security-fund';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import { cn } from '@/lib/utils';
+import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import {
     Errors,
     Exports,
@@ -101,11 +102,6 @@ export default function SecurityFundRegister({
 }: Props) {
     const [showCreate, setShowCreate] = useState(false);
     const [showFilters, setShowFilters] = useState(true);
-    const [employeeSearch, setEmployeeSearch] = useState('');
-    const [options, setOptions] = useState<Option[]>([]);
-    const [selectedEmployee, setSelectedEmployee] = useState<Option | null>(null);
-    const [lookupLoading, setLookupLoading] = useState(false);
-    const [lookupError, setLookupError] = useState('');
 
     const filter = useForm({
         search: initialFilters.search ?? '',
@@ -114,15 +110,6 @@ export default function SecurityFundRegister({
         branch_id: initialFilters.branch_id ?? '',
         department_id: initialFilters.department_id ?? '',
         as_of: asOf || fundToday(),
-    });
-
-    const createForm = useForm({
-        employee_id: '',
-        amount: '',
-        transaction_date: fundToday(),
-        reference_no: '',
-        notes: '',
-        idempotency_key: fundRequestKey(),
     });
 
     const hasActiveFilters = Boolean(
@@ -152,57 +139,6 @@ export default function SecurityFundRegister({
             as_of: fundToday(),
         });
         router.get(staffFundPath('/security-fund'), {}, { preserveState: false });
-    };
-
-    // Employee lookup inside Create Modal
-    useEffect(() => {
-        if (!showCreate) return;
-        const controller = new AbortController();
-        setLookupLoading(true);
-        const timer = setTimeout(async () => {
-            try {
-                const response = await fetch(
-                    `/security-fund/employees/lookup?search=${encodeURIComponent(employeeSearch)}`,
-                    {
-                        signal: controller.signal,
-                        headers: { Accept: 'application/json' },
-                    }
-                );
-                if (!response.ok) throw new Error('Employee lookup failed. Refresh or try again.');
-                const data: Option[] = await response.json();
-                setOptions(data);
-                setLookupError('');
-            } catch (error) {
-                if (!controller.signal.aborted) {
-                    setLookupError(error instanceof Error ? error.message : 'Lookup failed.');
-                }
-            } finally {
-                setLookupLoading(false);
-            }
-        }, 250);
-
-        return () => {
-            clearTimeout(timer);
-            controller.abort();
-        };
-    }, [employeeSearch, showCreate]);
-
-    const handleEmployeeSelect = (empId: string) => {
-        createForm.setData('employee_id', empId);
-        const found = options.find((o) => String(o.id) === empId);
-        setSelectedEmployee(found || null);
-    };
-
-    const handleCreateSubmit = (event: React.FormEvent) => {
-        event.preventDefault();
-        createForm.post(staffFundPath('/security-fund'), {
-            onSuccess: () => {
-                setShowCreate(false);
-                setSelectedEmployee(null);
-                createForm.reset();
-                createForm.setData('idempotency_key', fundRequestKey());
-            },
-        });
     };
 
     return (
@@ -466,9 +402,7 @@ export default function SecurityFundRegister({
                                             className="w-full h-8 rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 shadow-2xs focus:border-emerald-500 focus:outline-none"
                                         />
                                     </div>
-                                    <p className="text-[10px] text-zinc-400">
-                                        Bangladeshi: {fundDisplayDate(filter.data.as_of)}
-                                    </p>
+
                                 </div>
 
                                 {/* Action Buttons */}
@@ -708,218 +642,328 @@ export default function SecurityFundRegister({
             </div>
 
             {/* 7. Create Security Fund Deposit Modal */}
-            <Dialog open={showCreate} onOpenChange={setShowCreate}>
-                <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-sm font-bold text-zinc-800">
-                            <span className="flex h-6 w-6 items-center justify-center rounded bg-emerald-50 text-emerald-600">
-                                <Plus className="h-4 w-4" />
-                            </span>
-                            Create Security Fund Account
-                        </DialogTitle>
-                        <DialogDescription className="text-xs text-zinc-500">
-                            Record the initial security deposit for an active employee. 6% simple annual interest applies after 1 full year.
-                        </DialogDescription>
-                    </DialogHeader>
+            <CreateSecurityFundDepositModal
+                open={showCreate}
+                onOpenChange={setShowCreate}
+            />
+        </StaffFundLayout>
+    );
+}
 
-                    <form onSubmit={handleCreateSubmit} className="space-y-3.5 mt-1">
-                        <Errors errors={createForm.errors} />
+type CreateDepositModalProps = {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+};
 
-                        {/* Search Employee */}
-                        <div className="space-y-1">
-                            <label className="text-xs font-semibold text-zinc-700 block">
-                                1. Search Active Employee (কর্মী খুঁজুন) <span className="text-rose-500">*</span>
-                            </label>
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                                <Input
-                                    value={employeeSearch}
-                                    onChange={(e) => {
-                                        setEmployeeSearch(e.target.value);
-                                        createForm.setData('employee_id', '');
-                                        setSelectedEmployee(null);
-                                    }}
-                                    placeholder="Type PIN or employee name..."
-                                    className="h-8.5 text-xs pl-8 border-zinc-200 rounded"
-                                />
-                            </div>
-                        </div>
+function CreateSecurityFundDepositModal({ open, onOpenChange }: CreateDepositModalProps) {
+    const [employeeSearch, setEmployeeSearch] = useState('');
+    const [options, setOptions] = useState<Option[]>([]);
+    const [selectedEmployee, setSelectedEmployee] = useState<Option | null>(null);
+    const [lookupLoading, setLookupLoading] = useState(false);
+    const [lookupError, setLookupError] = useState('');
 
+    const createForm = useForm({
+        employee_id: '',
+        amount: '',
+        transaction_date: fundToday(),
+        reference_no: '',
+        notes: '',
+        idempotency_key: fundRequestKey(),
+    });
+
+    // Employee pool & items for ComboSelect - memoized strictly on options and selectedEmployee
+    const pool = useMemo(() => {
+        if (!selectedEmployee) return options;
+        if (options.some((row) => row.id === selectedEmployee.id)) return options;
+        return [selectedEmployee, ...options];
+    }, [options, selectedEmployee]);
+
+    const employeeItems = useMemo<ComboSelectItem<string>[]>(() => {
+        return pool.map((opt) => {
+            const designation = opt.designation ? ` · ${opt.designation}` : '';
+            const branch = opt.branch ? ` (${opt.branch})` : '';
+            return {
+                value: String(opt.id),
+                label: `[${opt.pin}] ${opt.name}${designation}${branch}`,
+                keywords: `${opt.pin} ${opt.name} ${opt.designation || ''} ${opt.branch || ''}`,
+            };
+        });
+    }, [pool]);
+
+    // Employee lookup inside Create Modal
+    useEffect(() => {
+        if (!open) return;
+        const controller = new AbortController();
+        setLookupLoading(true);
+        const timer = setTimeout(async () => {
+            try {
+                const response = await fetch(
+                    `/security-fund/employees/lookup?search=${encodeURIComponent(employeeSearch)}`,
+                    {
+                        signal: controller.signal,
+                        headers: { Accept: 'application/json' },
+                    }
+                );
+                if (!response.ok) throw new Error('Employee lookup failed. Refresh or try again.');
+                const data: Option[] = await response.json();
+                setOptions(data);
+                setLookupError('');
+            } catch (error) {
+                if (!controller.signal.aborted) {
+                    setLookupError(error instanceof Error ? error.message : 'Lookup failed.');
+                }
+            } finally {
+                setLookupLoading(false);
+            }
+        }, employeeSearch.trim() === '' ? 0 : 250);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [employeeSearch, open]);
+
+    const handleCreateSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        createForm.post(staffFundPath('/security-fund'), {
+            onSuccess: () => {
+                onOpenChange(false);
+                setSelectedEmployee(null);
+                setEmployeeSearch('');
+                createForm.reset();
+                createForm.setData('idempotency_key', fundRequestKey());
+            },
+        });
+    };
+
+    // Memoize formatted amount so typing digits is instantaneous without heavy re-parsing
+    const formattedAmount = useMemo(() => {
+        const val = createForm.data.amount;
+        if (!val || Number(val) <= 0) return null;
+        return fundMoney(val);
+    }, [createForm.data.amount]);
+
+    // Memoize policy projection values safely
+    const interestStartDate = useMemo(() => {
+        const dt = createForm.data.transaction_date;
+        if (!dt) return '—';
+        return fundDisplayDate(fundInterestStart(dt));
+    }, [createForm.data.transaction_date]);
+
+    const eligibilityDate = useMemo(() => {
+        const dt = createForm.data.transaction_date;
+        if (!dt) return '—';
+        return fundDisplayDate(fundEligibilityDate(dt));
+    }, [createForm.data.transaction_date]);
+
+    const displayTransactionDate = useMemo(() => {
+        const dt = createForm.data.transaction_date;
+        if (!dt) return '';
+        return fundDisplayDate(dt);
+    }, [createForm.data.transaction_date]);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-sm font-bold text-zinc-800">
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-emerald-50 text-emerald-600">
+                            <Plus className="h-4 w-4" />
+                        </span>
+                        Create Security Fund Account
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-zinc-500">
+                        Record the initial security deposit for an active employee. 6% simple annual interest applies after 1 full year.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={handleCreateSubmit} className="space-y-3.5 mt-1">
+                    <Errors errors={createForm.errors} />
+
+                    {/* 1. Employee ComboSelect */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-700 block">
+                            1. Select Active Employee (কর্মী নির্বাচন করুন) <span className="text-rose-500">*</span>
+                        </label>
+                        <ComboSelect<string>
+                            value={createForm.data.employee_id || null}
+                            onChange={(val) => {
+                                createForm.setData('employee_id', val ?? '');
+                                createForm.clearErrors('employee_id');
+                                const found = pool.find((o) => String(o.id) === String(val)) ?? null;
+                                setSelectedEmployee(found);
+                            }}
+                            onQueryChange={setEmployeeSearch}
+                            items={employeeItems}
+                            placeholder={lookupLoading ? 'Searching employees...' : 'Type PIN or name to search active employee...'}
+                            portal={false}
+                            clearable
+                            disabled={createForm.processing}
+                            emptyText={lookupLoading ? 'Searching employees...' : 'No active eligible employee found.'}
+                            triggerClassName="h-8.5 text-xs border-zinc-200 rounded bg-white"
+                        />
                         {lookupError && (
                             <p role="alert" className="text-xs text-rose-600">
                                 {lookupError}
                             </p>
                         )}
+                        <p className="text-[10px] text-zinc-400">
+                            Active employees without existing Security Fund accounts are listed.
+                        </p>
+                    </div>
 
-                        {/* Employee Select */}
-                        <div className="space-y-1">
+                    {/* Selected Employee Preview Card */}
+                    {selectedEmployee && (
+                        <div className="rounded border border-emerald-150 bg-emerald-50/50 p-2 text-xs flex items-center justify-between">
+                            <div>
+                                <p className="font-semibold text-emerald-950">{selectedEmployee.name}</p>
+                                <p className="text-[10px] text-zinc-500">
+                                    PIN: {selectedEmployee.pin} · {selectedEmployee.designation} · {selectedEmployee.branch}
+                                </p>
+                            </div>
+                            <Badge className="bg-emerald-600 text-white text-[10px]">Active Staff</Badge>
+                        </div>
+                    )}
+
+                    {/* Deposit Amount (৳) */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
                             <label className="text-xs font-semibold text-zinc-700 block">
-                                2. Select Employee from List <span className="text-rose-500">*</span>
+                                2. Deposit Amount (মূল আমানতের পরিমাণ) <span className="text-rose-500">*</span>
                             </label>
-                            <select
-                                className="w-full h-8.5 rounded border border-zinc-200 bg-white px-2.5 text-xs text-zinc-800 shadow-2xs focus:border-emerald-500 focus:outline-none"
+                            {formattedAmount && (
+                                <span className="text-xs font-mono font-bold text-emerald-700">
+                                    ৳ {formattedAmount}
+                                </span>
+                            )}
+                        </div>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">৳</span>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                max="99999999.99"
                                 required
-                                value={createForm.data.employee_id}
-                                onChange={(e) => handleEmployeeSelect(e.target.value)}
-                            >
-                                <option value="">Choose an employee ({options.length} found)</option>
-                                {options.map((option) => (
-                                    <option key={option.id} value={option.id}>
-                                        {option.pin} — {option.name} · {option.designation} · {option.branch}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="text-[10px] text-zinc-400">
-                                Active employees without existing Security Fund accounts are listed.
+                                placeholder="e.g. 50000.00"
+                                value={createForm.data.amount}
+                                onChange={(e) => createForm.setData('amount', e.target.value)}
+                                className="h-8.5 text-xs pl-7 font-mono font-semibold border-zinc-200 rounded"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Deposit Date (Bangladeshi context) */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-zinc-700 block">
+                                3. Deposit Date (জমার তারিখ) <span className="text-rose-500">*</span>
+                            </label>
+                            {displayTransactionDate && (
+                                <span className="text-[11px] font-mono text-zinc-500">
+                                    BD Format: <strong>{displayTransactionDate}</strong>
+                                </span>
+                            )}
+                        </div>
+                        <Input
+                            type="date"
+                            required
+                            max={fundToday()}
+                            value={createForm.data.transaction_date}
+                            onChange={(e) => createForm.setData('transaction_date', e.target.value)}
+                            className="h-8.5 text-xs border-zinc-200 rounded"
+                        />
+                    </div>
+
+                    {/* Policy Calculation Projection Box */}
+                    <div className="rounded-lg border border-emerald-150 bg-emerald-50/70 p-3 text-xs text-emerald-950 space-y-1 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                            Policy & Interest Projection:
+                        </div>
+                        <div className="text-[11px] text-zinc-700 space-y-0.5 leading-relaxed">
+                            <p>• Annual Rate: <strong className="text-emerald-800">6% Simple Interest</strong> on principal.</p>
+                            <p>
+                                • First Earning Month Starts:{' '}
+                                <strong className="text-emerald-800 font-mono">
+                                    {interestStartDate}
+                                </strong>
+                            </p>
+                            <p>
+                                • Eligible for Interest After 1 Year:{' '}
+                                <strong className="text-emerald-800 font-mono">
+                                    {eligibilityDate}
+                                </strong>
+                            </p>
+                            <p className="text-[10px] text-zinc-500 mt-1">
+                                Complete calendar months are counted retrospectively upon passing 1 year. Whole-taka rounding; never compounds.
                             </p>
                         </div>
+                    </div>
 
-                        {/* Selected Employee Preview Card */}
-                        {selectedEmployee && (
-                            <div className="rounded border border-emerald-150 bg-emerald-50/50 p-2 text-xs flex items-center justify-between">
-                                <div>
-                                    <p className="font-semibold text-emerald-950">{selectedEmployee.name}</p>
-                                    <p className="text-[10px] text-zinc-500">
-                                        PIN: {selectedEmployee.pin} · {selectedEmployee.designation} · {selectedEmployee.branch}
-                                    </p>
-                                </div>
-                                <Badge className="bg-emerald-600 text-white text-[10px]">Active Staff</Badge>
-                            </div>
-                        )}
-
-                        {/* Deposit Amount (৳) */}
-                        <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-semibold text-zinc-700 block">
-                                    3. Deposit Amount (মূল আমানতের পরিমাণ) <span className="text-rose-500">*</span>
-                                </label>
-                                {createForm.data.amount && Number(createForm.data.amount) > 0 && (
-                                    <span className="text-xs font-mono font-bold text-emerald-700">
-                                        ৳ {fundMoney(createForm.data.amount)}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">৳</span>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    max="99999999.99"
-                                    required
-                                    placeholder="e.g. 50000.00"
-                                    value={createForm.data.amount}
-                                    onChange={(e) => createForm.setData('amount', e.target.value)}
-                                    className="h-8.5 text-xs pl-7 font-mono font-semibold border-zinc-200 rounded"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Deposit Date (Bangladeshi context) */}
-                        <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-semibold text-zinc-700 block">
-                                    4. Deposit Date (জমার তারিখ) <span className="text-rose-500">*</span>
-                                </label>
-                                {createForm.data.transaction_date && (
-                                    <span className="text-[11px] font-mono text-zinc-500">
-                                        BD Format: <strong>{fundDisplayDate(createForm.data.transaction_date)}</strong>
-                                    </span>
-                                )}
-                            </div>
-                            <Input
-                                type="date"
-                                required
-                                max={fundToday()}
-                                value={createForm.data.transaction_date}
-                                onChange={(e) => createForm.setData('transaction_date', e.target.value)}
-                                className="h-8.5 text-xs border-zinc-200 rounded"
-                            />
-                        </div>
-
-                        {/* Policy Calculation Projection Box */}
-                        <div className="rounded-lg border border-emerald-150 bg-emerald-50/70 p-3 text-xs text-emerald-950 space-y-1 shadow-2xs">
-                            <div className="flex items-center gap-1.5 font-bold text-emerald-900">
-                                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-                                Policy & Interest Projection:
-                            </div>
-                            <div className="text-[11px] text-zinc-700 space-y-0.5 leading-relaxed">
-                                <p>• Annual Rate: <strong className="text-emerald-800">6% Simple Interest</strong> on principal.</p>
-                                <p>
-                                    • First Earning Month Starts:{' '}
-                                    <strong className="text-emerald-800 font-mono">
-                                        {createForm.data.transaction_date
-                                            ? fundDisplayDate(fundInterestStart(createForm.data.transaction_date))
-                                            : '—'}
-                                    </strong>
-                                </p>
-                                <p>
-                                    • Eligible for Interest After 1 Year:{' '}
-                                    <strong className="text-emerald-800 font-mono">
-                                        {createForm.data.transaction_date
-                                            ? fundDisplayDate(fundEligibilityDate(createForm.data.transaction_date))
-                                            : '—'}
-                                    </strong>
-                                </p>
-                                <p className="text-[10px] text-zinc-500 mt-1">
-                                    Complete calendar months are counted retrospectively upon passing 1 year. Whole-taka rounding; never compounds.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Reference / Receipt */}
-                        <div className="space-y-1">
+                    {/* Reference / Receipt */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
                             <label className="text-xs font-semibold text-zinc-700 block">
-                                5. Receipt / Voucher Reference No. <span className="text-rose-500">*</span>
+                                4. Receipt / Voucher Reference No.
                             </label>
-                            <Input
-                                required
-                                maxLength={120}
-                                placeholder="e.g. MR-2026-0042 / Bank Deposit Slip"
-                                value={createForm.data.reference_no}
-                                onChange={(e) => createForm.setData('reference_no', e.target.value)}
-                                className="h-8.5 text-xs border-zinc-200 rounded"
-                            />
+                            <span className="text-[11px] text-zinc-400 font-normal">
+                                ঐচ্ছিক (ফাঁকা রাখলে অটো জেনারেট হবে)
+                            </span>
                         </div>
+                        <Input
+                            maxLength={120}
+                            placeholder="Leave blank to auto-generate (e.g. SF-REC-...) or enter receipt no"
+                            value={createForm.data.reference_no}
+                            onChange={(e) => createForm.setData('reference_no', e.target.value)}
+                            className="h-8.5 text-xs border-zinc-200 rounded"
+                        />
+                        <p className="text-[10px] text-zinc-400">
+                            রসিদ বা ভাউচার নম্বর না দিলে সিস্টেম স্বয়ংক্রিয়ভাবে একটি রেফারেন্স নম্বর তৈরি করবে।
+                        </p>
+                    </div>
 
-                        {/* Notes */}
-                        <div className="space-y-1">
+                    {/* Notes */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
                             <label className="text-xs font-semibold text-zinc-700 block">
-                                6. Notes / Deposit Evidence <span className="text-rose-500">*</span>
+                                5. Notes / Deposit Evidence
                             </label>
-                            <textarea
-                                required
-                                rows={2}
-                                maxLength={2000}
-                                placeholder="e.g. Security deposit received via Bank transfer or cash voucher."
-                                value={createForm.data.notes}
-                                onChange={(e) => createForm.setData('notes', e.target.value)}
-                                className="w-full rounded border border-zinc-200 bg-white p-2 text-xs text-zinc-800 shadow-2xs focus:border-emerald-500 focus:outline-none"
-                            />
+                            <span className="text-[11px] text-zinc-400 font-normal">
+                                ঐচ্ছিক
+                            </span>
                         </div>
+                        <textarea
+                            rows={2}
+                            maxLength={2000}
+                            placeholder="e.g. Security deposit received via Bank transfer or cash voucher (Optional)"
+                            value={createForm.data.notes}
+                            onChange={(e) => createForm.setData('notes', e.target.value)}
+                            className="w-full rounded border border-zinc-200 bg-white p-2 text-xs text-zinc-800 shadow-2xs focus:border-emerald-500 focus:outline-none"
+                        />
+                    </div>
 
-                        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-zinc-100">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowCreate(false)}
-                                className="h-8 text-xs border-zinc-200"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                size="sm"
-                                disabled={createForm.processing}
-                                className="h-8 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white px-4"
-                            >
-                                {createForm.processing ? 'Recording Deposit...' : 'Create Account & Deposit'}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
-        </StaffFundLayout>
+                    <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-zinc-100">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onOpenChange(false)}
+                            className="h-8 text-xs border-zinc-200"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={createForm.processing}
+                            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white px-4"
+                        >
+                            {createForm.processing ? 'Recording Deposit...' : 'Create Account & Deposit'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }

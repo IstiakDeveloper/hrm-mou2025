@@ -35,6 +35,7 @@ export const fundTakaInterest = (amount: string | number | null | undefined) => 
 
 /** Format date in Bangladeshi numeric standard (DD/MM/YYYY) e.g. 01/07/2026 */
 export function fundDisplayDate(date: unknown): string {
+    if (!date || date === '—') return '—';
     if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
         const [year, month, day] = date.split('-');
         const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
@@ -42,14 +43,18 @@ export function fundDisplayDate(date: unknown): string {
             return `${day}/${month}/${year}`;
         }
     }
-    return formatDisplayDate(date);
+    try {
+        return formatDisplayDate(date);
+    } catch {
+        return '—';
+    }
 }
 
 /** Format date in Bangladeshi textual standard e.g. 01 Jul 2026 */
 export function fundDisplayDateReadable(date: unknown): string {
-    if (date == null || date === '') return '—';
+    if (date == null || date === '' || date === '—') return '—';
     const s = String(date).trim();
-    if (!s) return '—';
+    if (!s || s === '—') return '—';
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
         const [d, m, y] = s.split('/').map(Number);
         const dateObj = new Date(y, m - 1, d);
@@ -64,19 +69,42 @@ export function fundDisplayDateReadable(date: unknown): string {
             return readableDateFormatter.format(dateObj);
         }
     }
-    return formatDisplayDate(s);
+    try {
+        return formatDisplayDate(s);
+    } catch {
+        return '—';
+    }
 }
 
-export function fundEligibilityDate(depositDate: string): string {
-    const [year, month, day] = depositDate.split('-').map(Number);
-    const lastDay = new Date(Date.UTC(year + 1, month, 0)).getUTCDate();
-    return `${year + 1}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+export function fundEligibilityDate(depositDate: unknown): string {
+    if (!depositDate || typeof depositDate !== 'string') return '—';
+    const parts = depositDate.split('-');
+    if (parts.length !== 3) return '—';
+    const [year, month, day] = parts.map(Number);
+    if (!year || !month || !day || isNaN(year) || isNaN(month) || isNaN(day)) return '—';
+    try {
+        const lastDay = new Date(Date.UTC(year + 1, month, 0)).getUTCDate();
+        if (isNaN(lastDay)) return '—';
+        return `${year + 1}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+    } catch {
+        return '—';
+    }
 }
 
-export function fundInterestStart(depositDate: string): string {
-    const [year, month] = depositDate.split('-').map(Number);
-    const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
-    return nextMonth > '2026-07-01' ? nextMonth : '2026-07-01';
+export function fundInterestStart(depositDate: unknown): string {
+    if (!depositDate || typeof depositDate !== 'string') return '—';
+    const parts = depositDate.split('-');
+    if (parts.length < 2) return '—';
+    const [year, month] = parts.map(Number);
+    if (!year || !month || isNaN(year) || isNaN(month)) return '—';
+    try {
+        const d = new Date(Date.UTC(year, month, 1));
+        if (isNaN(d.getTime())) return '—';
+        const nextMonth = d.toISOString().slice(0, 10);
+        return nextMonth > '2026-07-01' ? nextMonth : '2026-07-01';
+    } catch {
+        return '—';
+    }
 }
 
 export const fundToday = () => todayFormatter.format(new Date());

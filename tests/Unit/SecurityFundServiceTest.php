@@ -425,6 +425,35 @@ test('Create endpoint selects an existing employee and validates money before wr
     expect(EmployeeSecurityFundAccount::count())->toBe(1)->and(EmployeeSecurityFundTransaction::count())->toBe(1);
 });
 
+test('Create endpoint allows optional receipt number and notes, and auto generates receipt number', function () {
+    $employee = securityEmployee();
+    securityWebUser(['staff-fund.view', 'staff-fund.create']);
+    $data = [
+        'employee_id' => $employee->id,
+        'amount' => '15000',
+        'transaction_date' => '2026-05-20',
+        'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+    ];
+    test()->post('/security-fund', $data)->assertRedirect();
+    $tx = EmployeeSecurityFundTransaction::where('type', 'deposit')->latest('id')->first();
+    expect($tx)->not->toBeNull()
+        ->and($tx->reference_no)->toBe('SF-REC-2026-0001')
+        ->and($tx->notes)->toBeNull();
+
+    // Second employee deposit auto increments receipt number
+    $employee2 = securityEmployee();
+    $data2 = [
+        'employee_id' => $employee2->id,
+        'amount' => '10000',
+        'transaction_date' => '2026-05-20',
+        'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+    ];
+    test()->post('/security-fund', $data2)->assertRedirect();
+    $tx2 = EmployeeSecurityFundTransaction::where('account_id', $employee2->securityFundAccount->id)->first();
+    expect($tx2)->not->toBeNull()
+        ->and($tx2->reference_no)->toBe('SF-REC-2026-0002');
+});
+
 test('posting endpoint rejects a stale preview and cannot duplicate interest', function () {
     $employee = securityEmployee();
     securityAccount($employee);

@@ -1,5 +1,6 @@
 import { AppraisalPrintRoot } from '@/components/appraisal/AppraisalPrintRoot';
 import { UpdatedByLine } from '@/components/appraisal/WorkflowStepComment';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 import { takaInWords } from '@/lib/taka-in-words';
 import React from 'react';
 
@@ -135,11 +136,11 @@ function latestSignature(signatures: Signature[] | undefined, stage: string, act
 
 function SignTitle({ title, sig }: { title: string; sig?: Signature }) {
     return (
-        <div className="flex min-h-[52px] flex-col items-center justify-end text-center">
+        <div className="flex min-h-[64px] flex-col items-center justify-end text-center">
             {sig?.signature ? (
-                <img src={`/storage/${sig.signature}`} alt="" className="mb-0.5 h-8 max-w-[110px] object-contain" />
+                <DocumentSignatureImage src={sig.signature} size="md" className="mb-0.5" />
             ) : (
-                <div className="h-8" />
+                <div className="h-12" />
             )}
             <div className="text-[10px] font-semibold">{title}</div>
             {sig?.user_name ? <div className="text-[8px]">{sig.user_name}</div> : null}
@@ -159,7 +160,7 @@ function CommentWithSignature({ title, comment, sig }: { title: string; comment?
             {sig ? (
                 <div className="mt-1 flex flex-col items-end leading-none">
                     {sig.signature ? (
-                        <img src={`/storage/${sig.signature}`} alt="" className="h-8 max-w-[110px] object-contain" />
+                        <DocumentSignatureImage src={sig.signature} size="md" />
                     ) : null}
                     {sig.user_name ? <div className="text-[8px] font-semibold">{sig.user_name}</div> : null}
                     {sig.signed_at ? <div className="text-[8px]">{dateText(sig.signed_at)}</div> : null}

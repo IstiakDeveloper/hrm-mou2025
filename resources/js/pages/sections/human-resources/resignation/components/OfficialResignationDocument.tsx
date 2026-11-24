@@ -1,5 +1,6 @@
 import React from 'react';
 import { format, parseISO } from 'date-fns';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 
 export const toBengaliNumber = (num: number | string | null | undefined) => {
     if (num === null || num === undefined || num === '') return '';
@@ -69,10 +70,10 @@ export default function OfficialResignationDocument({ application }: OfficialRes
 
     const renderSignatureImg = (sig: any, fallbackPath?: string) => {
         const path = sig?.signature_path || fallbackPath;
-        if (!path) return <div className="h-9" />;
+        if (!path) return <div className="h-12" />;
         return (
             <div className="flex justify-center mb-0.5">
-                <img src={`/storage/${path}`} alt="Signature" className="h-8 max-h-8 max-w-[120px] object-contain" />
+                <DocumentSignatureImage src={path} size="md" />
             </div>
         );
     };

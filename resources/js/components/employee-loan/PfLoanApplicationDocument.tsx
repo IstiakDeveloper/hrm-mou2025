@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 
 export type PfLoanFormFields = {
     day: string;
@@ -242,8 +243,8 @@ export function PfLoanApplicationDocument({ fields, editing = false, onChange }:
                 </p>
                 <div>
                     <p>আবেদনকারীর স্বাক্ষর:</p>
-                    <div className="flex h-12 items-end">
-                        {sign ? <img src={sign} alt="আবেদনকারীর স্বাক্ষর" className="max-h-12 max-w-[11rem] object-contain object-left" /> : null}
+                    <div className="flex h-14 items-end">
+                        <DocumentSignatureImage src={fields.signature} size="lg" />
                     </div>
                     <div className="mt-1 space-y-1">
                         <div className="flex flex-wrap items-end gap-x-1"><span className="shrink-0">নাম:</span><div className="min-w-0 flex-1 border-b border-dotted border-black"><Fill value={fields.name} align="left" /></div></div>

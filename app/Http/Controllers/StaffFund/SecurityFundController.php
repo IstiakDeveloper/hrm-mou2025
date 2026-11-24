@@ -137,12 +137,20 @@ class SecurityFundController extends Controller
 
     private function depositData(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'amount' => 'required|decimal:0,2|gt:0|max:99999999.99',
             'transaction_date' => 'required|date_format:Y-m-d|after_or_equal:1900-01-01|before_or_equal:'.BangladeshDate::todayString(),
-            'reference_no' => 'required|string|max:120', 'notes' => 'required|string|max:2000',
+            'reference_no' => 'nullable|string|max:120',
+            'notes' => 'nullable|string|max:2000',
             'idempotency_key' => 'required|uuid',
         ]);
+
+        $reference = trim((string) ($data['reference_no'] ?? ''));
+        $data['reference_no'] = $reference !== '' ? $reference : $this->fund->generateReceiptNumber($data['transaction_date'] ?? null, 'REC');
+        $notes = trim((string) ($data['notes'] ?? ''));
+        $data['notes'] = $notes !== '' ? $notes : null;
+
+        return $data;
     }
 
     public function store(Request $request)
@@ -207,8 +215,12 @@ class SecurityFundController extends Controller
         $data = $request->validate([
             'principal' => 'required|decimal:0,2|min:0|max:99999999.99', 'interest' => 'required|decimal:0,2|min:0|max:99999999.99',
             'transaction_date' => 'required|date_format:Y-m-d|before_or_equal:'.BangladeshDate::todayString(),
-            'reference_no' => 'required|string|max:120', 'notes' => 'required|string|max:2000', 'idempotency_key' => 'required|uuid',
+            'reference_no' => 'nullable|string|max:120', 'notes' => 'nullable|string|max:2000', 'idempotency_key' => 'required|uuid',
         ]);
+        $reference = trim((string) ($data['reference_no'] ?? ''));
+        $data['reference_no'] = $reference !== '' ? $reference : $this->fund->generateReceiptNumber($data['transaction_date'] ?? null, 'REF');
+        $notes = trim((string) ($data['notes'] ?? ''));
+        $data['notes'] = $notes !== '' ? $notes : null;
         $this->fund->refund($account, $data, $request->user()->id);
 
         return back()->with('success', 'Principal and interest refund recorded separately.');

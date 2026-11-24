@@ -36,6 +36,9 @@ class EmployeeSecurityFundService
             }
             $date = $this->validDate($data['transaction_date']);
             $amount = $this->positive($data['amount']);
+            if (empty(trim((string) ($data['reference_no'] ?? '')))) {
+                $data['reference_no'] = $this->generateReceiptNumber($date, 'REC');
+            }
             $account = Account::create([
                 'employee_id' => $employee->id, 'opened_on' => $date,
                 'policy_version' => config('security_fund.policy_version'), 'created_by' => $actor,
@@ -111,6 +114,9 @@ class EmployeeSecurityFundService
             $principal = Money::paisa($this->accountSnapshot($locked, $date)['principal']);
             if ($principal + $amount > Money::paisa(config('security_fund.maximum_principal'))) {
                 $this->fail('amount', 'The resulting principal exceeds the supported account limit.');
+            }
+            if (empty(trim((string) ($data['reference_no'] ?? '')))) {
+                $data['reference_no'] = $this->generateReceiptNumber($date, 'REC');
             }
 
             return $this->entry($locked, 'deposit', $date, ['principal_credit' => Money::decimal($amount)], $data, $actor);
@@ -253,6 +259,31 @@ class EmployeeSecurityFundService
 
             return $reversal;
         });
+    }
+
+    public function generateReceiptNumber(?string $date = null, string $prefixType = 'REC'): string
+    {
+        $year = $date ? substr($date, 0, 4) : BangladeshDate::todayString();
+        $year = substr($year, 0, 4);
+        $prefix = "SF-{$prefixType}-{$year}-";
+
+        $last = Transaction::query()
+            ->where('reference_no', 'like', $prefix.'%')
+            ->orderByDesc('id')
+            ->value('reference_no');
+
+        $sequence = 1;
+        if ($last && preg_match('/-(\d+)$/', $last, $matches)) {
+            $sequence = ((int) $matches[1]) + 1;
+        }
+
+        $candidate = sprintf('%s%04d', $prefix, $sequence);
+        while (Transaction::query()->where('reference_no', $candidate)->exists()) {
+            $sequence++;
+            $candidate = sprintf('%s%04d', $prefix, $sequence);
+        }
+
+        return $candidate;
     }
 
     private function entry(Account $account, string $type, string $date, array $amounts, array $data, ?int $actor): Transaction

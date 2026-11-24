@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 
 export type MotorcycleRecommendation = {
     comments?: string;
@@ -77,7 +78,10 @@ function Seat({ title, seat }: { title: string; seat?: MotorcycleRecommendation 
         <div className="min-h-[5.5rem]">
             <p className="font-semibold">{title}</p>
             {seat?.comments ? <p className="mt-1 text-[11px] leading-4">{seat.comments}</p> : null}
-            <p className="mt-2">সিল ও স্বাক্ষর: {sign ? <img src={sign} alt="" className="inline-block h-8 max-w-[7rem] object-contain align-middle" /> : '........................'}</p>
+            <p className="mt-2 flex items-center gap-1.5 flex-wrap">
+                <span>সিল ও স্বাক্ষর:</span>
+                {sign ? <DocumentSignatureImage src={sign} size="md" inline /> : '........................'}
+            </p>
             <p>নাম: {seat?.name || '........................'}</p>
             <p>তারিখ: {seat?.date || '........................'}</p>
         </div>
@@ -178,7 +182,9 @@ export function MotorcycleLoanApplicationDocument({ fields, editing = false, onC
 
             <div className="mt-3">
                 <p>আবেদনকারীর স্বাক্ষর:</p>
-                <div className="flex h-10 items-end">{fields.signature ? <img src={signatureUrl(fields.signature) || ''} alt="" className="max-h-10 max-w-[9rem] object-contain" /> : null}</div>
+                <div className="flex h-12 items-end">
+                    <DocumentSignatureImage src={fields.signature} size="lg" />
+                </div>
                 <p>নাম: <span className="font-semibold">{fields.name}</span></p>
                 <p>পদবী: <span className="font-semibold">{fields.designation}</span></p>
                 <p>তারিখ: <span className="font-semibold">{fields.date}</span></p>
@@ -203,7 +209,10 @@ export function MotorcycleLoanApplicationDocument({ fields, editing = false, onC
                 <p>অনুমোদনকৃত লোনের পরিমাণ: {fields.accounts_amount || '....................'} টাকা</p>
                 <p>কথায় ({fields.accounts_amount_words || '................................'})</p>
                 <p>প্রদান করা হলো: {fields.accounts_date || '....................'}</p>
-                <p>সিল ও স্বাক্ষর: {accountsSign ? <img src={accountsSign} alt="" className="inline-block h-7 max-w-[6rem] object-contain align-middle" /> : '............'}</p>
+                <p className="flex items-center gap-1.5 flex-wrap">
+                    <span>সিল ও স্বাক্ষর:</span>
+                    {accountsSign ? <DocumentSignatureImage src={accountsSign} size="md" inline /> : '............'}
+                </p>
             </div>
         </article>
     );
