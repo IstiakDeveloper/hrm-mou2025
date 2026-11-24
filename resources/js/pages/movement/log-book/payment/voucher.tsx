@@ -6,6 +6,8 @@ import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-nam
 import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { format } from 'date-fns';
 import { ArrowLeft, Printer } from 'lucide-react';
+import { handlePrintClose } from '@/lib/print-page';
+import { DocumentSignatureImage } from '@/components/common/DocumentSignatureImage';
 
 interface Employee extends EmployeeNameFields {
     pin?: string | null;
@@ -30,7 +32,7 @@ interface Payment {
     employee: Employee;
     approver?: { name: string; signature_path?: string | null } | null;
     recommender?: { name: string; signature_path?: string | null } | null;
-    processor?: { name: string } | null;
+    processor?: { name: string; signature_path?: string | null } | null;
     approved_at?: string | null;
     recommended_at?: string | null;
     processed_at?: string | null;
@@ -69,14 +71,12 @@ function SignatoryBlock({
     date?: string | null;
     signaturePath?: string | null;
 }) {
-    const src = signatureSrc(signaturePath);
-
     return (
         <div>
             <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
             <div className="flex h-16 items-end">
-                {src ? (
-                    <img src={src} alt="" className="max-h-16 max-w-[150px] object-contain object-left" />
+                {signaturePath ? (
+                    <DocumentSignatureImage src={signaturePath} size="xl" />
                 ) : null}
             </div>
             <div className="border-t border-slate-400 pt-1">
@@ -265,12 +265,15 @@ export default function LogBookPaymentVoucher({ payment, displayVoucherNo, kmSum
 
             <div data-screen-root className="mx-auto max-w-3xl px-4 py-6 print:hidden">
                 <div className="mb-4 flex items-center gap-3">
-                    <Link href={route('movement-log-book-payments.show', payment.id)}>
-                        <Button variant="outline" size="sm">
-                            <ArrowLeft className="mr-1 h-4 w-4" />
-                            Back
-                        </Button>
-                    </Link>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePrintClose(route('movement-log-book-payments.show', payment.id))}
+                    >
+                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        Back
+                    </Button>
                     <Button size="sm" onClick={() => window.print()}>
                         <Printer className="mr-1 h-4 w-4" />
                         Print
@@ -386,6 +389,7 @@ export default function LogBookPaymentVoucher({ payment, displayVoucherNo, kmSum
                                 label="Processed by"
                                 name={payment.processor?.name || '—'}
                                 date={payment.processed_at}
+                                signaturePath={payment.processor?.signature_path}
                             />
                             <SignatoryBlock
                                 label="Recommended by"

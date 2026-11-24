@@ -11,7 +11,7 @@ import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { format } from 'date-fns';
 import { AlertTriangle, ArrowLeft, Check, Eye, Printer, ThumbsUp, Trash2, XCircle } from 'lucide-react';
 
-const SIGNATURE_REQUIRED = 'লগ বুক পেমেন্ট রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+const SIGNATURE_REQUIRED = 'লগ বুক পেমেন্ট প্রসেস, রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
 
 function blockWithoutSignature(signature?: string | null) {
     if (signature) return false;

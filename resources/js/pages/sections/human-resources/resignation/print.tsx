@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft } from 'lucide-react';
 import OfficialResignationDocument from './components/OfficialResignationDocument';
+import { handlePrintClose } from '@/lib/print-page';
 
 export default function ResignationApplicationPrint({ application }: any) {
     const employee = application.employee || {};
@@ -18,7 +19,7 @@ export default function ResignationApplicationPrint({ application }: any) {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.history.back()}
+                            onClick={() => handlePrintClose('/resignation-applications')}
                             className="text-xs h-9 bg-white border-slate-300"
                         >
                             <ArrowLeft className="h-4 w-4 mr-1.5" />

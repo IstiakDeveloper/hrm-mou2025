@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer } from 'lucide-react';
+import { handlePrintClose } from '@/lib/print-page';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatSmartNumber, formatSmartKm } from '@/lib/format-smart-number';
@@ -109,12 +110,15 @@ export default function LogBookPrint({ logBooks, filterSummary, generatedAt, com
 
             <div data-screen-root="" className="mx-auto max-w-6xl px-4 py-6 print:hidden">
                 <div className="mb-4 flex items-center gap-3">
-                    <Link href={route('movement-log-books.index')}>
-                        <Button variant="outline" size="sm">
-                            <ArrowLeft className="mr-1 h-4 w-4" />
-                            Back
-                        </Button>
-                    </Link>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePrintClose(route('movement-log-books.index'))}
+                    >
+                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        Back
+                    </Button>
                     <Button size="sm" onClick={() => window.print()}>
                         <Printer className="mr-1 h-4 w-4" />
                         Print

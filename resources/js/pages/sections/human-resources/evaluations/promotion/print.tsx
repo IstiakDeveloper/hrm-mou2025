@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft } from 'lucide-react';
 import OfficialFormDocument from './components/OfficialFormDocument';
+import { handlePrintClose } from '@/lib/print-page';
 
 export default function PromotionEvaluationPrint({ evaluation }: any) {
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
@@ -22,7 +23,7 @@ export default function PromotionEvaluationPrint({ evaluation }: any) {
                         <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => window.history.back()}
+                            onClick={() => handlePrintClose('/promotion-evaluations')}
                             className="text-xs h-9 bg-white border-slate-300"
                         >
                             <ArrowLeft className="h-4 w-4 mr-1.5" />

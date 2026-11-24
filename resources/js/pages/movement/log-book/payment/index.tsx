@@ -147,7 +147,7 @@ function CompactDate({ label, value }: { label: string; value?: string | null })
     );
 }
 
-const SIGNATURE_REQUIRED = 'লগ বুক পেমেন্ট রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
+const SIGNATURE_REQUIRED = 'লগ বুক পেমেন্ট প্রসেস, রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
 
 function blockWithoutSignature(signature?: string | null) {
     if (signature) return false;
@@ -216,7 +216,7 @@ function PaymentActions({ row, compact = false }: { row: Payment; compact?: bool
 
 export default function LogBookPaymentIndex({ payments, summary, myPendingCounts, filters, ratePerKm, canProcess, userLimitInfo, scopeView = 'team', showScopeTabs = false }: Props) {
     const { flash, auth } = usePage<{ flash?: { success?: string; error?: string }; auth?: { user?: { signature?: string | null } } }>().props;
-    const needsSignature = !auth?.user?.signature && payments.data.some((row) => row.can_recommend || row.can_approve);
+    const needsSignature = !auth?.user?.signature && (canProcess || payments.data.some((row) => row.can_recommend || row.can_approve));
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || '');
     const [periodYear, setPeriodYear] = useState(filters.period_year || '');
@@ -294,6 +294,7 @@ export default function LogBookPaymentIndex({ payments, summary, myPendingCounts
     const showProcess = canProcess && (!showScopeTabs || scopeView === 'mine');
 
     const handleProcess = () => {
+        if (blockWithoutSignature(auth?.user?.signature)) return;
         if (!confirm(`Process your log book payment for ${monthLabel(Number(processYear), Number(processMonth))}? All unpaid entries up to this month (including previous unpaid) will be included at ৳${ratePerKm}/km.`)) return;
         router.post(route('movement-log-book-payments.process'), {
             period_year: processYear,

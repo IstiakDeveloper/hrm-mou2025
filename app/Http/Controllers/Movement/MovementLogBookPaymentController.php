@@ -185,6 +185,10 @@ class MovementLogBookPaymentController extends Controller
         $user = Auth::user();
         abort_unless($this->userCanProcessPayments($user), 403);
 
+        if ($redirect = $this->redirectIfSignatureMissing($user)) {
+            return $redirect;
+        }
+
         $request->validate([
             'period_year' => 'required|integer|min:2020|max:2100',
             'period_month' => 'required|integer|min:1|max:12',
@@ -415,7 +419,8 @@ class MovementLogBookPaymentController extends Controller
             'recommender.employee:id,signature',
             'approver:id,name,signature,employee_id',
             'approver.employee:id,signature',
-            'processor:id,name',
+            'processor:id,name,signature,employee_id',
+            'processor.employee:id,signature',
         ]);
 
         $this->attachSignatoryPaths($payment);
@@ -451,12 +456,12 @@ class MovementLogBookPaymentController extends Controller
 
         return redirect()
             ->route('settings.profile.edit')
-            ->with('error', 'লগ বুক পেমেন্ট রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
+            ->with('error', 'লগ বুক পেমেন্ট প্রসেস, রেকমেন্ড বা অনুমোদনের পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।');
     }
 
     private function attachSignatoryPaths(MovementLogBookPayment $payment): void
     {
-        foreach (['recommender', 'approver'] as $relation) {
+        foreach (['processor', 'recommender', 'approver'] as $relation) {
             $person = $payment->{$relation};
             if (! $person instanceof User) {
                 continue;

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer } from 'lucide-react';
+import { handlePrintClose } from '@/lib/print-page';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { PayrollReportDocumentHeader } from '@/components/payroll/PayrollReportDocumentHeader';
@@ -166,11 +167,15 @@ export default function MovementPrint({ movements, filterSummary, generatedAt, c
                         <p className="text-xs text-slate-500">Filtered movement list in A4 portrait format.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-                            <Link href={route('movements.index')}>
-                                <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-                                Back
-                            </Link>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => handlePrintClose(route('movements.index'))}
+                        >
+                            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+                            Back
                         </Button>
                         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => window.print()}>
                             <Printer className="mr-1.5 h-3.5 w-3.5" />
