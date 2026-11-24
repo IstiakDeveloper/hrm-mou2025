@@ -82,8 +82,8 @@ function money(value: unknown) {
 
 const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
 
-function blockWithoutSignature(userHasSignature: boolean) {
-    if (userHasSignature) return false;
+function blockWithoutSignature(userHasSignature: boolean, bypass = false) {
+    if (userHasSignature || bypass) return false;
     alert(SIGNATURE_REQUIRED);
     window.location.href = '/settings/profile';
     return true;
@@ -97,6 +97,7 @@ export default function FinalClearanceIndex({
     canCreate,
     userHasSignature = false,
     isSuperAdmin = false,
+    isExecutiveDirector = false,
 }: {
     clearances: Paginator;
     filters: { status?: string; search?: string; per_page?: string; month?: string };
@@ -105,6 +106,7 @@ export default function FinalClearanceIndex({
     canCreate: boolean;
     userHasSignature?: boolean;
     isSuperAdmin?: boolean;
+    isExecutiveDirector?: boolean;
 }) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status || 'all');
@@ -168,7 +170,7 @@ export default function FinalClearanceIndex({
                             href="/final-clearances/create"
                             className="shrink-0"
                             onClick={(event) => {
-                                if (blockWithoutSignature(userHasSignature)) event.preventDefault();
+                                if (blockWithoutSignature(userHasSignature, isSuperAdmin || isExecutiveDirector)) event.preventDefault();
                             }}
                         >
                             <Button className="h-8.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700">

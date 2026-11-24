@@ -470,6 +470,10 @@ class FinalClearanceService
                 throw ValidationException::withMessages(['employee' => 'Employee record is missing.']);
             }
 
+            $this->refreshSecurityFund($clearance);
+            $this->recomputeTotals($clearance);
+            $clearance->save();
+
             $payment = $this->settlements->generateForEmployee($employee, $user->id);
             if (! $payment->isPending()) {
                 throw ValidationException::withMessages([
@@ -620,7 +624,7 @@ class FinalClearanceService
         return $user->isAccountant() || $user->hasPermission('final-clearances.accounts');
     }
 
-    private function isDirectorFinance(User $user): bool
+    public function isDirectorFinance(User $user): bool
     {
         if ($user->isSuperAdmin()) {
             return false;
@@ -644,7 +648,7 @@ class FinalClearanceService
             ->exists();
     }
 
-    private function isExecutiveDirector(User $user): bool
+    public function isExecutiveDirector(User $user): bool
     {
         if ($user->isSuperAdmin()) {
             return false;

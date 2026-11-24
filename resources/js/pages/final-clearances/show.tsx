@@ -58,8 +58,8 @@ function FieldError({ message }: { message?: string }) {
 
 const SIGNATURE_REQUIRED = 'চূড়ান্ত ছাড়পত্রের কোনো কাজ করার পূর্বে আপনার প্রোফাইলে ডিজিটাল স্বাক্ষর (Signature) আপলোড করা আবশ্যক। অনুগ্রহ করে প্রথমে স্বাক্ষর আপলোড করুন।';
 
-function blockWithoutSignature(userHasSignature: boolean) {
-    if (userHasSignature) return false;
+function blockWithoutSignature(userHasSignature: boolean, bypass = false) {
+    if (userHasSignature || bypass) return false;
     alert(SIGNATURE_REQUIRED);
     window.location.href = '/settings/profile';
     return true;
@@ -70,11 +70,13 @@ export default function FinalClearanceShow({
     canAct,
     userHasSignature = false,
     isSuperAdmin = false,
+    isExecutiveDirector = false,
 }: {
     clearance: Clearance;
     canAct: boolean;
     userHasSignature?: boolean;
     isSuperAdmin?: boolean;
+    isExecutiveDirector?: boolean;
 }) {
     const listReturnUrl = useListReturnUrl('/final-clearances');
     const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -124,7 +126,7 @@ export default function FinalClearanceShow({
     const decision = useForm({ comments: '' });
 
     const postDecision = (url: string) => {
-        if (blockWithoutSignature(userHasSignature)) return;
+        if (blockWithoutSignature(userHasSignature, isSuperAdmin || isExecutiveDirector)) return;
         if (decision.data.comments.trim() === '') {
             decision.setError('comments', 'Comment is required before submit.');
             return;

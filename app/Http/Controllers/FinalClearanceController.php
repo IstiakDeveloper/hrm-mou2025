@@ -40,7 +40,7 @@ class FinalClearanceController extends Controller
         ];
 
         $rows = (clone $scope)
-            ->with('signatures')
+            ->with(['signatures.user.employee', 'initiator'])
             ->when($status !== '', fn ($q) => $q->where('status', $status))
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
@@ -57,19 +57,69 @@ class FinalClearanceController extends Controller
                     ? $row->signatures->where('action', 'sent_back')->sortByDesc('id')->first()
                     : null;
 
+                $canAct = $this->clearances->canAct($user, $row);
+
                 return [
                     'id' => $row->id,
                     'staff_id' => $row->staff_id,
                     'employee_name' => $row->employee_name,
                     'designation_name' => $row->designation_name,
+                    'department_name' => $row->department_name,
                     'workplace' => $row->workplace,
                     'status' => $row->status,
                     'status_label' => $this->clearances->stageLabel($row->status),
+                    'total_payable' => $row->total_payable,
+                    'total_adjustable' => $row->total_adjustable,
                     'net_payable' => $row->net_payable,
+                    'unpaid_salary' => $row->unpaid_salary,
+                    'unpaid_salary_remarks' => $row->unpaid_salary_remarks,
+                    'pf_amount' => $row->pf_amount,
+                    'pf_remarks' => $row->pf_remarks,
+                    'gratuity_amount' => $row->gratuity_amount,
+                    'gratuity_remarks' => $row->gratuity_remarks,
+                    'staff_security' => $row->staff_security,
+                    'staff_security_interest' => $row->staff_security_interest,
+                    'staff_security_remarks' => $row->staff_security_remarks,
+                    'other_payable' => $row->other_payable,
+                    'other_payable_remarks' => $row->other_payable_remarks,
+                    'pf_loan' => $row->pf_loan,
+                    'motorcycle_loan' => $row->motorcycle_loan,
+                    'laptop_loan' => $row->laptop_loan,
+                    'other_loan' => $row->other_loan,
+                    'advance_received' => $row->advance_received,
+                    'advance_remarks' => $row->advance_remarks,
+                    'joining_date' => optional($row->joining_date)->toDateString(),
+                    'confirmation_date' => optional($row->confirmation_date)->toDateString(),
+                    'dropout_date' => optional($row->dropout_date)->toDateString(),
+                    'service_length_label' => $row->service_length_label,
+                    'leave_balance' => $row->leave_balance,
+                    'id_card_returned' => (bool) $row->id_card_returned,
+                    'sim_returned' => (bool) $row->sim_returned,
+                    'member_loan_outstanding' => $row->member_loan_outstanding,
+                    'savings_outstanding' => $row->savings_outstanding,
+                    'total_member' => $row->total_member,
+                    'total_borrower' => $row->total_borrower,
+                    'preparer_comments' => $row->preparer_comments,
+                    'accounts_comments' => $row->accounts_comments,
+                    'rejected_reason' => $row->rejected_reason,
                     'initiator_name' => $row->initiator?->name,
                     'created_at' => optional($row->created_at)->toDateString(),
-                    'can_act' => $this->clearances->canAct($user, $row),
+                    'can_act' => $canAct,
+                    'can_approve' => $canAct && in_array($row->status, [FinalClearance::STATUS_DIRECTOR_FA, FinalClearance::STATUS_ED], true),
+                    'can_send_back' => $canAct && in_array($row->status, [FinalClearance::STATUS_HR, FinalClearance::STATUS_ACCOUNTS, FinalClearance::STATUS_DIRECTOR_FA, FinalClearance::STATUS_ED], true),
+                    'can_reject' => $canAct && in_array($row->status, [FinalClearance::STATUS_DIRECTOR_FA, FinalClearance::STATUS_ED], true),
                     'sent_back_reason' => $sentBack?->comments,
+                    'signatures' => $row->signatures->map(function ($sig) {
+                        return [
+                            'id' => $sig->id,
+                            'stage' => $sig->stage,
+                            'action' => $sig->action,
+                            'comments' => $sig->comments,
+                            'signed_at' => optional($sig->signed_at)->format('Y-m-d H:i'),
+                            'user_name' => $sig->user?->name,
+                            'signature' => $sig->user?->signature ?: $sig->user?->employee?->signature,
+                        ];
+                    })->values(),
                 ];
             });
 
@@ -83,6 +133,7 @@ class FinalClearanceController extends Controller
             'canCreate' => $this->clearances->canOpenCreate($user),
             'userHasSignature' => $user->hasSignature(),
             'isSuperAdmin' => $user->isSuperAdmin(),
+            'isExecutiveDirector' => $this->clearances->isExecutiveDirector($user),
         ]);
     }
 
@@ -173,6 +224,7 @@ class FinalClearanceController extends Controller
             'canAct' => $this->clearances->canAct($user, $finalClearance),
             'userHasSignature' => $user->hasSignature(),
             'isSuperAdmin' => $user->isSuperAdmin(),
+            'isExecutiveDirector' => $this->clearances->isExecutiveDirector($user),
         ]);
     }
 
@@ -410,6 +462,8 @@ class FinalClearanceController extends Controller
         ]));
 
         if ($finalClearance->status === FinalClearance::STATUS_DIRECTOR_FA) {
+            $this->clearances->refreshSecurityFund($finalClearance);
+            $this->clearances->recomputeTotals($finalClearance);
             $finalClearance->status = FinalClearance::STATUS_ED;
             $finalClearance->save();
             $this->clearances->sign($finalClearance, $user, 'director_fa', 'approved', $data['comments'] ?? null);
@@ -552,6 +606,10 @@ class FinalClearanceController extends Controller
 
     private function requireSignature($user): ?\Illuminate\Http\RedirectResponse
     {
+        if ($user->isSuperAdmin() || $this->clearances->isExecutiveDirector($user)) {
+            return null;
+        }
+
         $user->loadMissing('employee');
         if ($user->hasSignature()) {
             return null;
