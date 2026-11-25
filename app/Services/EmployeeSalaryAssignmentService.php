@@ -136,69 +136,6 @@ class EmployeeSalaryAssignmentService
     }
 
     /**
-     * Overlay salary-process / payslip computed amounts onto component rows (esp. Tax & Loans).
-     *
-     * @param  array{
-     *   basic_salary?: float,
-     *   addition_rows: list<array<string, mixed>>,
-     *   deduction_rows: list<array<string, mixed>>,
-     *   totals?: array{total_addition: float, total_deduction: float, net_payable: float}
-     * }  $payload
-     * @param  list<array{salary_head_id?: int|null, head_name?: string, type: string, computed_amount: float|int|string}>  $payrollLines
-     * @return array{
-     *   basic_salary?: float,
-     *   addition_rows: list<array<string, mixed>>,
-     *   deduction_rows: list<array<string, mixed>>,
-     *   totals: array{total_addition: float, total_deduction: float, net_payable: float}
-     * }
-     */
-    public function applyPayrollLinesToRows(array $payload, array $payrollLines, ?float $basicSalary = null): array
-    {
-        $byHeadId = [];
-        foreach ($payrollLines as $line) {
-            $headId = isset($line['salary_head_id']) ? (int) $line['salary_head_id'] : 0;
-            if ($headId <= 0) {
-                continue;
-            }
-            $amount = SalaryStructureCalculator::roundTaka((float) $line['computed_amount']);
-            $byHeadId[$headId] = ($byHeadId[$headId] ?? 0) + $amount;
-        }
-
-        $apply = function (array $rows) use ($byHeadId): array {
-            return array_map(function (array $row) use ($byHeadId) {
-                $headId = (int) ($row['salary_head_id'] ?? 0);
-                if ($headId > 0 && array_key_exists($headId, $byHeadId)) {
-                    // Display the exact payroll amount (Tax / Loan / PF) as fixed value.
-                    $row['amount_type'] = 'fixed';
-                    $row['amount'] = self::formatAmountForInput('fixed', (string) $byHeadId[$headId]);
-                }
-
-                return $row;
-            }, $rows);
-        };
-
-        $payload['addition_rows'] = $apply($payload['addition_rows'] ?? []);
-        $payload['deduction_rows'] = $apply($payload['deduction_rows'] ?? []);
-
-        $basic = SalaryStructureCalculator::roundTaka(
-            $basicSalary ?? (float) ($payload['basic_salary'] ?? 0)
-        );
-        $payload['basic_salary'] = $basic;
-        $payload['totals'] = SalaryStructureCalculator::totalsFromLines(
-            collect($payload['addition_rows'])
-                ->merge($payload['deduction_rows'])
-                ->map(fn (array $row) => [
-                    'salary_head_id' => $row['salary_head_id'],
-                    'amount_type' => $row['amount_type'],
-                    'amount' => $row['amount'],
-                ]),
-            $basic
-        );
-
-        return $payload;
-    }
-
-    /**
      * @param  list<array{salary_head_id: int, amount_type: string, amount: float|int|string}>  $lines
      */
     public function syncEmployeeSalaryLines(Employee $employee, array $lines, ?Carbon $effectiveFrom = null): void

@@ -317,6 +317,7 @@ export function EmployeeSalaryAssignment({
     const previewRequestId = useRef(0);
     const lastPreviewKey = useRef<string | null>(null);
     const initialRowsApplied = useRef(false);
+    const setupBeforeEdit = useRef<{ basic: string; additions: SalaryComponentRow[]; deductions: SalaryComponentRow[] } | null>(null);
 
     useEffect(() => {
         setStepBasicSalary(stepBasicSalaryProp);
@@ -394,6 +395,8 @@ export function EmployeeSalaryAssignment({
     useEffect(() => {
         if (!showSalaryComponents || !previewUrl) return;
         if (!effectivePayscaleId || !salaryGradeId || !salaryStepId) {
+            previewRequestId.current += 1;
+            setPreviewLoading(false);
             onAdditionRowsChange?.([]);
             onDeductionRowsChange?.([]);
             setPayrollPreview(null);
@@ -424,6 +427,7 @@ export function EmployeeSalaryAssignment({
         }
 
         lastPreviewKey.current = assignmentKey;
+        setPayrollPreview(null);
 
         const requestId = ++previewRequestId.current;
         const params = new URLSearchParams({
@@ -442,13 +446,12 @@ export function EmployeeSalaryAssignment({
             .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Preview failed'))))
             .then((preview: SalaryAssignmentPreview) => {
                 if (requestId !== previewRequestId.current) return;
-                // Always apply server preview so Tax/PF/Loan and totals match salary process.
                 applyComponentPreview(preview);
                 setPayrollPreview(preview.payroll_preview ?? null);
             })
             .catch(() => {
                 if (requestId !== previewRequestId.current) return;
-                if (selectedStep) {
+                if (!seedBasicOnly && selectedStep) {
                     onBasicSalaryChange(String(selectedStep.basic_salary ?? ''));
                     setStepBasicSalary(Number(selectedStep.basic_salary) || 0);
                 }
@@ -464,6 +467,7 @@ export function EmployeeSalaryAssignment({
     const handleResetToGradeStep = () => {
         if (!effectivePayscaleId || !salaryGradeId || !salaryStepId || !previewUrl) return;
 
+        const requestId = ++previewRequestId.current;
         setPreviewLoading(true);
         const params = new URLSearchParams({
             payscale_id: effectivePayscaleId,
@@ -480,14 +484,8 @@ export function EmployeeSalaryAssignment({
         })
             .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Reset preview failed'))))
             .then((preview: SalaryAssignmentPreview) => {
-                const nextBasic =
-                    preview.step_basic_salary !== undefined && preview.step_basic_salary !== null
-                        ? Math.round(preview.step_basic_salary)
-                        : Math.round(preview.basic_salary) || 0;
-                onBasicSalaryChange(nextBasic > 0 ? String(nextBasic) : '');
-                setStepBasicSalary(preview.step_basic_salary);
-                onAdditionRowsChange?.(normalizePreviewRows(preview.addition_rows));
-                onDeductionRowsChange?.(normalizePreviewRows(preview.deduction_rows));
+                if (requestId !== previewRequestId.current) return;
+                applyComponentPreview(preview);
                 setPayrollPreview(preview.payroll_preview ?? null);
                 onResetToGradeStep?.();
             })
@@ -495,7 +493,9 @@ export function EmployeeSalaryAssignment({
                 console.error('Reset to grade/step error:', err);
             })
             .finally(() => {
-                setPreviewLoading(false);
+                if (requestId === previewRequestId.current) {
+                    setPreviewLoading(false);
+                }
             });
     };
 
@@ -511,6 +511,23 @@ export function EmployeeSalaryAssignment({
         );
     };
 
+    const toggleComponentsEdit = () => {
+        if (componentsEditing) {
+            previewRequestId.current += 1;
+            setPreviewLoading(false);
+            const setup = setupBeforeEdit.current;
+            if (setup) {
+                onBasicSalaryChange(setup.basic);
+                onAdditionRowsChange?.(setup.additions);
+                onDeductionRowsChange?.(setup.deductions);
+            }
+        } else {
+            setupBeforeEdit.current = { basic: basicSalary, additions: additionRows, deductions: deductionRows };
+        }
+
+        onToggleComponentsEdit?.();
+    };
+
     const patchDeduction = (id: number, patch: Partial<SalaryComponentRow>) => {
         onDeductionRowsChange?.(
             deductionRows.map((r) => (r.salary_head_id === id ? { ...r, ...patch } : r)),
@@ -518,13 +535,6 @@ export function EmployeeSalaryAssignment({
     };
 
     const liveTotals = useMemo(() => {
-        if (payrollPreview) {
-            return {
-                total_addition: Math.round(payrollPreview.gross_salary),
-                total_deduction: Math.round(payrollPreview.total_deduction),
-                net_payable: Math.round(payrollPreview.net_payable),
-            };
-        }
         const totalAddition = basicNum + sumComponentRows(additionRows, basicNum);
         const totalDeduction = sumComponentRows(deductionRows, basicNum);
         return {
@@ -532,7 +542,7 @@ export function EmployeeSalaryAssignment({
             total_deduction: totalDeduction,
             net_payable: totalAddition - totalDeduction,
         };
-    }, [additionRows, deductionRows, basicNum, payrollPreview]);
+    }, [additionRows, deductionRows, basicNum]);
 
     const hasAssignment = Boolean(effectivePayscaleId && salaryGradeId && salaryStepId);
 
@@ -556,7 +566,7 @@ export function EmployeeSalaryAssignment({
                         }}
                         items={payscaleItems}
                         placeholder={payscaleLocked ? 'Active payscale' : 'Select payscale'}
-                        disabled={payscaleLocked}
+                        disabled={payscaleLocked || componentsEditing}
                         clearable={!payscaleLocked}
                     />
                     {errors.payscale_id && <p className="text-[11px] text-red-500">{errors.payscale_id}</p>}
@@ -572,7 +582,7 @@ export function EmployeeSalaryAssignment({
                         }}
                         items={gradeItems}
                         placeholder={effectivePayscaleId ? 'Select grade' : 'Select payscale first'}
-                        disabled={!effectivePayscaleId}
+                        disabled={!effectivePayscaleId || componentsEditing}
                         clearable
                     />
                     {errors.salary_grade_id && <p className="text-[11px] text-red-500">{errors.salary_grade_id}</p>}
@@ -587,7 +597,7 @@ export function EmployeeSalaryAssignment({
                         }}
                         items={stepItems}
                         placeholder={salaryGradeId ? 'Select step' : 'Select grade first'}
-                        disabled={!salaryGradeId}
+                        disabled={!salaryGradeId || componentsEditing}
                         clearable
                     />
                     {errors.salary_step_id && <p className="text-[11px] text-red-500">{errors.salary_step_id}</p>}
@@ -599,7 +609,7 @@ export function EmployeeSalaryAssignment({
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5">
                         <div>
                             <p className="text-[11px] font-semibold text-zinc-800">
-                                {componentsReadOnly ? 'Salary components (preview)' : 'Custom salary components (editing)'}
+                                {componentsReadOnly ? 'Full-month salary setup' : 'Edit full-month salary setup'}
                             </p>
                             <p className="text-[10px] text-zinc-500">
                                 {componentsReadOnly
@@ -621,7 +631,8 @@ export function EmployeeSalaryAssignment({
                             {onToggleComponentsEdit && (
                                 <button
                                     type="button"
-                                    onClick={onToggleComponentsEdit}
+                                    onClick={toggleComponentsEdit}
+                                    disabled={previewLoading && !componentsEditing}
                                     className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-[11px] font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
                                 >
                                     {componentsEditing ? 'Cancel' : 'Edit components'}
@@ -665,7 +676,13 @@ export function EmployeeSalaryAssignment({
                                     {payrollPreview.source === 'payslip' ? 'From processed payslip' : 'Live estimate'}
                                 </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Basic</p>
+                                    <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                        ৳{formatTakaWhole(payrollPreview.basic_salary)}
+                                    </p>
+                                </div>
                                 <div>
                                     <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Gross</p>
                                     <p className="font-mono text-[12px] font-bold text-zinc-800">

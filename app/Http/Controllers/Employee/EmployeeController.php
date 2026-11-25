@@ -738,11 +738,21 @@ class EmployeeController extends Controller
             'month' => 'nullable|integer|min:1|max:12',
         ]);
 
+        $this->assertEmployeePayrollAssignment($validated);
+
         $employee = (isset($validated['employee_id']) && ! $request->boolean('ignore_custom'))
             ? Employee::query()
                 ->with(['employeeType', 'salaryGrade', 'salaryStep', 'payscale'])
                 ->find($validated['employee_id'])
             : null;
+
+        if ($employee && (
+            (int) $validated['payscale_id'] !== (int) $employee->payscale_id
+            || (int) $validated['salary_grade_id'] !== (int) $employee->salary_grade_id
+            || (int) $validated['salary_step_id'] !== (int) $employee->salary_step_id
+        )) {
+            $employee = null;
+        }
 
         $payload = $this->employeeSalaryAssignmentService->resolveRows(
             (int) $validated['payscale_id'],
@@ -752,33 +762,24 @@ class EmployeeController extends Controller
         );
 
         if ($employee) {
-            $assignmentUnchanged =
-                (int) $validated['payscale_id'] === (int) $employee->payscale_id
-                && (int) $validated['salary_grade_id'] === (int) $employee->salary_grade_id
-                && (int) $validated['salary_step_id'] === (int) $employee->salary_step_id;
-
             $year = isset($validated['year']) ? (int) $validated['year'] : null;
             $month = isset($validated['month']) ? (int) $validated['month'] : null;
 
             // Prefer the latest processed salary month so Tax/PF/Loan match salary process.
-            $existingPayslip = null;
-            if ($assignmentUnchanged) {
-                $payslipQuery = Payslip::query()
-                    ->where('employee_id', $employee->id)
-                    ->whereHas('payrollRun', function ($q) use ($year, $month) {
-                        $q->where('salary_type', 'salary');
-                        if ($year !== null && $month !== null) {
-                            $q->where('year', $year)->where('month', $month);
-                        }
-                    })
-                    ->with(['lines', 'payrollRun'])
-                    ->latest('id');
-
-                $existingPayslip = $payslipQuery->first();
-                if ($existingPayslip?->payrollRun) {
-                    $year = (int) $existingPayslip->payrollRun->year;
-                    $month = (int) $existingPayslip->payrollRun->month;
-                }
+            $existingPayslip = Payslip::query()
+                ->where('employee_id', $employee->id)
+                ->whereHas('payrollRun', function ($q) use ($year, $month) {
+                    $q->where('salary_type', 'salary');
+                    if ($year !== null && $month !== null) {
+                        $q->where('year', $year)->where('month', $month);
+                    }
+                })
+                ->with(['lines', 'payrollRun'])
+                ->latest('id')
+                ->first();
+            if ($existingPayslip?->payrollRun) {
+                $year = (int) $existingPayslip->payrollRun->year;
+                $month = (int) $existingPayslip->payrollRun->month;
             }
 
             $year ??= (int) now()->year;
@@ -821,33 +822,9 @@ class EmployeeController extends Controller
                         ->sum('computed_amount'),
                     'lines' => $payrollLines,
                 ];
-
-                $payload = $this->employeeSalaryAssignmentService->applyPayrollLinesToRows(
-                    $payload,
-                    $payrollLines,
-                    (float) $existingPayslip->basic_salary,
-                );
             } else {
-                // Preview uses the selected grade/step without forcing custom overrides.
-                $previewEmployee = $employee->replicate();
-                $previewEmployee->id = $employee->id;
-                $previewEmployee->exists = true;
-                $previewEmployee->payscale_id = (int) $validated['payscale_id'];
-                $previewEmployee->salary_grade_id = (int) $validated['salary_grade_id'];
-                $previewEmployee->salary_step_id = (int) $validated['salary_step_id'];
-                $previewEmployee->setRelation('salaryGrade', $employee->salaryGrade);
-                $previewEmployee->setRelation('salaryStep', $employee->salaryStep);
-                $previewEmployee->setRelation('payscale', $employee->payscale);
-                $previewEmployee->setRelation('employeeType', $employee->employeeType);
-
-                // Clear incomplete custom flags so estimate matches salary-process grade/step path.
-                if (! $employee->hasEffectiveCustomBasic()) {
-                    $previewEmployee->basic_salary = null;
-                    $previewEmployee->custom_salary_assigned_at = null;
-                }
-
                 $calc = $this->payrollCalculationService->calculateForEmployee(
-                    $previewEmployee,
+                    $employee,
                     $asOf,
                     'salary',
                     $year,
@@ -874,12 +851,6 @@ class EmployeeController extends Controller
                     'loan_total' => collect($calc['loan_deductions'] ?? [])->sum('amount'),
                     'lines' => $payrollLines,
                 ];
-
-                $payload = $this->employeeSalaryAssignmentService->applyPayrollLinesToRows(
-                    $payload,
-                    $payrollLines,
-                    (float) $calc['basic_salary'],
-                );
             }
         }
 
@@ -889,7 +860,7 @@ class EmployeeController extends Controller
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function syncEmployeeSalaryComponents(Employee $employee, array $validated): void
+    private function syncEmployeeSalaryComponents(Employee $employee, array $validated, bool $initialAssignment = false): void
     {
         if (! $employee->payscale_id || ! $employee->salary_grade_id || ! $employee->salary_step_id) {
             return;
@@ -902,6 +873,10 @@ class EmployeeController extends Controller
         $lines = is_array($validated['salary_lines'] ?? null) ? $validated['salary_lines'] : [];
 
         $effectiveFrom = $employee->joining_date ? Carbon::parse($employee->joining_date) : Carbon::today();
+
+        if ($initialAssignment) {
+            $employee->assignmentHistoryContext = ['effective_from' => $effectiveFrom];
+        }
 
         $this->employeeSalaryAssignmentService->syncEmployeeSalary(
             $employee,
@@ -2734,6 +2709,7 @@ class EmployeeController extends Controller
                 'documents',
                 'photo',
                 'signature',
+                'basic_salary',
                 'salary_lines',
                 'salary_lines_json',
                 'sync_salary_components',
@@ -2778,10 +2754,6 @@ class EmployeeController extends Controller
                         'employee_signatures',
                         (string) ($employeeData['pin'] ?? 'emp')
                     );
-                }
-
-                if (! $request->boolean('sync_salary_components')) {
-                    unset($employeeData['basic_salary']);
                 }
 
                                 $createdEmployee = Employee::create($employeeData);
@@ -2945,7 +2917,7 @@ class EmployeeController extends Controller
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $createdEmployee, true);
                 if ($request->boolean('sync_salary_components')) {
-                    $this->syncEmployeeSalaryComponents($createdEmployee, $validated);
+                    $this->syncEmployeeSalaryComponents($createdEmployee, $validated, initialAssignment: true);
                 }
             });
 
@@ -3494,6 +3466,7 @@ class EmployeeController extends Controller
                 'disciplinary_actions',
                 'photo',
                 'signature',
+                'basic_salary',
                 'salary_lines',
                 'salary_lines_json',
                 'sync_salary_components',
@@ -3542,6 +3515,7 @@ class EmployeeController extends Controller
                 }
 
                 $employee->update($employeeData);
+                $salaryAssignmentChanged = $employee->wasChanged(['payscale_id', 'salary_grade_id', 'salary_step_id']);
                 $employee->load('designation');
                 $this->syncZoneRegionalManagerAssignment($employee);
                 $this->syncUserAccountForEmployee($employee->fresh());
@@ -3906,8 +3880,10 @@ class EmployeeController extends Controller
                 $employee->refresh();
                 if ($request->boolean('reset_salary_components')) {
                     $this->employeeSalaryAssignmentService->resetCustomAssignment($employee);
-                } elseif ($request->boolean('sync_salary_components') || ($request->has('basic_salary') && $request->input('basic_salary') !== null && $request->input('basic_salary') !== '')) {
+                } elseif ($request->boolean('sync_salary_components')) {
                     $this->syncEmployeeSalaryComponents($employee, $validated);
+                } elseif ($salaryAssignmentChanged) {
+                    $this->employeeSalaryAssignmentService->resetCustomAssignment($employee);
                 }
             });
 

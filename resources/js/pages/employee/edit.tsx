@@ -1849,14 +1849,11 @@ export default function EmployeeEdit({
                         (row) => String(row.action_date ?? '').trim() !== '',
                     ),
                     reset_salary_components: salaryComponentsReset ? 1 : 0,
-                    sync_salary_components: salaryComponentsReset
-                        ? 0
-                        : (salaryComponentsEditing || (formData.basic_salary !== '' && formData.basic_salary !== String(employee.basic_salary ?? '')) ? 1 : 0),
-                    salary_lines_json: salaryComponentsReset
-                        ? ''
-                        : (salaryComponentsEditing || (formData.basic_salary !== '' && formData.basic_salary !== String(employee.basic_salary ?? ''))
-                            ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
-                            : ''),
+                    basic_salary: salaryComponentsEditing && !salaryComponentsReset ? formData.basic_salary : '',
+                    sync_salary_components: salaryComponentsEditing && !salaryComponentsReset ? 1 : 0,
+                    salary_lines_json: salaryComponentsEditing && !salaryComponentsReset
+                        ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
+                        : '',
                 };
             },
             onSuccess: () => {
@@ -3391,21 +3388,8 @@ export default function EmployeeEdit({
                                                     setSalaryComponentsReset(true);
                                                 }}
                                                 onToggleComponentsEdit={() => {
-                                                    setSalaryComponentsEditing((prev) => {
-                                                        if (prev) {
-                                                            setSalaryComponentsReset(false);
-                                                            // cancel: restore preview rows from server snapshot
-                                                            setSalaryAdditionRows(salaryAssignment?.addition_rows ?? []);
-                                                            setSalaryDeductionRows(salaryAssignment?.deduction_rows ?? []);
-                                                            setData(
-                                                                'basic_salary',
-                                                                employee.basic_salary != null && employee.basic_salary !== ''
-                                                                    ? String(employee.basic_salary)
-                                                                    : '',
-                                                            );
-                                                        }
-                                                        return !prev;
-                                                    });
+                                                    setSalaryComponentsReset(false);
+                                                    setSalaryComponentsEditing((prev) => !prev);
                                                 }}
                                                 errors={errors}
                                             />
