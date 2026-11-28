@@ -225,10 +225,7 @@ class LogBookPaymentWorkflowService
         }
 
         // 6. Accountant (500 KM)
-        if (
-            str_contains($title, 'accountant')
-            || str_contains($title, 'accounts officer')
-        ) {
+        if ($this->isAccountantTitle($title)) {
             return [
                 'eligible' => true,
                 'km_limit' => 500.0,
@@ -308,6 +305,12 @@ class LogBookPaymentWorkflowService
         }
 
         if ($tier === self::TIER_STAFF) {
+            if ($this->isAccountantPayment($payment)) {
+                $zmId = $this->zonalManagerEmployeeId($payment->employee);
+
+                return $zmId !== null && (int) $user->employee_id === $zmId;
+            }
+
             $rmId = $this->regionalManagerEmployeeId($payment->employee);
             if ($rmId) {
                 return (int) $user->employee_id === $rmId;
@@ -347,6 +350,14 @@ class LogBookPaymentWorkflowService
 
         if (! $payment->needs_recommendation) {
             return 'Awaiting Executive Director approval';
+        }
+
+        if ($this->isAccountantPayment($payment)) {
+            return match ($payment->status) {
+                'pending' => 'Awaiting Regional Manager recommendation',
+                'recommended' => 'Awaiting Zonal Manager approval',
+                default => null,
+            };
         }
 
         if ($payment->status === 'pending') {
@@ -396,6 +407,12 @@ class LogBookPaymentWorkflowService
         $employee = $payment->employee;
 
         if ($tier === self::TIER_STAFF) {
+            if ($this->isAccountantPayment($payment)) {
+                $rmId = $this->regionalManagerEmployeeId($employee);
+
+                return $rmId !== null && (int) $user->employee_id === $rmId;
+            }
+
             $bmId = $this->branchManagerEmployeeId($employee);
             if ($bmId) {
                 return (int) $user->employee_id === $bmId;
@@ -418,6 +435,22 @@ class LogBookPaymentWorkflowService
         }
 
         return false;
+    }
+
+    private function isAccountantPayment(MovementLogBookPayment $payment): bool
+    {
+        if ($payment->submitter_tier !== self::TIER_STAFF) {
+            return false;
+        }
+
+        $title = mb_strtolower(trim((string) ($payment->employee?->designation?->name ?? '')));
+
+        return $this->isAccountantTitle($title);
+    }
+
+    private function isAccountantTitle(string $title): bool
+    {
+        return str_contains($title, 'accountant') || str_contains($title, 'accounts officer');
     }
 
     private function branchManagerEmployeeId(Employee $employee): ?int
